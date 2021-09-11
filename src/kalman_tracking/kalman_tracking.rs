@@ -17,7 +17,7 @@ pub enum KalmanModelType {
 }
 
 impl KalmanWrapper {
-    pub fn new(model_type: KalmanModelType, init_x: f32, init_y: f32) -> Self {
+    pub fn new(model_type: KalmanModelType) -> Self {
         let tmp = match model_type {
             KalmanModelType::ConstantVelocity => {
                 let opencv_kf = KF::new(4, 2, 0, CV_32F).unwrap();
@@ -114,7 +114,6 @@ impl KalmanWrapper {
                 kw.opencv_kf.set_measurement_matrix(measurement_matrix);
                 println!("\tMeasurement matrix 'H' {:?}", kw.opencv_kf.measurement_matrix().data_typed::<f32>().unwrap());
 
-
                 // Noise covariance matrix 'P'
                 let noise_covariance_matrix_data: Vec<Vec<f32>> = vec![
                     vec![10e5, 0.0,  0.0,  0.0,  0.0,  0.0],
@@ -149,7 +148,7 @@ impl KalmanWrapper {
                 let measurement_noise_covariance_matrix = Mat::from_slice_2d(&measurement_noise_covariance_matrix_data).unwrap();
                 kw.opencv_kf.set_measurement_noise_cov(measurement_noise_covariance_matrix);
                 println!("\tMeasurement matrix 'R' {:?}", kw.opencv_kf.measurement_noise_cov().data_typed::<f32>().unwrap());
-                
+
                 kw
             }
         };
