@@ -62,7 +62,7 @@ Vehicle detection/tracking and speed estimation via next instruments:
     * Tracking
     * Spatial converter
     * Speed evaluations
-    
+    * Read frames in one thread and do neural network's job in another one
 
 ## Support
 If you have troubles or questions please [open an issue](https://github.com/LdDl/rust-road-traffic/issues/new).
