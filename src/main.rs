@@ -1,18 +1,16 @@
 use opencv::{
+    prelude::*,
     core,
     highgui,
     videoio,
-    prelude::*,
-    imgcodecs::*,
-    imgproc::rectangle,
     imgproc::resize,
-    dnn::Net,
     dnn::DNN_BACKEND_CUDA,
     dnn::DNN_TARGET_CUDA,
-    dnn::DNN_TARGET_CUDA_FP16,
     dnn::read_net,
     dnn::blob_from_image
 };
+
+use std::time::{Instant};
 
 fn run() -> opencv::Result<()> {
     const OUTPUT_WIDTH: i32 = 500;
@@ -112,12 +110,15 @@ fn run() -> opencv::Result<()> {
                 println!("Can't set input of neural network due the error {:?}", err);
             }
         };
+
+        let now = Instant::now();
         match neural_net.forward(&mut detections, &out_layers_names) {
             Ok(_) => {}
             Err(err) => {
                 println!("Can't process input of neural network due the error {:?}", err);
             }
         }
+        println!("Elapes milliseconds to detect object on image: {}", now.elapsed().as_millis());
 
         if resized_frame.size()?.width > 0 {
             highgui::imshow(window, &mut resized_frame)?;
