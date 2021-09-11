@@ -62,8 +62,8 @@ Vehicle detection/tracking and speed estimation via next instruments:
     * ~~Display an output~~
 
 * Additional functionality
-    * Kalman filtering
-    * Tracking
+    * Kalman filtering *W.I.P.*
+    * Tracking *W.I.P.*
     * Spatial converter
     * Speed evaluations
     * Read frames in one thread and do neural network's job in another one
