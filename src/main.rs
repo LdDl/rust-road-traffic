@@ -17,6 +17,8 @@ use opencv::{
 
 use std::time::{Instant};
 
+mod kalman_tracking;
+
 fn run() -> opencv::Result<()> {
     const OUTPUT_WIDTH: i32 = 500;
     const OUTPUT_HEIGHT: i32 = 500;
@@ -25,7 +27,7 @@ fn run() -> opencv::Result<()> {
     const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
     const CLASSES_NUM: usize = COCO_CLASSNAMES.len();
     const NMS_THRESHOLD: f32 = 0.3;
-    
+
     let video_src = "./data/sample_960_540.mp4";
     let weights_src = "./data/yolov4-tiny.weights";
     let cfg_src = "./data/yolov4-tiny.cfg";
