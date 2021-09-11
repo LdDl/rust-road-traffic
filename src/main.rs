@@ -18,6 +18,10 @@ use opencv::{
 use std::time::{Instant};
 
 mod kalman_tracking;
+use kalman_tracking::{
+    kalman_tracking::KalmanWrapper,
+    kalman_tracking::KalmanModelType
+};
 
 fn run() -> opencv::Result<()> {
     const OUTPUT_WIDTH: i32 = 500;
@@ -32,6 +36,11 @@ fn run() -> opencv::Result<()> {
     let weights_src = "./data/yolov4-tiny.weights";
     let cfg_src = "./data/yolov4-tiny.cfg";
     let window = "Tiny YOLO v4";
+
+    // Prepare Kalman filter
+    let kf = KalmanWrapper::new(KalmanModelType::ConstantVelocity, 0.0, 0.0);
+
+    return Ok(());
 
     // Prepare output window
     match highgui::named_window(window, 1) {
