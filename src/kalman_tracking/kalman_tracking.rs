@@ -48,8 +48,8 @@ impl KalmanWrapper {
                 kw.opencv_kf.set_measurement_matrix(measurement_matrix);
                 println!("\tMeasurement matrix 'H' {:?}", kw.opencv_kf.measurement_matrix().data_typed::<f32>().unwrap());
 
-                 // Noise covariance matrix 'P'
-                 let noise_covariance_matrix_data: Vec<Vec<f32>> = vec![
+                // Noise covariance matrix 'P'
+                let noise_covariance_matrix_data: Vec<Vec<f32>> = vec![
                     vec![10e5, 0.0,  0.0,  0.0],
                     vec![0.0,  10e5, 0.0,  0.0],
                     vec![0.0,  0.0,  10e5, 0.0],
