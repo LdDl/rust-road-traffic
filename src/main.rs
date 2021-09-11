@@ -13,7 +13,6 @@ use opencv::{
 };
 
 use std::time::{Instant};
-use std::cmp;
 
 fn run() -> opencv::Result<()> {
     const OUTPUT_WIDTH: i32 = 500;
@@ -124,22 +123,23 @@ fn run() -> opencv::Result<()> {
         match neural_net.forward(&mut detections, &out_layers_names) {
             Ok(_) => {
                 let outs = detections.len();
-                // let mut class_ids = vec![];
-                // let mut confidences = vec![];
-                // let mut bboxes: vec![];
+                let mut class_ids = vec![];
+                let mut confidences = vec![];
+                let mut bboxes = vec![];
                 for o in 0..outs {
                     let output = detections.get(o).unwrap();
                     let data_ptr = output.data_typed::<f32>().unwrap();
                     for (i, _) in data_ptr.iter().enumerate().step_by(CLASSES_NUM + 5) {
-                        let mut class = 0 as usize;
+                        let mut class_id = 0 as usize;
                         let mut max_probability = 0.0;
                         for j in 5..(CLASSES_NUM + 5) {
                             if data_ptr[i+j] > max_probability {
                                 max_probability = data_ptr[i+j];
-                                class = (j-5) % CLASSES_NUM;
+                                class_id = (j-5) % CLASSES_NUM;
                             }
                         }
-                        if max_probability * data_ptr[i+4] > CONF_THRESHOLD {
+                        let confidence = max_probability * data_ptr[i+4];
+                        if confidence > CONF_THRESHOLD {
                             let center_x = data_ptr[i] * frame_cols;
                             let center_y = data_ptr[i + 1] * frame_rows;
                             let width = data_ptr[i + 2] * frame_cols;
@@ -153,6 +153,10 @@ fn run() -> opencv::Result<()> {
                                     println!("Can't draw bounding box of object due the error {:?}", err);
                                 }
                             };
+
+                            class_ids.push(class_id);
+                            confidences.push(confidence);
+                            bboxes.push(bbox);
                         }
                     }
                 }
