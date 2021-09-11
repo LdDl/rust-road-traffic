@@ -10,7 +10,7 @@ use opencv::{
     dnn::DNN_BACKEND_CUDA,
     dnn::DNN_TARGET_CUDA,
     dnn::DNN_TARGET_CUDA_FP16,
-    dnn::read_net_from_tensorflow,
+    dnn::read_net,
     dnn::blob_from_image
 };
 
@@ -18,6 +18,8 @@ fn run() -> opencv::Result<()> {
     const OUTPUT_WIDTH: i32 = 500;
     const OUTPUT_HEIGHT: i32 = 500;
     let video_src = "./data/sample_960_540.mp4";
+    let weights_src = "./data/yolov4-tiny.weights";
+    let cfg_src = "./data/yolov4-tiny.cfg";
     let window = "Tiny YOLO v4";
     match highgui::named_window(window, 1) {
         Ok(_) => {},
@@ -49,6 +51,13 @@ fn run() -> opencv::Result<()> {
     if !opened {
         panic!("Unable to open video '{}'", video_src);
     }
+
+    let mut neural_net = match read_net(weights_src, cfg_src, "Darknet"){
+        Ok(result) => result,
+        Err(err) => {
+            panic!("Can't read network '{}' (with cfg '{}') due the error: {:?}", weights_src, cfg_src, err);
+        }
+    };
 
     Ok(())
 }
