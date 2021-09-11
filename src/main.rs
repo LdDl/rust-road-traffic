@@ -162,12 +162,19 @@ fn run() -> opencv::Result<()> {
                     }
                 };
                 for (i, _) in indices.iter().enumerate() {
-                    match rectangle(&mut frame, bboxes.get(i)?, core::Scalar::new(0.0, 255.0, 0.0, 100.0), 2, 1, 0){
-                        Ok(_) => {},
+                    match bboxes.get(i) {
+                        Ok(bbox) => {
+                            match rectangle(&mut frame, bbox, core::Scalar::new(0.0, 255.0, 0.0, 100.0), 2, 1, 0){
+                                Ok(_) => {},
+                                Err(err) => {
+                                    println!("Can't draw bounding box of object due the error {:?}", err);
+                                }
+                            };
+                        },
                         Err(err) => {
-                            println!("Can't draw bounding box of object due the error {:?}", err);
+                            panic!("Can't extract bbox from filtered bboxes due the error {:?}", err);
                         }
-                    };
+                    }
                 }
             }
             Err(err) => {
