@@ -23,7 +23,7 @@ Vehicle detection/tracking and speed estimation via next instruments:
     ```shell
     git clone https://github.com/LdDl/rust-road-traffic.git
     ```
-    Well, actually I provide yolov4-tiny configuration and weights file from [official repository](https://github.com/AlexeyAB/darknet), but you are free to use yours.
+    Well, actually I provide yolov4-tiny configuration and weights file from [official repository](https://github.com/AlexeyAB/darknet) (authors of YOLOv4), but you are free to use yours.
     I provide video file as sample also.
     If you want to change those you can navigate to source code:
     ```rust
