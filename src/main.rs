@@ -82,7 +82,13 @@ fn run() -> opencv::Result<()> {
     let mut resized_frame = core::Mat::default();
 
     loop {
-        video_capture.read(&mut frame)?;
+        match video_capture.read(&mut frame) {
+            Ok(_) => {},
+            Err(_) => {
+                println!("Can't read next frame");
+                break;
+            }
+        };
         match resize(&mut frame, &mut resized_frame, core::Size::new(OUTPUT_WIDTH, OUTPUT_HEIGHT), 1.0, 1.0, 1) {
             Ok(_) => {},
             Err(err) => {
