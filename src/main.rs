@@ -5,6 +5,9 @@ use opencv::{
     videoio,
     imgproc::resize,
     imgproc::rectangle,
+    imgproc::put_text,
+    imgproc::FONT_HERSHEY_SIMPLEX,
+    imgproc::LINE_8,
     dnn::DNN_BACKEND_CUDA,
     dnn::DNN_TARGET_CUDA,
     dnn::read_net,
@@ -19,9 +22,10 @@ fn run() -> opencv::Result<()> {
     const OUTPUT_HEIGHT: i32 = 500;
     const CONF_THRESHOLD: f32 = 0.1;
     const COCO_CLASSNAMES: &'static [&'static str] = &["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"];
+    const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
     const CLASSES_NUM: usize = COCO_CLASSNAMES.len();
     const NMS_THRESHOLD: f32 = 0.3;
-
+    
     let video_src = "./data/sample_960_540.mp4";
     let weights_src = "./data/yolov4-tiny.weights";
     let cfg_src = "./data/yolov4-tiny.cfg";
@@ -124,7 +128,7 @@ fn run() -> opencv::Result<()> {
         match neural_net.forward(&mut detections, &out_layers_names) {
             Ok(_) => {
                 let outs = detections.len();
-                let mut class_ids = vec![];
+                let mut class_names = vec![];
                 let mut confidences = core::Vector::<f32>::new();
                 let mut bboxes = core::Vector::<core::Rect>::new();
                 for o in 0..outs {
@@ -139,18 +143,21 @@ fn run() -> opencv::Result<()> {
                                 class_id = (j-5) % CLASSES_NUM;
                             }
                         }
-                        let confidence = max_probability * data_ptr[i+4];
-                        if confidence > CONF_THRESHOLD {
-                            let center_x = data_ptr[i] * frame_cols;
-                            let center_y = data_ptr[i + 1] * frame_rows;
-                            let width = data_ptr[i + 2] * frame_cols;
-                            let height = data_ptr[i + 3] * frame_rows;
-                            let left = center_x - width / 2.0;
-                            let top = center_y - height / 2.0;
-                            let bbox = core::Rect::new(left as i32, top as i32, width as i32, height as i32);
-                            class_ids.push(class_id);
-                            confidences.push(confidence);
-                            bboxes.push(bbox);
+                        let class_name = COCO_CLASSNAMES[class_id];
+                        if COCO_FILTERED_CLASSNAMES.contains(&class_name) {
+                            let confidence = max_probability * data_ptr[i+4];
+                            if confidence > CONF_THRESHOLD {
+                                let center_x = data_ptr[i] * frame_cols;
+                                let center_y = data_ptr[i + 1] * frame_rows;
+                                let width = data_ptr[i + 2] * frame_cols;
+                                let height = data_ptr[i + 3] * frame_rows;
+                                let left = center_x - width / 2.0;
+                                let top = center_y - height / 2.0;
+                                let bbox = core::Rect::new(left as i32, top as i32, width as i32, height as i32);
+                                class_names.push(class_name);
+                                confidences.push(confidence);
+                                bboxes.push(bbox);
+                            }
                         }
                     }
                 }
@@ -164,10 +171,18 @@ fn run() -> opencv::Result<()> {
                 for (i, _) in indices.iter().enumerate() {
                     match bboxes.get(i) {
                         Ok(bbox) => {
-                            match rectangle(&mut frame, bbox, core::Scalar::new(0.0, 255.0, 0.0, 100.0), 2, 1, 0){
+                            match rectangle(&mut frame, bbox, core::Scalar::from((0.0, 255.0, 0.0)), 2, 1, 0) {
                                 Ok(_) => {},
                                 Err(err) => {
                                     println!("Can't draw bounding box of object due the error {:?}", err);
+                                }
+                            };
+                            let class_name = class_names[i];
+                            let anchor = core::Point::new(bbox.x + 2, bbox.y + 3);
+                            match put_text(&mut frame, &class_name, anchor, FONT_HERSHEY_SIMPLEX, 1.5, core::Scalar::from((0.0, 255.0, 255.0)), 2, LINE_8, false) {
+                                Ok(_) => {},
+                                Err(err) => {
+                                    println!("Can't display classname of object due the error {:?}", err);
                                 }
                             };
                         },
