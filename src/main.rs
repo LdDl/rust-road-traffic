@@ -20,6 +20,7 @@ fn run() -> opencv::Result<()> {
     const CONF_THRESHOLD: f32 = 0.1;
     const COCO_CLASSNAMES: &'static [&'static str] = &["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"];
     const CLASSES_NUM: usize = COCO_CLASSNAMES.len();
+    const NMS_THRESHOLD: f32 = 0.3;
 
     let video_src = "./data/sample_960_540.mp4";
     let weights_src = "./data/yolov4-tiny.weights";
@@ -147,18 +148,26 @@ fn run() -> opencv::Result<()> {
                             let left = center_x - width / 2.0;
                             let top = center_y - height / 2.0;
                             let bbox = core::Rect::new(left as i32, top as i32, width as i32, height as i32);
-                            match rectangle(&mut frame, bbox, core::Scalar::new(255.0, 0.0, 0.0, 100.0), 2, 1, 0){
-                                Ok(_) => {},
-                                Err(err) => {
-                                    println!("Can't draw bounding box of object due the error {:?}", err);
-                                }
-                            };
-
                             class_ids.push(class_id);
                             confidences.push(confidence);
                             bboxes.push(bbox);
                         }
                     }
+                }
+                let mut indices = core::Vector::<i32>::new();
+                match nms_boxes(&bboxes, &confidences, CONF_THRESHOLD, NMS_THRESHOLD, &mut indices, 1.0, 0) {
+                    Ok(_) => {},
+                    Err(err) => {
+                        println!("Can't run NMSBoxes on detections due the error {:?}", err);
+                    }
+                };
+                for (i, _) in indices.iter().enumerate() {
+                    match rectangle(&mut frame, bboxes.get(i)?, core::Scalar::new(0.0, 255.0, 0.0, 100.0), 2, 1, 0){
+                        Ok(_) => {},
+                        Err(err) => {
+                            println!("Can't draw bounding box of object due the error {:?}", err);
+                        }
+                    };
                 }
             }
             Err(err) => {
