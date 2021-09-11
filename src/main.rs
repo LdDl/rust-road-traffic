@@ -23,6 +23,8 @@ fn run() -> opencv::Result<()> {
     let weights_src = "./data/yolov4-tiny.weights";
     let cfg_src = "./data/yolov4-tiny.cfg";
     let window = "Tiny YOLO v4";
+
+    // Prepare output window
     match highgui::named_window(window, 1) {
         Ok(_) => {},
         Err(err) =>{
@@ -42,25 +44,31 @@ fn run() -> opencv::Result<()> {
     let cuda_available = cuda_count > 0;
     println!("CUDA is {}", if cuda_available { "available" } else { "not available" });
     
+    // Prepare video
     let mut video_capture = match videoio::VideoCapture::from_file(video_src, videoio::CAP_ANY) {
         Ok(result) => {result},
         Err(err) => {
             panic!("Can't init '{}' due the error: {:?}", video_src, err);
         }
     };
-
     let opened = videoio::VideoCapture::is_opened(&video_capture)?;
     if !opened {
         panic!("Unable to open video '{}'", video_src);
     }
 
+    // Prepare neural network
     let mut neural_net = match read_net(weights_src, cfg_src, "Darknet"){
         Ok(result) => result,
         Err(err) => {
             panic!("Can't read network '{}' (with cfg '{}') due the error: {:?}", weights_src, cfg_src, err);
         }
     };
-    let out_layers_names = neural_net.get_unconnected_out_layers_names().unwrap();
+    let out_layers_names = match neural_net.get_unconnected_out_layers_names() {
+        Ok(result) => result,
+        Err(err) => {
+            panic!("Can't get output layers names of neural network due the error: {:?}", err);
+        }
+    };
 
     // Initialize CUDA back-end if possible
     if cuda_available {
@@ -80,6 +88,7 @@ fn run() -> opencv::Result<()> {
     
     let mut frame = core::Mat::default();
     let mut resized_frame = core::Mat::default();
+    let mut detections = core::Vector::<core::Mat>::new();
 
     loop {
         match video_capture.read(&mut frame) {
@@ -95,6 +104,21 @@ fn run() -> opencv::Result<()> {
                 panic!("Can't resize output frame due the error {:?}", err);
             }
         }
+
+        let blobimg = blob_from_image(&frame, 0.00392, core::Size::new(608, 608), core::Scalar::default(), true, false, core::CV_32F);
+        match neural_net.set_input(&blobimg.unwrap(), "", 1.0, core::Scalar::default()){
+            Ok(_) => {},
+            Err(err) => {
+                println!("Can't set input of neural network due the error {:?}", err);
+            }
+        };
+        match neural_net.forward(&mut detections, &out_layers_names) {
+            Ok(_) => {}
+            Err(err) => {
+                println!("Can't process input of neural network due the error {:?}", err);
+            }
+        }
+
         if resized_frame.size()?.width > 0 {
             highgui::imshow(window, &mut resized_frame)?;
         }
