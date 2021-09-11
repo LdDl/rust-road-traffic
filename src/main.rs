@@ -42,7 +42,7 @@ fn run() -> opencv::Result<()> {
     let cuda_available = cuda_count > 0;
     println!("CUDA is {}", if cuda_available { "available" } else { "not available" });
     
-    let video_capture = match videoio::VideoCapture::from_file(video_src, videoio::CAP_ANY) {
+    let mut video_capture = match videoio::VideoCapture::from_file(video_src, videoio::CAP_ANY) {
         Ok(result) => {result},
         Err(err) => {
             panic!("Can't init '{}' due the error: {:?}", video_src, err);
@@ -78,6 +78,25 @@ fn run() -> opencv::Result<()> {
         }
     }
     
+    let mut frame = core::Mat::default();
+    let mut resized_frame = core::Mat::default();
+
+    loop {
+        video_capture.read(&mut frame)?;
+        match resize(&mut frame, &mut resized_frame, core::Size::new(OUTPUT_WIDTH, OUTPUT_HEIGHT), 1.0, 1.0, 1) {
+            Ok(_) => {},
+            Err(err) => {
+                panic!("Can't resize output frame due the error {:?}", err);
+            }
+        }
+        if resized_frame.size()?.width > 0 {
+            highgui::imshow(window, &mut resized_frame)?;
+        }
+        let key = highgui::wait_key(10)?;
+        if key > 0 && key != 255 {
+            break;
+        }
+    }
     Ok(())
 }
 
