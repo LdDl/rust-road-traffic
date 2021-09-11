@@ -40,7 +40,7 @@ fn run() -> opencv::Result<()> {
     let cuda_available = cuda_count > 0;
     println!("CUDA is {}", if cuda_available { "available" } else { "not available" });
     
-    let mut video_capture = match videoio::VideoCapture::from_file(video_src, videoio::CAP_ANY) {
+    let video_capture = match videoio::VideoCapture::from_file(video_src, videoio::CAP_ANY) {
         Ok(result) => {result},
         Err(err) => {
             panic!("Can't init '{}' due the error: {:?}", video_src, err);
@@ -59,6 +59,21 @@ fn run() -> opencv::Result<()> {
         }
     };
 
+    // Initialize CUDA back-end if possible
+    if cuda_available {
+        match neural_net.set_preferable_backend(DNN_BACKEND_CUDA){
+            Ok(_) => {},
+            Err(err) => {
+                panic!("Can't set DNN_BACKEND_CUDA for neural network due the error {:?}", err);
+            }
+        }
+        match neural_net.set_preferable_target(DNN_TARGET_CUDA){
+            Ok(_) => {},
+            Err(err) => {
+                panic!("Can't set DNN_TARGET_CUDA for neural network due the error {:?}", err);
+            }
+        }
+    }
     Ok(())
 }
 
