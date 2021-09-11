@@ -154,4 +154,10 @@ impl KalmanWrapper {
         };
         return tmp
     }
+    pub fn predict(&self) {
+        // @todo
+    }
+    pub fn correct(&self, x: f32, y: f32) {
+        // @todo
+    }
 }
