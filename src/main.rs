@@ -124,7 +124,7 @@ fn run() -> opencv::Result<()> {
             Ok(_) => {
                 let outs = detections.len();
                 let mut class_ids = vec![];
-                let mut confidences = vec![];
+                let mut confidences = core::Vector::<f32>::new();
                 let mut bboxes = core::Vector::<core::Rect>::new();
                 for o in 0..outs {
                     let output = detections.get(o).unwrap();
