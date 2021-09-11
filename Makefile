@@ -15,9 +15,6 @@ RPMS=cmake curl wget git gtk2-devel libpng-devel libjpeg-devel libtiff-devel tbb
 DEBS=unzip wget build-essential cmake curl git libgtk2.0-dev pkg-config libavcodec-dev libavformat-dev libswscale-dev libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libdc1394-22-dev
 JETSON=build-essential cmake git unzip pkg-config libjpeg-dev libpng-dev libtiff-dev libavcodec-dev libavformat-dev libswscale-dev libgtk2.0-dev libcanberra-gtk* libxvidcore-dev libx264-dev libgtk-3-dev libtbb2 libtbb-dev libdc1394-22-dev libv4l-dev v4l-utils libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libavresample-dev libvorbis-dev libxine2-dev libfaac-dev libmp3lame-dev libtheora-dev libopencore-amrnb-dev libopencore-amrwb-dev libopenblas-dev libatlas-base-dev libblas-dev liblapack-dev libeigen3-dev gfortran libhdf5-dev protobuf-compiler libprotobuf-dev libgoogle-glog-dev libgflags-dev
 
-explain:
-	@echo "For quick install with typical defaults of both OpenCV and GoCV, run 'make install'"
-
 # Detect Linux distribution
 distro_deps=
 ifneq ($(shell which dnf 2>/dev/null),)
@@ -148,7 +145,6 @@ build_all:
 
 # Cleanup temporary build files.
 clean:
-	go clean --cache
 	rm -rf $(TMP_DIR)opencv
 
 # Cleanup old library files.
