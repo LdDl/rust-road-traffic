@@ -57,9 +57,9 @@ impl KalmanWrapper {
 
                 // Transition matrix 'A'
                 let transition_matrix_data: Vec<Vec<f32>> = vec![
-                    vec![1.0, 1.0, 0.0, 0.0],
-                    vec![0.0, 1.0, 0.0, 0.0],
-                    vec![0.0, 0.0, 1.0, 1.0],
+                    vec![1.0, 0.0, 1.0, 0.0],
+                    vec![0.0, 1.0, 0.0, 1.0],
+                    vec![0.0, 0.0, 1.0, 0.0],
                     vec![0.0, 0.0, 0.0, 1.0],
                 ];
                 let transition_matrix = Mat::from_slice_2d(&transition_matrix_data).unwrap();
@@ -69,7 +69,7 @@ impl KalmanWrapper {
                 // Measurement matrix 'H'
                 let measurement_matrix_data: Vec<Vec<f32>> = vec![
                     vec![1.0, 0.0, 0.0, 0.0],
-                    vec![0.0, 0.0, 1.0, 0.0],
+                    vec![0.0, 1.0, 0.0, 0.0],
                 ];
                 let measurement_matrix = Mat::from_slice_2d(&measurement_matrix_data).unwrap();
                 kw.opencv_kf.set_measurement_matrix(measurement_matrix);
@@ -77,11 +77,17 @@ impl KalmanWrapper {
 
                 // Noise covariance matrix 'P'
                 let noise_covariance_matrix_data: Vec<Vec<f32>> = vec![
-                    vec![10e5, 0.0,  0.0,  0.0],
-                    vec![0.0,  10e5, 0.0,  0.0],
-                    vec![0.0,  0.0,  10e5, 0.0],
-                    vec![0.0,  0.0,  0.0,  10e5],
+                    vec![1.0, 0.0, 0.0, 0.0],
+                    vec![0.0, 1.0, 0.0, 0.0],
+                    vec![0.0, 0.0, 1.0, 0.0],
+                    vec![0.0, 0.0, 0.0, 1.0],
                 ];
+                // let noise_covariance_matrix_data: Vec<Vec<f32>> = vec![
+                //     vec![10e5, 0.0,  0.0,  0.0],
+                //     vec![0.0,  10e5, 0.0,  0.0],
+                //     vec![0.0,  0.0,  10e5, 0.0],
+                //     vec![0.0,  0.0,  0.0,  10e5],
+                // ];
                 let noise_covariance_matrix = Mat::from_slice_2d(&noise_covariance_matrix_data).unwrap();
                 kw.opencv_kf.set_error_cov_post(noise_covariance_matrix);
                 println!("\tNoise covariance matrix 'P' {:?}", kw.opencv_kf.error_cov_post().data_typed::<f32>().unwrap());
@@ -89,8 +95,8 @@ impl KalmanWrapper {
                 // Covariance matrix 'Q'
                 let covariance_matrix_data: Vec<Vec<f32>> = vec![
                     vec![25.0, 0.0,  0.0,  0.0],
-                    vec![0.0,  10.0, 0.0,  0.0],
-                    vec![0.0,  0.0,  25.0, 0.0],
+                    vec![0.0,  25.0, 0.0,  0.0],
+                    vec![0.0,  0.0,  10.0, 0.0],
                     vec![0.0,  0.0,  0.0,  10.0],
                 ];
                 let covariance_matrix = Mat::from_slice_2d(&covariance_matrix_data).unwrap();
@@ -99,8 +105,8 @@ impl KalmanWrapper {
 
                 // Measurement noise covariance matrix 'P'
                 let measurement_noise_covariance_matrix_data: Vec<Vec<f32>> = vec![
-                    vec![25.0, 0.0],
-                    vec![0.0,  25.0],
+                    vec![0.0, 0.0],
+                    vec![0.0,  0.0],
                 ];
                 let measurement_noise_covariance_matrix = Mat::from_slice_2d(&measurement_noise_covariance_matrix_data).unwrap();
                 kw.opencv_kf.set_measurement_noise_cov(measurement_noise_covariance_matrix);
@@ -142,13 +148,21 @@ impl KalmanWrapper {
 
                 // Noise covariance matrix 'P'
                 let noise_covariance_matrix_data: Vec<Vec<f32>> = vec![
-                    vec![10e5, 0.0,  0.0,  0.0,  0.0,  0.0],
-                    vec![0.0,  10e5, 0.0,  0.0,  0.0,  0.0],
-                    vec![0.0,  0.0,  10e5, 0.0,  0.0,  0.0],
-                    vec![0.0,  0.0,  0.0,  10e5, 0.0,  0.0],
-                    vec![0.0,  0.0,  0.0,  0.0,  10e5, 0.0],
-                    vec![0.0,  0.0,  0.0,  0.0,  0.0,  10e5],
+                    vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                    vec![0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                    vec![0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                    vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                    vec![0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                    vec![0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
                 ];
+                // let noise_covariance_matrix_data: Vec<Vec<f32>> = vec![
+                //     vec![10e5, 0.0,  0.0,  0.0,  0.0,  0.0],
+                //     vec![0.0,  10e5, 0.0,  0.0,  0.0,  0.0],
+                //     vec![0.0,  0.0,  10e5, 0.0,  0.0,  0.0],
+                //     vec![0.0,  0.0,  0.0,  10e5, 0.0,  0.0],
+                //     vec![0.0,  0.0,  0.0,  0.0,  10e5, 0.0],
+                //     vec![0.0,  0.0,  0.0,  0.0,  0.0,  10e5],
+                // ];
                 let noise_covariance_matrix = Mat::from_slice_2d(&noise_covariance_matrix_data).unwrap();
                 kw.opencv_kf.set_error_cov_post(noise_covariance_matrix);
                 println!("\tNoise covariance matrix 'P' {:?}", kw.opencv_kf.error_cov_post().data_typed::<f32>().unwrap());
