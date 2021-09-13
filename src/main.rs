@@ -41,7 +41,6 @@ fn run() -> opencv::Result<()> {
     // let kf = KalmanWrapper::new(KalmanModelType::ConstantVelocity, 0.0, 0.0);
     // let kf = KalmanWrapper::new(KalmanModelType::Acceleration, 0.0, 0.0);
 
-    return Ok(());
 
     // Prepare output window
     match highgui::named_window(window, 1) {
