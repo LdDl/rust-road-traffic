@@ -38,8 +38,21 @@ fn run() -> opencv::Result<()> {
     let window = "Tiny YOLO v4";
 
     // Prepare Kalman filter
-    // let kf = KalmanWrapper::new(KalmanModelType::ConstantVelocity);
+    // let mut kf = KalmanWrapper::new(KalmanModelType::ConstantVelocity);
     // let kf = KalmanWrapper::new(KalmanModelType::Acceleration);
+    // test struggling
+    // for i in 0..5 {
+    //     println!("Step#{}:", i);
+    //     let x = i as f32;
+    //     // let y = f32::powf(x, 2.0);
+    //     let y = x;
+    //     println!("\tpoint {} {}", x, y);
+    //     let predicted = kf.predict();
+    //     println!("\tpredicted {:?}", predicted);
+    //     let state = kf.correct(x, y);
+    //     println!("\tstate {:?}", state);
+    // }
+    // return Ok(());
 
     // Prepare output window
     match highgui::named_window(window, 1) {
