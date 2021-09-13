@@ -38,8 +38,8 @@ fn run() -> opencv::Result<()> {
     let window = "Tiny YOLO v4";
 
     // Prepare Kalman filter
-    // let mut kf = KalmanWrapper::new(KalmanModelType::ConstantVelocity);
-    // let kf = KalmanWrapper::new(KalmanModelType::Acceleration);
+    let mut kf = KalmanWrapper::new(KalmanModelType::ConstantVelocity);
+    // let mut kf = KalmanWrapper::new(KalmanModelType::Acceleration);
     // test struggling
     // for i in 0..5 {
     //     println!("Step#{}:", i);

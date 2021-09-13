@@ -196,7 +196,7 @@ impl KalmanWrapper {
                         panic!("Error prediction Y: {:?}", err);
                     }
                 };
-                let prediction_point = Point::new(prediction_point_x as i32, prediction_point_y as i32);
+                let prediction_point = Point::new(prediction_point_x.round() as i32, prediction_point_y.round() as i32);
                 return Some(prediction_point)
             },
             Err(err) => {
@@ -221,7 +221,7 @@ impl KalmanWrapper {
                         panic!("Error correction Y: {:?}", err);
                     }
                 };
-                let state_point = Point::new(state_point_x as i32, state_point_y as i32);
+                let state_point = Point::new(state_point_x.round() as i32, state_point_y.round() as i32);
                 return Some(state_point)
             },
             Err(err) => {
