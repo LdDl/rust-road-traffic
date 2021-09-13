@@ -38,9 +38,8 @@ fn run() -> opencv::Result<()> {
     let window = "Tiny YOLO v4";
 
     // Prepare Kalman filter
-    // let kf = KalmanWrapper::new(KalmanModelType::ConstantVelocity, 0.0, 0.0);
-    // let kf = KalmanWrapper::new(KalmanModelType::Acceleration, 0.0, 0.0);
-
+    // let kf = KalmanWrapper::new(KalmanModelType::ConstantVelocity);
+    // let kf = KalmanWrapper::new(KalmanModelType::Acceleration);
 
     // Prepare output window
     match highgui::named_window(window, 1) {

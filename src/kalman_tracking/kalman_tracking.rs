@@ -2,8 +2,33 @@ use opencv::{
     prelude::*,
     core::Mat,
     core::CV_32F,
+    core::Point,
     video::KalmanFilter as KF
 };
+
+use std::error::Error;
+use std::fmt;
+#[derive(Debug)]
+struct PredictionError {
+    details: String
+}
+impl PredictionError {
+    fn new(msg: &str) -> PredictionError {
+        PredictionError{details: msg.to_string()}
+    }
+}
+impl fmt::Display for PredictionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"{}",self.details)
+    }
+}
+impl Error for PredictionError {
+    fn description(&self) -> &str {
+        &self.details
+    }
+}
+
+
 
 pub struct KalmanWrapper {
     pub model_type: KalmanModelType,
@@ -15,6 +40,7 @@ pub enum KalmanModelType {
     ConstantVelocity,
     Acceleration
 }
+
 
 impl KalmanWrapper {
     pub fn new(model_type: KalmanModelType) -> Self {
@@ -154,10 +180,53 @@ impl KalmanWrapper {
         };
         return tmp
     }
-    pub fn predict(&self) {
-        // @todo
+    pub fn predict(&mut self) -> Option<Point> {
+        // @todo: handle possible errors
+        match self.opencv_kf.predict(&Mat::default()) {
+            Ok(prediction) => {
+                let prediction_point_x = match prediction.at::<f32>(0) {
+                    Ok(x) => *x,
+                    Err(_) => {
+                        return None
+                    }
+                };
+                let prediction_point_y = match prediction.at::<f32>(1) {
+                    Ok(y) => *y,
+                    Err(_) => {
+                        return None
+                    }
+                };
+                let prediction_point = Point::new(prediction_point_x as i32, prediction_point_y as i32);
+                return Some(prediction_point)
+            },
+            Err(_) => {
+                return None
+            }
+        }
     }
-    pub fn correct(&self, x: f32, y: f32) {
-        // @todo
+    pub fn correct(&mut self, x: f32, y: f32) -> Option<Point> {
+        // @todo: handle possible errors
+        let measurement = Mat::from_slice_2d(&vec![vec![x, y]]).unwrap();
+        match self.opencv_kf.correct(&measurement) {
+            Ok(estimated) => {
+                let state_point_x = match estimated.at::<f32>(0) {
+                    Ok(x) => *x,
+                    Err(_) => {
+                        return None
+                    }
+                };
+                let state_point_y = match estimated.at::<f32>(1) {
+                    Ok(y) => *y,
+                    Err(_) => {
+                        return None
+                    }
+                };
+                let state_point = Point::new(state_point_x as i32, state_point_y as i32);
+                return Some(state_point)
+            },
+            Err(_) => {
+                return None
+            }
+        };
     }
 }
