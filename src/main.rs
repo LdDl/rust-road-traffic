@@ -17,10 +17,10 @@ use opencv::{
 
 use std::time::{Instant};
 
-mod kalman_tracking;
-use kalman_tracking::{
-    kalman_tracking::KalmanWrapper,
-    kalman_tracking::KalmanModelType
+mod tracking;
+use tracking::{
+    KalmanWrapper,
+    KalmanModelType
 };
 
 fn run() -> opencv::Result<()> {
