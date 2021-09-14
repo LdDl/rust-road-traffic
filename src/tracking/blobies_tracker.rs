@@ -9,7 +9,7 @@ pub struct KalmanBlobiesTracker {
     objects: HashMap<Uuid, KalmanBlobie>,
     max_no_match: usize,
     min_threshold_distance: f32,
-    map_points_in_track: i32
+    max_points_in_track: i32
 }
 
 impl KalmanBlobiesTracker {
@@ -18,7 +18,7 @@ impl KalmanBlobiesTracker {
             objects: HashMap::new(),
             max_no_match: 30,
             min_threshold_distance: 15.0,
-            map_points_in_track: 100,
+            max_points_in_track: 100,
         }
     }
     pub fn get_objects_num(&self) -> usize {
