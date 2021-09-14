@@ -16,10 +16,13 @@ impl KalmanBlobiesTracker {
     pub fn default() -> Self {
         return KalmanBlobiesTracker{
             objects: HashMap::new(),
-            max_no_match: 5,
+            max_no_match: 30,
             min_threshold_distance: 15.0,
             map_points_in_track: 100,
         }
+    }
+    pub fn get_objects_num(&self) -> usize {
+        return self.objects.len();
     }
     fn prepare(&mut self) {
         for (_, b) in self.objects.iter_mut() {
@@ -83,8 +86,5 @@ impl KalmanBlobiesTracker {
         for delete_id in delete_blobs {
             self.objects.remove(&delete_id);
         }
-    }
-    fn deregister(&mut self, delete_id: &Uuid) {
-        self.objects.remove(delete_id);
     }
 }

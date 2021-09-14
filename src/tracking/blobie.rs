@@ -124,7 +124,9 @@ impl KalmanBlobie {
 		    delta_y += (self.track[current].y - self.track[prev].y) * weight;
             sum += i as i32;
             current = prev;
-            prev = current - 1;
+            if current != 0 {
+                prev = current - 1;
+            }
         }
         if sum > 0 {
             delta_x /= sum;
