@@ -19,16 +19,18 @@ pub struct KalmanBlobie {
     id: Uuid,
     center: Point,
     predicted_next_position: Point,
+    current_rect: Rect,
     diagonal: f32,
     exists: bool,
     no_match_times: usize,
+    map_points_in_track: usize,
     is_still_tracked: bool,
     track: Vec<Point>,
     kf: KalmanWrapper,
 }
 
 impl KalmanBlobie {
-    pub fn new(rect: &Rect, kalman_type: KalmanModelType) -> Self {
+    pub fn new(rect: &Rect, kalman_type: KalmanModelType, map_points_in_track: usize) -> Self {
         let center_x = rect.x as f32 + 0.5 * rect.width as f32;
         let center_y = rect.y as f32 + 0.5 * rect.height as f32;
         let center = Point::new(center_x.round() as i32, center_y.round() as i32);
@@ -38,9 +40,11 @@ impl KalmanBlobie {
             id : Uuid::new_v4(),
             center: center,
             predicted_next_position: Point::default(),
+            current_rect: *rect,
             diagonal: diagonal,
             exists: true,
             no_match_times: 0,
+            map_points_in_track: 100,
             is_still_tracked: true,
             track: vec![center],
             kf: kf
@@ -85,6 +89,9 @@ impl KalmanBlobie {
     }
     pub fn predict_next_position(&mut self, max_no_match: usize) {
         let track_len = self.track.len();
+        if track_len < 2 {
+            return;
+        }
         let account = usize::min(max_no_match, track_len);
         let mut current = track_len - 1;
         let mut prev = current - 1;
@@ -107,15 +114,41 @@ impl KalmanBlobie {
         self.predicted_next_position.y = self.track[track_len - 1].y + delta_y;
     }
     pub fn update(&mut self, newb: &KalmanBlobie) {
-        // @todo
-        // let new_center = newb.get_center();
-        // self.kf.correct(new_center.x as f32, new_center.y as f32);
+        // @todo: handle possible error instead of unwrap() call
+        let new_center = newb.get_center();
+        let predicted = self.kf.predict().unwrap();
+        self.center = predicted;
+        self.kf.correct(new_center.x as f32, new_center.y as f32);
+        let diff_x = predicted.x-newb.center.x;
+        let diff_y = predicted.y-newb.center.y;
+        self.current_rect = Rect::new(
+            newb.current_rect.x-diff_x,
+            newb.current_rect.y-diff_y,
+            newb.current_rect.width-diff_x,
+            newb.current_rect.width-diff_y
+        );
+        self.diagonal = newb.diagonal;
+        self.is_still_tracked = true;
+        self.exists = true;
+        self.track.push(self.center);
+        // Restrict number of points in track (shift to the left)
+        if self.track.len() > self.map_points_in_track {
+            self.track = self.track[1..].to_vec();
+        }
     }
-    pub fn draw(&self, img: &mut Mat) {
+    pub fn draw_center(&self, img: &mut Mat) {
         match circle(img, self.center, 5, Scalar::from((255.0, 0.0, 0.0)), 2, LINE_8, 0) {
             Ok(_) => {},
             Err(err) => {
                 panic!("Can't draw circle and blob's center due the error: {:?}", err)
+            }
+        };
+    }
+    pub fn draw_predicted(&self, img: &mut Mat) {
+        match circle(img, self.predicted_next_position, 5, Scalar::from((0.0, 255.0, 0.0)), 2, LINE_8, 0) {
+            Ok(_) => {},
+            Err(err) => {
+                panic!("Can't draw circle and blob's predicted position due the error: {:?}", err)
             }
         };
     }

@@ -34,7 +34,8 @@ fn run() -> opencv::Result<()> {
     const CLASSES_NUM: usize = COCO_CLASSNAMES.len();
     const NMS_THRESHOLD: f32 = 0.3;
     const PICKED_KALMAN_MODEL: KalmanModelType = KalmanModelType::ConstantVelocity;
-    
+    const MAX_POINTS_IN_TRACK: usize = 100;
+
     // Define default tracker for detected objects
     let tracker = KalmanBlobiesTracker::default();
 
@@ -44,20 +45,21 @@ fn run() -> opencv::Result<()> {
     let window = "Tiny YOLO v4";
 
     // Testing Kalman filter
-    let mut kf = KalmanWrapper::new(PICKED_KALMAN_MODEL);
-    // test struggling
-    for i in 0..6 {
-        println!("Step#{}:", i);
-        let x = i as f32;
-        let y = f32::powf(x, 2.0);
-        // let y = x;
-        println!("\tpoint {} {}", x, y);
-        let predicted = kf.predict();
-        println!("\tpredicted {:?}", predicted);
-        let state = kf.correct(x, y);
-        println!("\tstate {:?}", state);
-    }
-    return Ok(());
+    // let mut kf = KalmanWrapper::new(PICKED_KALMAN_MODEL);
+    // // test struggling
+    // let xs = vec![311, 312, 313, 311, 311, 312, 312, 313, 312, 312, 312, 312, 312, 312, 312, 312, 312, 312, 311, 311, 311, 311, 311, 310, 311, 311, 311, 310, 310, 308, 307, 308, 308, 308, 307, 307, 307, 308, 307, 307, 307, 307, 307, 308, 307, 309, 306, 307, 306, 307, 308, 306, 306, 306, 305, 307, 307, 307, 306, 306, 306, 307, 307, 308, 307, 307, 308, 307, 306, 308, 309, 309, 309, 309, 308, 309, 309, 309, 308, 311, 311, 307, 311, 307, 313, 311, 307, 311, 311, 306, 312, 312, 312, 312, 312, 312, 312, 312, 312, 312, 312, 312, 312, 312, 312, 312, 312, 312, 312, 312, 312, 312];
+    // let ys = vec![5, 6, 8, 10, 11, 12, 12, 13, 16, 16, 18, 18, 19, 19, 20, 20, 22, 22, 23, 23, 24, 24, 28, 30, 32, 35, 39, 42, 44, 46, 56, 58, 70, 60, 52, 64, 51, 70, 70, 70, 66, 83, 80, 85, 80, 98, 79, 98, 61, 94, 101, 94, 104, 94, 107, 112, 108, 108, 109, 109, 121, 108, 108, 120, 122, 122, 128, 130, 122, 140, 122, 122, 140, 122, 134, 141, 136, 136, 154, 155, 155, 150, 161, 162, 169, 171, 181, 175, 175, 163, 178, 178, 178, 178, 178, 178, 178, 178, 178, 178, 178, 178, 178, 178, 178, 178, 178, 178, 178, 178, 178, 178];
+    // for (i, _) in xs.iter().enumerate() {
+    //     println!("Step#{}:", i);
+    //     let x = xs[i];
+    //     let y = ys[i];
+    //     println!("\tpoint {} {}", x, y);
+    //     let predicted = kf.predict();
+    //     println!("\tpredicted {:?}", predicted);
+    //     let state = kf.correct(x as f32, y as f32);
+    //     println!("\tstate {:?}", state);
+    // }
+    // return Ok(());
 
     // Prepare output window
     match highgui::named_window(window, 1) {
@@ -199,8 +201,9 @@ fn run() -> opencv::Result<()> {
                 for (i, _) in indices.iter().enumerate() {
                     match bboxes.get(i) {
                         Ok(bbox) => {
-                            let mut kb = KalmanBlobie::new(&bbox, PICKED_KALMAN_MODEL);
-                            kb.draw(&mut frame);
+                            let mut kb = KalmanBlobie::new(&bbox, PICKED_KALMAN_MODEL, MAX_POINTS_IN_TRACK);
+                            kb.draw_center(&mut frame);
+                            kb.draw_predicted(&mut frame);
                             match rectangle(&mut frame, bbox, core::Scalar::from((0.0, 255.0, 0.0)), 2, 1, 0) {
                                 Ok(_) => {},
                                 Err(err) => {
