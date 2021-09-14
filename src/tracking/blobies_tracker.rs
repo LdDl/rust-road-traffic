@@ -2,18 +2,8 @@ use crate::tracking::{
     KalmanBlobie,
 };
 
-use opencv::{
-    core::Mat,
-    core::Rect,
-    core::Point,
-    core::Scalar,
-    imgproc::LINE_8,
-    imgproc::circle,
-};
-
 use uuid::Uuid;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 pub struct KalmanBlobiesTracker {
     objects: HashMap<Uuid, KalmanBlobie>,
