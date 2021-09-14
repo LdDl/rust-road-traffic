@@ -37,7 +37,7 @@ fn run() -> opencv::Result<()> {
     const MAX_POINTS_IN_TRACK: usize = 100;
 
     // Define default tracker for detected objects (blobs storage)
-    let tracker = KalmanBlobiesTracker::default();
+    let mut tracker = KalmanBlobiesTracker::default();
 
     let video_src = "./data/sample_960_540.mp4";
     let weights_src = "./data/yolov4-tiny.weights";
@@ -212,6 +212,7 @@ fn run() -> opencv::Result<()> {
                         }
                     }
                 }
+                tracker.match_to_existing(&mut tmp_blobs);
                 for b in tmp_blobs{
                     b.draw_center(&mut frame);
                     b.draw_predicted(&mut frame);

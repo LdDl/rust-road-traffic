@@ -109,7 +109,7 @@ impl KalmanBlobie {
     }
     pub fn predict_next_position(&mut self, max_no_match: usize) {
         let track_len = self.track.len();
-        if track_len < 2 {
+        if track_len < 3 {
             return;
         }
         let account = usize::min(max_no_match, track_len);
