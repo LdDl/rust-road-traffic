@@ -10,6 +10,7 @@ use opencv::{
     core::Scalar,
     imgproc::LINE_8,
     imgproc::circle,
+    imgproc::rectangle
 };
 
 use uuid::Uuid;
@@ -140,15 +141,23 @@ impl KalmanBlobie {
         match circle(img, self.center, 5, Scalar::from((255.0, 0.0, 0.0)), 2, LINE_8, 0) {
             Ok(_) => {},
             Err(err) => {
-                panic!("Can't draw circle and blob's center due the error: {:?}", err)
+                panic!("Can't draw circle at blob's center due the error: {:?}", err)
             }
         };
     }
     pub fn draw_predicted(&self, img: &mut Mat) {
-        match circle(img, self.predicted_next_position, 5, Scalar::from((0.0, 255.0, 0.0)), 2, LINE_8, 0) {
+        match circle(img, self.predicted_next_position, 5, Scalar::from((0.0, 0.0, 255.0)), 2, LINE_8, 0) {
             Ok(_) => {},
             Err(err) => {
-                panic!("Can't draw circle and blob's predicted position due the error: {:?}", err)
+                panic!("Can't draw circle at blob's predicted position due the error: {:?}", err)
+            }
+        };
+    }
+    pub fn draw_rectangle(&self, img: &mut Mat) {
+        match rectangle(img, self.current_rect, Scalar::from((0.0, 255.0, 0.0)), 2, 1, 0) {
+            Ok(_) => {},
+            Err(err) => {
+                println!("Can't draw bounding box of object due the error {:?}", err);
             }
         };
     }

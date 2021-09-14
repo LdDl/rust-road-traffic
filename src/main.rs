@@ -36,7 +36,7 @@ fn run() -> opencv::Result<()> {
     const PICKED_KALMAN_MODEL: KalmanModelType = KalmanModelType::ConstantVelocity;
     const MAX_POINTS_IN_TRACK: usize = 100;
 
-    // Define default tracker for detected objects
+    // Define default tracker for detected objects (blobs storage)
     let tracker = KalmanBlobiesTracker::default();
 
     let video_src = "./data/sample_960_540.mp4";
@@ -198,18 +198,12 @@ fn run() -> opencv::Result<()> {
                         println!("Can't run NMSBoxes on detections due the error {:?}", err);
                     }
                 };
+                let mut tmp_blobs = vec![];
                 for (i, _) in indices.iter().enumerate() {
                     match bboxes.get(i) {
                         Ok(bbox) => {
-                            let mut kb = KalmanBlobie::new(&bbox, PICKED_KALMAN_MODEL, MAX_POINTS_IN_TRACK);
-                            kb.draw_center(&mut frame);
-                            kb.draw_predicted(&mut frame);
-                            match rectangle(&mut frame, bbox, core::Scalar::from((0.0, 255.0, 0.0)), 2, 1, 0) {
-                                Ok(_) => {},
-                                Err(err) => {
-                                    println!("Can't draw bounding box of object due the error {:?}", err);
-                                }
-                            };
+                            let kb = KalmanBlobie::new(&bbox, PICKED_KALMAN_MODEL, MAX_POINTS_IN_TRACK);
+                            tmp_blobs.push(kb);
                             let class_name = class_names[i];
                             let anchor = core::Point::new(bbox.x + 2, bbox.y + 3);
                             match put_text(&mut frame, &class_name, anchor, FONT_HERSHEY_SIMPLEX, 1.5, core::Scalar::from((0.0, 255.0, 255.0)), 2, LINE_8, false) {
@@ -223,6 +217,11 @@ fn run() -> opencv::Result<()> {
                             panic!("Can't extract bbox from filtered bboxes due the error {:?}", err);
                         }
                     }
+                }
+                for b in tmp_blobs{
+                    b.draw_center(&mut frame);
+                    b.draw_predicted(&mut frame);
+                    b.draw_rectangle(&mut frame);
                 }
             }
             Err(err) => {
