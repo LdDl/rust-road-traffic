@@ -51,6 +51,7 @@ impl KalmanBlobiesTracker {
         return delete_blobs
     }
     pub fn match_to_existing(&mut self, blobies: &mut Vec<KalmanBlobie>) {
+        // @todo: handle panic!() call
         self.prepare();
         let mut blobies_to_register = vec![];
         for (i, b) in blobies.iter_mut().enumerate() {
@@ -82,7 +83,11 @@ impl KalmanBlobiesTracker {
         for (i, _) in blobies_to_register.iter().enumerate() {
             // @todo: arghhhh. Can't understand pointer's rust-ish stuff
             // let b = blobies[i];
-            // self.objects.entry(b.get_id()).or_insert_with(|| b);
+            // self.objects.entry(b.get_id()).or_insert_with(|| b); // <----- here is an compile-time error
+            // @todo: so create new blob.
+            let b = &blobies[i];
+            let copy_b = KalmanBlobie::new(&b.get_current_rect(), b.get_kalman_model_type(), b.get_max_points_in_track());
+            self.objects.entry(b.get_id()).or_insert_with(|| copy_b);
         }
         let delete_blobs = self.refresh_no_match();
         for delete_id in delete_blobs {

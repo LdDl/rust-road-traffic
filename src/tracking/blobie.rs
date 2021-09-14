@@ -89,8 +89,17 @@ impl KalmanBlobie {
     pub fn get_predicted_center(&self) -> Point {
         return self.predicted_next_position;
     }
+    pub fn get_current_rect(&self) -> Rect {
+        return self.current_rect;
+    }
     pub fn get_diagonal(&self) -> f32 {
         return self.diagonal;
+    }
+    pub fn get_max_points_in_track(&self) -> usize {
+        return self.max_points_in_track;
+    }
+    pub fn get_kalman_model_type(&self) -> KalmanModelType {
+        return self.kf.model_type;
     }
     pub fn distance_to(&self, b: &KalmanBlobie) -> f32 {
         return utils::euclidean_distance(self.center, b.get_center());

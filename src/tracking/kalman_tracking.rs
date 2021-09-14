@@ -34,6 +34,7 @@ pub struct KalmanWrapper {
     measurement: Mat
 }
 
+#[derive(Copy, Clone)]
 pub enum KalmanModelType {
     ConstantVelocity,
     Acceleration
