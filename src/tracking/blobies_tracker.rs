@@ -79,8 +79,7 @@ impl KalmanBlobiesTracker {
             // self.objects.entry(b.get_id()).or_insert_with(|| b); // <----- here is an compile-time error
             // @todo: so create new blob.
             let b = &blobies[i];
-            let mut copy_b = KalmanBlobie::new(&b.get_current_rect(), b.get_kalman_model_type(), b.get_max_points_in_track());
-            copy_b.set_class_name(b.get_class_name());
+            let copy_b = KalmanBlobie::partial_copy(b);
             self.objects.entry(b.get_id()).or_insert_with(|| copy_b);
         }
         let delete_blobs = self.refresh_no_match();

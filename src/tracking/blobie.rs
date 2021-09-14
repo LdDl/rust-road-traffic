@@ -56,6 +56,11 @@ impl KalmanBlobie {
         };
         return kb 
     }
+    pub fn partial_copy(newb: &KalmanBlobie) -> Self {
+        let mut copy_b = KalmanBlobie::new(&newb.get_current_rect(), newb.get_kalman_model_type(), newb.get_max_points_in_track());
+        copy_b.set_class_name(newb.get_class_name());
+        return copy_b;
+    }
     pub fn set_id(&mut self, id: Uuid) {
         self.id = id;
     }
