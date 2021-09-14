@@ -180,6 +180,16 @@ impl KalmanBlobie {
             }
         };
     }
+    pub fn draw_track(&self, img: &mut Mat) {
+        for pt in self.track.iter() {
+            match circle(img, *pt, 5, Scalar::from((0.0, 255.0, 0.0)), 2, LINE_8, 0) {
+                Ok(_) => {},
+                Err(err) => {
+                    panic!("Can't draw circle at blob's center due the error: {:?}", err)
+                }
+            };
+        }
+    }
     pub fn draw_rectangle(&self, img: &mut Mat) {
         match rectangle(img, self.current_rect, Scalar::from((0.0, 255.0, 0.0)), 2, 1, 0) {
             Ok(_) => {},

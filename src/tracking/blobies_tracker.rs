@@ -16,7 +16,7 @@ impl KalmanBlobiesTracker {
     pub fn default() -> Self {
         return KalmanBlobiesTracker{
             objects: HashMap::new(),
-            max_no_match: 30,
+            max_no_match: 5,
             min_threshold_distance: 15.0,
             max_points_in_track: 100,
         }
