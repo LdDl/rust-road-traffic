@@ -9,8 +9,10 @@ use opencv::{
     core::Point,
     core::Scalar,
     imgproc::LINE_8,
+    imgproc::FONT_HERSHEY_SIMPLEX,
     imgproc::circle,
-    imgproc::rectangle
+    imgproc::rectangle,
+    imgproc::put_text
 };
 
 use uuid::Uuid;
@@ -18,6 +20,7 @@ use crate::tracking::utils;
 
 pub struct KalmanBlobie {
     id: Uuid,
+    class_name: String,
     center: Point,
     predicted_next_position: Point,
     current_rect: Rect,
@@ -39,6 +42,7 @@ impl KalmanBlobie {
         let kf = KalmanWrapper::new(kalman_type);
         let kb = KalmanBlobie {
             id : Uuid::new_v4(),
+            class_name: "Undefined".to_string(),
             center: center,
             predicted_next_position: Point::default(),
             current_rect: *rect,
@@ -54,6 +58,9 @@ impl KalmanBlobie {
     }
     pub fn set_id(&mut self, id: Uuid) {
         self.id = id;
+    }
+    pub fn set_class_name(&mut self, class_name: String) {
+        self.class_name = class_name;
     }
     pub fn set_exists(&mut self, exists: bool) {
         self.exists = exists;
@@ -72,6 +79,9 @@ impl KalmanBlobie {
     }
     pub fn get_id(&self) -> Uuid {
         return self.id;
+    }
+    pub fn get_class_name(&self) -> String {
+        return self.class_name.clone();
     }
     pub fn get_center(&self) -> Point {
         return self.center;
@@ -158,6 +168,15 @@ impl KalmanBlobie {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't draw bounding box of object due the error {:?}", err);
+            }
+        };
+    }
+    pub fn draw_class_name(&self, img: &mut Mat) {
+        let anchor = Point::new(self.current_rect.x + 2, self.current_rect.y + 3);
+        match put_text(img, &self.class_name, anchor, FONT_HERSHEY_SIMPLEX, 1.5, Scalar::from((0.0, 255.0, 255.0)), 2, LINE_8, false) {
+            Ok(_) => {},
+            Err(err) => {
+                println!("Can't display classname of object due the error {:?}", err);
             }
         };
     }

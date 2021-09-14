@@ -202,16 +202,10 @@ fn run() -> opencv::Result<()> {
                 for (i, _) in indices.iter().enumerate() {
                     match bboxes.get(i) {
                         Ok(bbox) => {
-                            let kb = KalmanBlobie::new(&bbox, PICKED_KALMAN_MODEL, MAX_POINTS_IN_TRACK);
-                            tmp_blobs.push(kb);
                             let class_name = class_names[i];
-                            let anchor = core::Point::new(bbox.x + 2, bbox.y + 3);
-                            match put_text(&mut frame, &class_name, anchor, FONT_HERSHEY_SIMPLEX, 1.5, core::Scalar::from((0.0, 255.0, 255.0)), 2, LINE_8, false) {
-                                Ok(_) => {},
-                                Err(err) => {
-                                    println!("Can't display classname of object due the error {:?}", err);
-                                }
-                            };
+                            let mut kb = KalmanBlobie::new(&bbox, PICKED_KALMAN_MODEL, MAX_POINTS_IN_TRACK);
+                            kb.set_class_name(class_name.to_string());
+                            tmp_blobs.push(kb);
                         },
                         Err(err) => {
                             panic!("Can't extract bbox from filtered bboxes due the error {:?}", err);
@@ -222,6 +216,7 @@ fn run() -> opencv::Result<()> {
                     b.draw_center(&mut frame);
                     b.draw_predicted(&mut frame);
                     b.draw_rectangle(&mut frame);
+                    b.draw_class_name(&mut frame);
                 }
             }
             Err(err) => {
