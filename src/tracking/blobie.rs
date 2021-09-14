@@ -27,14 +27,14 @@ pub struct KalmanBlobie {
     diagonal: f32,
     exists: bool,
     no_match_times: usize,
-    map_points_in_track: usize,
+    max_points_in_track: usize,
     is_still_tracked: bool,
     track: Vec<Point>,
     kf: KalmanWrapper,
 }
 
 impl KalmanBlobie {
-    pub fn new(rect: &Rect, kalman_type: KalmanModelType, map_points_in_track: usize) -> Self {
+    pub fn new(rect: &Rect, kalman_type: KalmanModelType, max_points_in_track: usize) -> Self {
         let center_x = rect.x as f32 + 0.5 * rect.width as f32;
         let center_y = rect.y as f32 + 0.5 * rect.height as f32;
         let center = Point::new(center_x.round() as i32, center_y.round() as i32);
@@ -49,7 +49,7 @@ impl KalmanBlobie {
             diagonal: diagonal,
             exists: true,
             no_match_times: 0,
-            map_points_in_track: 100,
+            max_points_in_track: max_points_in_track,
             is_still_tracked: true,
             track: vec![center],
             kf: kf
@@ -143,7 +143,7 @@ impl KalmanBlobie {
         self.exists = true;
         self.track.push(self.center);
         // Restrict number of points in track (shift to the left)
-        if self.track.len() > self.map_points_in_track {
+        if self.track.len() > self.max_points_in_track {
             self.track = self.track[1..].to_vec();
         }
     }
