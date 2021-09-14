@@ -21,8 +21,9 @@ pub struct KalmanBlobie {
     predicted_next_position: Point,
     diagonal: f32,
     exists: bool,
-    no_match_times: i32,
+    no_match_times: usize,
     is_still_tracked: bool,
+    track: Vec<Point>,
     kf: KalmanWrapper,
 }
 
@@ -41,6 +42,7 @@ impl KalmanBlobie {
             exists: true,
             no_match_times: 0,
             is_still_tracked: true,
+            track: vec![center],
             kf: kf
         };
         return kb 
@@ -60,7 +62,7 @@ impl KalmanBlobie {
     pub fn exists(&self) -> bool {
         return self.exists;
     }
-    pub fn no_match_times(&self) -> i32 {
+    pub fn no_match_times(&self) -> usize {
         return self.no_match_times;
     }
     pub fn get_id(&self) -> Uuid {
@@ -81,8 +83,28 @@ impl KalmanBlobie {
     pub fn distance_to_predicted(&self, b: &KalmanBlobie) -> f32 {
         return utils::euclidean_distance(self.center, b.get_predicted_center());
     }
-    pub fn predict_next_position(&mut self, max_no_match: i32) {
-        // @todo
+    pub fn predict_next_position(&mut self, max_no_match: usize) {
+        let track_len = self.track.len();
+        let account = usize::min(max_no_match, track_len);
+        let mut current = track_len - 1;
+        let mut prev = current - 1;
+        let mut delta_x = 0;
+        let mut delta_y = 0;
+        let mut sum = 0;
+        for i in 1..account {
+            let weight = (account - i) as i32;
+            delta_x += (self.track[current].x - self.track[prev].x) * weight;
+		    delta_y += (self.track[current].y - self.track[prev].y) * weight;
+            sum += i as i32;
+            current = prev;
+            prev = current - 1;
+        }
+        if sum > 0 {
+            delta_x /= sum;
+            delta_y /= sum;
+        }
+        self.predicted_next_position.x = self.track[track_len - 1].x + delta_x;
+        self.predicted_next_position.y = self.track[track_len - 1].y + delta_y;
     }
     pub fn update(&mut self, newb: &KalmanBlobie) {
         // @todo

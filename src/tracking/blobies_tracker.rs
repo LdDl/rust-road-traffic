@@ -13,10 +13,11 @@ use opencv::{
 
 use uuid::Uuid;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 pub struct KalmanBlobiesTracker {
     objects: HashMap<Uuid, KalmanBlobie>,
-    max_no_match: i32,
+    max_no_match: usize,
     min_threshold_distance: f32,
     map_points_in_track: i32
 }
