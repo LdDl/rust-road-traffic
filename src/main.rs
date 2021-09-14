@@ -21,7 +21,8 @@ mod tracking;
 use tracking::{
     KalmanWrapper,
     KalmanModelType,
-    KalmanBlobie
+    KalmanBlobie,
+    KalmanBlobiesTracker,
 };
 
 fn run() -> opencv::Result<()> {
@@ -34,26 +35,29 @@ fn run() -> opencv::Result<()> {
     const NMS_THRESHOLD: f32 = 0.3;
     const PICKED_KALMAN_MODEL: KalmanModelType = KalmanModelType::ConstantVelocity;
     
+    // Define default tracker for detected objects
+    let tracker = KalmanBlobiesTracker::default();
+
     let video_src = "./data/sample_960_540.mp4";
     let weights_src = "./data/yolov4-tiny.weights";
     let cfg_src = "./data/yolov4-tiny.cfg";
     let window = "Tiny YOLO v4";
 
     // Testing Kalman filter
-    // let mut kf = KalmanWrapper::new(PICKED_KALMAN_MODEL);
-    // // test struggling
-    // for i in 0..5 {
-    //     println!("Step#{}:", i);
-    //     let x = i as f32;
-    //     let y = f32::powf(x, 2.0);
-    //     // let y = x;
-    //     println!("\tpoint {} {}", x, y);
-    //     let predicted = kf.predict();
-    //     println!("\tpredicted {:?}", predicted);
-    //     let state = kf.correct(x, y);
-    //     println!("\tstate {:?}", state);
-    // }
-    // return Ok(());
+    let mut kf = KalmanWrapper::new(PICKED_KALMAN_MODEL);
+    // test struggling
+    for i in 0..6 {
+        println!("Step#{}:", i);
+        let x = i as f32;
+        let y = f32::powf(x, 2.0);
+        // let y = x;
+        println!("\tpoint {} {}", x, y);
+        let predicted = kf.predict();
+        println!("\tpredicted {:?}", predicted);
+        let state = kf.correct(x, y);
+        println!("\tstate {:?}", state);
+    }
+    return Ok(());
 
     // Prepare output window
     match highgui::named_window(window, 1) {
