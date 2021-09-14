@@ -51,7 +51,8 @@ impl KalmanBlobiesTracker {
     }
     pub fn match_to_existing(&mut self, blobies: &mut Vec<KalmanBlobie>) {
         self.prepare();
-        for b in blobies.iter_mut() {
+        let mut blobies_to_register = vec![];
+        for (i, b) in blobies.iter_mut().enumerate() {
             let mut min_id = Uuid::default();
             let mut min_distance = f32::MAX;
             for (j, sb) in self.objects.iter() {
@@ -66,11 +67,21 @@ impl KalmanBlobiesTracker {
             if min_distance < b.get_diagonal() * 0.5 || min_distance < self.min_threshold_distance {
                 match self.objects.get_mut(&min_id) {
                     Some(v) => v.update(b),
-                    None => continue
+                    None => {
+                        // continue
+                        panic!("immposible self.objects.get_mut(&min_id)")
+                    }
                 };
             } else {
-                self.register(b);
+                let new_id = Uuid::new_v4();
+                b.set_id(new_id);
+                blobies_to_register.push(i)
             }
+        }
+        for (i, _) in blobies_to_register.iter().enumerate() {
+            // @todo: arghhhh. Can't understand pointer's rust-ish stuff
+            // let b = blobies[i];
+            // self.objects.entry(b.get_id()).or_insert_with(|| b);
         }
         let delete_blobs = self.refresh_no_match();
         for delete_id in delete_blobs {
@@ -79,11 +90,5 @@ impl KalmanBlobiesTracker {
     }
     fn deregister(&mut self, delete_id: &Uuid) {
         self.objects.remove(delete_id);
-    }
-    pub fn register(&mut self,  b: &mut KalmanBlobie) {
-        // @todo
-        // let new_id = Uuid::new_v4();
-        // b.set_id(new_id);
-        // // self.objects.insert(new_id, b);
     }
 }

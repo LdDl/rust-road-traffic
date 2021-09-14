@@ -23,7 +23,6 @@ pub struct KalmanBlobie {
     exists: bool,
     no_match_times: i32,
     is_still_tracked: bool,
-    // kf: Cell<KalmanWrapper>
     kf: KalmanWrapper,
 }
 
@@ -63,6 +62,9 @@ impl KalmanBlobie {
     }
     pub fn no_match_times(&self) -> i32 {
         return self.no_match_times;
+    }
+    pub fn get_id(&self) -> Uuid {
+        return self.id;
     }
     pub fn get_center(&self) -> Point {
         return self.center;

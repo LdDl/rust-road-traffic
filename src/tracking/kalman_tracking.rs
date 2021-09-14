@@ -28,8 +28,6 @@ impl Error for PredictionError {
     }
 }
 
-
-
 pub struct KalmanWrapper {
     pub model_type: KalmanModelType,
     opencv_kf: KF,
@@ -40,7 +38,6 @@ pub enum KalmanModelType {
     ConstantVelocity,
     Acceleration
 }
-
 
 impl KalmanWrapper {
     pub fn new(model_type: KalmanModelType) -> Self {
@@ -220,8 +217,8 @@ impl KalmanWrapper {
     }
     pub fn correct(&mut self, x: f32, y: f32) -> Option<Point> {
         // @todo: handle possible errors
-        let measurement = Mat::from_slice_2d(&vec![vec![x], vec![y]]).unwrap();
-        match self.opencv_kf.correct(&measurement) {
+        self.measurement = Mat::from_slice_2d(&vec![vec![x], vec![y]]).unwrap();
+        match self.opencv_kf.correct(&self.measurement) {
             Ok(estimated) => {
                 let state_point_x = match estimated.at::<f32>(0) {
                     Ok(x) => *x,
