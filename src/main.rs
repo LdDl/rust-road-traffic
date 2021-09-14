@@ -20,7 +20,8 @@ use std::time::{Instant};
 mod tracking;
 use tracking::{
     KalmanWrapper,
-    KalmanModelType
+    KalmanModelType,
+    KalmanBlobie
 };
 
 fn run() -> opencv::Result<()> {
@@ -31,15 +32,15 @@ fn run() -> opencv::Result<()> {
     const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
     const CLASSES_NUM: usize = COCO_CLASSNAMES.len();
     const NMS_THRESHOLD: f32 = 0.3;
-
+    const PICKED_KALMAN_MODEL: KalmanModelType = KalmanModelType::ConstantVelocity;
+    
     let video_src = "./data/sample_960_540.mp4";
     let weights_src = "./data/yolov4-tiny.weights";
     let cfg_src = "./data/yolov4-tiny.cfg";
     let window = "Tiny YOLO v4";
 
-    // Prepare Kalman filter
-    // let mut kf = KalmanWrapper::new(KalmanModelType::ConstantVelocity);
-    // // let mut kf = KalmanWrapper::new(KalmanModelType::Acceleration);
+    // Testing Kalman filter
+    // let mut kf = KalmanWrapper::new(PICKED_KALMAN_MODEL);
     // // test struggling
     // for i in 0..5 {
     //     println!("Step#{}:", i);
@@ -194,6 +195,8 @@ fn run() -> opencv::Result<()> {
                 for (i, _) in indices.iter().enumerate() {
                     match bboxes.get(i) {
                         Ok(bbox) => {
+                            let mut kb = KalmanBlobie::new(&bbox, PICKED_KALMAN_MODEL);
+                            kb.draw(&mut frame);
                             match rectangle(&mut frame, bbox, core::Scalar::from((0.0, 255.0, 0.0)), 2, 1, 0) {
                                 Ok(_) => {},
                                 Err(err) => {

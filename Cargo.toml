@@ -7,3 +7,4 @@ edition = "2018"
 
 [dependencies]
 opencv = {version = "0.54"}
+uuid = { version = "0.8", features = ["v4"] }
