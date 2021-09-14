@@ -49,7 +49,7 @@ Vehicle detection/tracking and speed estimation via next instruments:
 ## Screenshots
 * imshow() output:
 
-    <img src="data/tiny-yolov4-example-output-1.jpeg" width="480"> | <img src="data/tiny-yolov4-example-output-2.jpeg" width="480">
+    <img src="data/tiny-yolov4-example-output-1.jpeg" width="320"> | <img src="data/tiny-yolov4-example-output-2.jpeg" width="320">
 
 # ROADMAP
 * Main functionality:
