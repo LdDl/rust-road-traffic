@@ -6,7 +6,7 @@ use uuid::Uuid;
 use std::collections::HashMap;
 
 pub struct KalmanBlobiesTracker {
-    objects: HashMap<Uuid, KalmanBlobie>,
+    pub objects: HashMap<Uuid, KalmanBlobie>,
     max_no_match: usize,
     min_threshold_distance: f32,
     max_points_in_track: i32
@@ -79,7 +79,8 @@ impl KalmanBlobiesTracker {
             // self.objects.entry(b.get_id()).or_insert_with(|| b); // <----- here is an compile-time error
             // @todo: so create new blob.
             let b = &blobies[i];
-            let copy_b = KalmanBlobie::new(&b.get_current_rect(), b.get_kalman_model_type(), b.get_max_points_in_track());
+            let mut copy_b = KalmanBlobie::new(&b.get_current_rect(), b.get_kalman_model_type(), b.get_max_points_in_track());
+            copy_b.set_class_name(b.get_class_name());
             self.objects.entry(b.get_id()).or_insert_with(|| copy_b);
         }
         let delete_blobs = self.refresh_no_match();

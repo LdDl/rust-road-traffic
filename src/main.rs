@@ -213,12 +213,18 @@ fn run() -> opencv::Result<()> {
                     }
                 }
                 tracker.match_to_existing(&mut tmp_blobs);
-                for b in tmp_blobs{
+                for b in tmp_blobs {
                     b.draw_center(&mut frame);
                     b.draw_predicted(&mut frame);
                     b.draw_rectangle(&mut frame);
                     b.draw_class_name(&mut frame);
                 }
+                // for (_, b) in tracker.objects.iter() {
+                //     b.draw_center(&mut frame);
+                //     b.draw_predicted(&mut frame);
+                //     b.draw_rectangle(&mut frame);
+                //     b.draw_class_name(&mut frame);
+                // }
             }
             Err(err) => {
                 println!("Can't process input of neural network due the error {:?}", err);
