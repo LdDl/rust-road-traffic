@@ -144,6 +144,7 @@ impl KalmanBlobie {
         // @todo: handle possible error instead of unwrap() call
         let new_center = newb.get_center();
         let predicted = self.kf.predict().unwrap();
+        // self.center = new_center;
         self.center = predicted;
         self.kf.correct(new_center.x as f32, new_center.y as f32);
         let diff_x = predicted.x-newb.center.x;
