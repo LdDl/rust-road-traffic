@@ -62,7 +62,8 @@ Vehicle detection/tracking and speed estimation via next instruments:
     * ~~Display an output~~
 
 * Additional functionality
-    * Kalman filtering *W.I.P. Testing calculation right now* 
+    * OpenCV-based Kalman filtering *Need help to figure it out. PR's are welcome* 
+    * Custom Kalman filtering *W.I.P. Testing calculation right now* 
     * Tracking *W.I.P. Struggling with implementation*
     * Spatial converter
     * Speed evaluations
