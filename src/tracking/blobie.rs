@@ -1,6 +1,9 @@
 use crate::tracking::{
     KalmanWrapper,
-    KalmanModelType
+    KalmanModelType,
+    KalmanFilterLinear,
+    Matrix2x1f32,
+    Matrix4x1f32
 };
 
 use opencv::{
@@ -30,16 +33,18 @@ pub struct KalmanBlobie {
     max_points_in_track: usize,
     is_still_tracked: bool,
     track: Vec<Point>,
-    kf: KalmanWrapper,
+    custom_kf: KalmanFilterLinear
 }
 
 impl KalmanBlobie {
-    pub fn new(rect: &Rect, kalman_type: KalmanModelType, max_points_in_track: usize) -> Self {
+    pub fn new(rect: &Rect, max_points_in_track: usize) -> Self {
         let center_x = rect.x as f32 + 0.5 * rect.width as f32;
         let center_y = rect.y as f32 + 0.5 * rect.height as f32;
-        let center = Point::new(center_x.round() as i32, center_y.round() as i32);
+        // let center = Point::new(center_x.round() as i32, center_y.round() as i32);
+        let center = Point::new(center_x as i32, center_y as i32);
         let diagonal = f32::sqrt((i32::pow(rect.width, 2) + i32::pow(rect.height, 2)) as f32);
-        let kf = KalmanWrapper::new(kalman_type, center_x, center_y, 0.0, 0.0);
+        let mut custom_kf = KalmanFilterLinear::new();
+        custom_kf.set_time(1.0);
         let kb = KalmanBlobie {
             id : Uuid::new_v4(),
             class_name: "Undefined".to_string(),
@@ -52,12 +57,12 @@ impl KalmanBlobie {
             max_points_in_track: max_points_in_track,
             is_still_tracked: true,
             track: vec![center],
-            kf: kf
+            custom_kf: custom_kf
         };
         return kb 
     }
     pub fn partial_copy(newb: &KalmanBlobie) -> Self {
-        let mut copy_b = KalmanBlobie::new(&newb.get_current_rect(), newb.get_kalman_model_type(), newb.get_max_points_in_track());
+        let mut copy_b = KalmanBlobie::new(&newb.get_current_rect(), newb.get_max_points_in_track());
         copy_b.set_class_name(newb.get_class_name());
         return copy_b;
     }
@@ -103,9 +108,6 @@ impl KalmanBlobie {
     pub fn get_max_points_in_track(&self) -> usize {
         return self.max_points_in_track;
     }
-    pub fn get_kalman_model_type(&self) -> KalmanModelType {
-        return self.kf.model_type;
-    }
     pub fn distance_to(&self, b: &KalmanBlobie) -> f32 {
         return utils::euclidean_distance(self.center, b.get_center());
     }
@@ -114,10 +116,12 @@ impl KalmanBlobie {
     }
     pub fn predict_next_position(&mut self, max_no_match: usize) {
         let track_len = self.track.len();
-        if track_len < 3 {
-            return;
-        }
         let account = usize::min(max_no_match, track_len);
+        if account <= 1 {
+            self.predicted_next_position.x = 0;
+            self.predicted_next_position.y = 0;
+            return
+        }
         let mut current = track_len - 1;
         let mut prev = current - 1;
         let mut delta_x = 0;
@@ -143,17 +147,28 @@ impl KalmanBlobie {
     pub fn update(&mut self, newb: &KalmanBlobie) {
         // @todo: handle possible error instead of unwrap() call
         let new_center = newb.get_center();
-        let predicted = self.kf.predict().unwrap();
-        // self.center = new_center;
+        let y = Matrix2x1f32::new(
+            new_center.x as f32,
+            new_center.y as f32
+        );
+        // tracker.set_time(dt);
+        let u = Matrix4x1f32::new(
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        );
+        let predicted_custom = self.custom_kf.step(u, y).unwrap();
+        // let predicted = Point::new(predicted_custom[(0, 0)].round() as i32, predicted_custom[(1, 0)].round() as i32);
+        let predicted = Point::new(predicted_custom[(0, 0)] as i32, predicted_custom[(1, 0)] as i32);
         self.center = predicted;
-        self.kf.correct(new_center.x as f32, new_center.y as f32);
         let diff_x = predicted.x-newb.center.x;
         let diff_y = predicted.y-newb.center.y;
         self.current_rect = Rect::new(
             newb.current_rect.x-diff_x,
             newb.current_rect.y-diff_y,
             newb.current_rect.width-diff_x,
-            newb.current_rect.width-diff_y
+            newb.current_rect.height-diff_y
         );
         self.diagonal = newb.diagonal;
         self.is_still_tracked = true;
@@ -206,5 +221,85 @@ impl KalmanBlobie {
                 println!("Can't display classname of object due the error {:?}", err);
             }
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_kalman_prediction() {
+        let points = vec![
+            vec![0, 0],
+            vec![1, 1],
+            vec![2, 2],
+            vec![4, 4],
+            vec![6, 6],
+            vec![9, 9],
+            vec![11, 11],
+            vec![16, 16],
+            vec![20, 20]
+        ];
+        let kalman_points = vec![
+            vec![0, 0],
+			vec![0, 0],
+			vec![1, 1],
+			vec![3, 3],
+			vec![5, 5],
+			vec![7, 7],
+			vec![10, 10],
+			vec![13, 13],
+			vec![17, 17],
+        ];
+        let correct_predictions = vec![
+            vec![0, 0],
+			vec![0, 0],
+			vec![0, 0],
+			vec![1, 1],
+			vec![4, 4],
+			vec![6, 6],
+			vec![8, 8],
+			vec![12, 12],
+			vec![15, 15],
+        ];
+
+        assert_eq!(points.len(), kalman_points.len());
+        assert_eq!(points.len(), correct_predictions.len());
+        assert_eq!(kalman_points.len(), correct_predictions.len());
+
+        let max_points_in_track = 150;
+        let max_no_match = 5;
+        let rect_half_height = 30;
+	    let rect_half_width = 75;
+
+        let center_one = &points[0];
+        let rect_one = Rect::new(center_one[0]-rect_half_width, center_one[1]-rect_half_height, 2*rect_half_width, 2*rect_half_height);
+        let mut b: KalmanBlobie = KalmanBlobie::new(&rect_one, max_points_in_track);
+        let blob_one = KalmanBlobie::new(&rect_one, max_points_in_track);
+        b.predict_next_position(max_no_match);
+        b.update(&blob_one);
+
+        for i in 1..points.len() {
+            let center_one = &points[i];
+            let rect_one = Rect::new(center_one[0]-rect_half_width, center_one[1]-rect_half_height, 2*rect_half_width, 2*rect_half_height);
+            let blob_one = KalmanBlobie::new(&rect_one, max_points_in_track);
+            b.predict_next_position(max_no_match);
+            b.update(&blob_one);
+            
+            let check_x = b.center.x;
+            let check_y = b.center.y;
+            let smoothed_x = kalman_points[i][0];
+            let smoothed_y = kalman_points[i][1];
+            assert_eq!(check_x, smoothed_x);
+            assert_eq!(check_y, smoothed_y);
+
+            let predicted_x = b.predicted_next_position.x;
+            let predicted_y = b.predicted_next_position.y;
+            let correct_x = correct_predictions[i][0];
+            let correct_y = correct_predictions[i][1];
+            assert_eq!(predicted_x, correct_x);
+            assert_eq!(predicted_y, correct_y);
+        }
+        assert_eq!(1, 0);
     }
 }

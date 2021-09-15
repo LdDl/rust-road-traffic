@@ -28,7 +28,7 @@ fn run() -> opencv::Result<()> {
     const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
     const CLASSES_NUM: usize = COCO_CLASSNAMES.len();
     const NMS_THRESHOLD: f32 = 0.3;
-    const PICKED_KALMAN_MODEL: KalmanModelType = KalmanModelType::ConstantVelocity;
+    // const PICKED_KALMAN_MODEL: KalmanModelType = KalmanModelType::ConstantVelocity;
     const MAX_POINTS_IN_TRACK: usize = 100;
 
     // Define default tracker for detected objects (blobs storage)
@@ -181,7 +181,7 @@ fn run() -> opencv::Result<()> {
                     match bboxes.get(i) {
                         Ok(bbox) => {
                             let class_name = class_names[i];
-                            let mut kb = KalmanBlobie::new(&bbox, PICKED_KALMAN_MODEL, MAX_POINTS_IN_TRACK);
+                            let mut kb = KalmanBlobie::new(&bbox, MAX_POINTS_IN_TRACK);
                             kb.set_class_name(class_name.to_string());
                             tmp_blobs.push(kb);
                         },

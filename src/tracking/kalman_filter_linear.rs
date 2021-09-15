@@ -15,8 +15,8 @@ use nalgebra;
 type Matrix4x4f32 = nalgebra::SMatrix<f32, 4, 4>;
 type Matrix2x4f32 = nalgebra::SMatrix<f32, 2, 4>;
 type Matrix2x2f32 = nalgebra::SMatrix<f32, 2, 2>;
-type Matrix4x1f32 = nalgebra::SMatrix<f32, 4, 1>;
-type Matrix2x1f32 = nalgebra::SMatrix<f32, 2, 1>;
+pub type Matrix4x1f32 = nalgebra::SMatrix<f32, 4, 1>;
+pub type Matrix2x1f32 = nalgebra::SMatrix<f32, 2, 1>;
 
 const DIAG_ONES: Matrix4x4f32 = Matrix4x4f32::new(
     1.0, 0.0, 0.0, 0.0,

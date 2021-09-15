@@ -6,27 +6,7 @@ use opencv::{
     video::KalmanFilter as KF,
 };
 
-use std::error::Error;
-use std::fmt;
-#[derive(Debug)]
-struct PredictionError {
-    details: String
-}
-impl PredictionError {
-    fn new(msg: &str) -> PredictionError {
-        PredictionError{details: msg.to_string()}
-    }
-}
-impl fmt::Display for PredictionError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,"{}",self.details)
-    }
-}
-impl Error for PredictionError {
-    fn description(&self) -> &str {
-        &self.details
-    }
-}
+// use crate::tracking::KalmanFilterLinear;
 
 pub struct KalmanWrapper {
     pub model_type: KalmanModelType,
