@@ -13,7 +13,8 @@
 Vehicle detection/tracking and speed estimation via next instruments:
 1. Rust programming language - https://www.rust-lang.org/
 2. OpenCV bindings - https://github.com/twistedfall/opencv-rust#rust-opencv-bindings
-3. YOLO v4 (its tiny version) - https://arxiv.org/abs/2004.10934
+3. Linear algebra - https://github.com/dimforge/nalgebra
+4. YOLO v4 (its tiny version) - https://arxiv.org/abs/2004.10934
 
 ## Installation and usage
 1. You need installed Rust compiler obviously. Follow instruction of official site: https://www.rust-lang.org/tools/install
@@ -62,12 +63,13 @@ Vehicle detection/tracking and speed estimation via next instruments:
     * ~~Display an output~~
 
 * Additional functionality
-    * OpenCV-based Kalman filtering *Need help to figure it out. PR's are welcome* 
-    * Custom Kalman filtering *W.I.P. Testing calculation right now* 
-    * Tracking *W.I.P. Struggling with implementation*
+    * ~~Usage of custom implementation (via [nalgebra](https://github.com/dimforge/nalgebra)) of Kalman filter~~
+    * ~~Tracking via custom implementation of Kalman filter~~
+    * Usage of OpenCV-based Kalman filter *Need help to figure it out. PR's are welcome* 
+    * Tracking via OpenCV-based Kalman filter *PR's are welcome: for both constant velocity model and acceleration model*
     * Spatial converter
     * Speed evaluations
-    * Read frames in one thread and do neural network's job in another one
-
+    * Read frames in one thread and do neural network's job in another one __W.I.P__
+    * Error handling __W.I.P__
 ## Support
 If you have troubles or questions please [open an issue](https://github.com/LdDl/rust-road-traffic/issues/new).
