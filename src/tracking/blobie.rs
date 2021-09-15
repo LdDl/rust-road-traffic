@@ -39,7 +39,7 @@ impl KalmanBlobie {
         let center_y = rect.y as f32 + 0.5 * rect.height as f32;
         let center = Point::new(center_x.round() as i32, center_y.round() as i32);
         let diagonal = f32::sqrt((i32::pow(rect.width, 2) + i32::pow(rect.height, 2)) as f32);
-        let kf = KalmanWrapper::new(kalman_type);
+        let kf = KalmanWrapper::new(kalman_type, center_x, center_y, 0.0, 0.0);
         let kb = KalmanBlobie {
             id : Uuid::new_v4(),
             class_name: "Undefined".to_string(),
