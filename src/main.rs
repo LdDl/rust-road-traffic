@@ -11,7 +11,8 @@ use opencv::{
     dnn::nms_boxes
 };
 
-use std::time::{Instant};
+use std::time::Instant;
+use std::io::Write;
 
 mod tracking;
 use tracking::{
@@ -210,7 +211,14 @@ fn run() -> opencv::Result<()> {
                 println!("Can't process input of neural network due the error {:?}", err);
             }
         }
-        println!("Elapes milliseconds to detect object on image: {}", now.elapsed().as_millis());
+        print!("\rAverate FPS of detection process: {}", 1000.0 / now.elapsed().as_millis() as f32);
+        match std::io::stdout().flush() {
+            Ok(_) => {},
+            Err(err) => {
+                panic!("There is a problem with stdout().flush(): {}", err);
+            }
+        };
+        // println!("Elapes milliseconds to detect object on image: {}", now.elapsed().as_millis());
 
         match resize(&mut frame, &mut resized_frame, core::Size::new(OUTPUT_WIDTH, OUTPUT_HEIGHT), 1.0, 1.0, 1) {
             Ok(_) => {},
