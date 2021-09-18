@@ -211,7 +211,7 @@ fn run() -> opencv::Result<()> {
                 println!("Can't process input of neural network due the error {:?}", err);
             }
         }
-        print!("\rAverate FPS of detection process: {}", 1000.0 / now.elapsed().as_millis() as f32);
+        print!("\rAverage FPS of detection process: {}", 1000.0 / now.elapsed().as_millis() as f32);
         match std::io::stdout().flush() {
             Ok(_) => {},
             Err(err) => {
