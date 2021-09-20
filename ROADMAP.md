@@ -18,3 +18,4 @@
     * Error handling __W.I.P__
     * MJPEG streamer (via [actix-web](https://github.com/actix/actix-web#actix-web) I guess?)
 .   * gRPC or REST (websockets) for clients
+.   * Installation instructions (Makefile+Ubuntu18-20)
