@@ -5,19 +5,29 @@ use toml;
 
 #[derive(Deserialize, Debug)]
 pub struct AppSettings {
+    pub input: InputSettings,
     pub output: OutputSettings,
     pub detection: DetectionSettings,
     pub tracking: TrackingSettings,
 }
 
 #[derive(Deserialize, Debug)]
+pub struct InputSettings {
+    pub video_src: String,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct OutputSettings {
     pub width: i32,
     pub height: i32,
+    pub window_name: String,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct DetectionSettings {
+    pub network_weights: String,
+    pub network_cfg: String,
+    pub network_type: String,
     pub conf_threshold: f32,
     pub nms_threshold: f32,
 }

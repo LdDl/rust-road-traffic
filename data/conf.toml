@@ -1,8 +1,15 @@
+[input]
+video_src = "./data/sample_960_540.mp4"
+
 [output]
 width = 500
 height = 500
+window_name = "Tiny YOLO v4"
 
 [detection]
+network_weights = "./data/yolov4-tiny.weights"
+network_cfg = "./data/yolov4-tiny.cfg"
+network_type = "Darknet"
 conf_threshold = 0.1
 nms_threshold = 0.3
 

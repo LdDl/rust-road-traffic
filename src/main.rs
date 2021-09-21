@@ -39,14 +39,15 @@ fn run() -> opencv::Result<()> {
     const COCO_CLASSNAMES: &'static [&'static str] = &["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"];
     const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
     const CLASSES_NUM: usize = COCO_CLASSNAMES.len();
-    
+
     // Define default tracker for detected objects (blobs storage)
     let mut tracker = KalmanBlobiesTracker::default();
 
-    let video_src = "./data/sample_960_540.mp4";
-    let weights_src = "./data/yolov4-tiny.weights";
-    let cfg_src = "./data/yolov4-tiny.cfg";
-    let window = "Tiny YOLO v4";
+    let video_src = &app_settings.input.video_src;
+    let weights_src = &app_settings.detection.network_weights;
+    let cfg_src = &app_settings.detection.network_cfg;
+    let network_type = &app_settings.detection.network_type;
+    let window = &app_settings.output.window_name;
 
     // Prepare output window
     match highgui::named_window(window, 1) {
@@ -81,7 +82,7 @@ fn run() -> opencv::Result<()> {
     }
 
     // Prepare neural network
-    let mut neural_net = match read_net(weights_src, cfg_src, "Darknet"){
+    let mut neural_net = match read_net(weights_src, cfg_src, network_type){
         Ok(result) => result,
         Err(err) => {
             panic!("Can't read network '{}' (with cfg '{}') due the error: {:?}", weights_src, cfg_src, err);
