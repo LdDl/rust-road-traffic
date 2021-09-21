@@ -9,3 +9,6 @@ edition = "2018"
 opencv = {version = "0.54"}
 uuid = { version = "0.8", features = ["v4"] }
 nalgebra = "0.29.0" 
+toml = "0.5"
+serde_derive = "1.0.130"
+serde = "1.0.130"

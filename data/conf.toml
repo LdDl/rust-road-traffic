@@ -1,0 +1,10 @@
+[output]
+width = 500
+height = 500
+
+[detection]
+conf_threshold = 0.1
+nms_threshold = 0.3
+
+[tracking]
+max_points_in_track = 100

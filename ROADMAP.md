@@ -14,8 +14,9 @@
     * Tracking via OpenCV-based Kalman filter *PR's are welcome: for both constant velocity model and acceleration model*
     * Spatial converter
     * Speed evaluations
-    * Read frames in one thread and do neural network's job in another one __W.I.P__
-    * Error handling __W.I.P__
+    * Read frames in one thread and do neural network's job in another one __W.I.P.__
+    * Error handling __W.I.P.__
     * MJPEG streamer (via [actix-web](https://github.com/actix/actix-web#actix-web) I guess?)
 .   * gRPC or REST (websockets) for clients
 .   * Installation instructions (Makefile+Ubuntu18-20)
+    * TOML configuration __W.I.P.__

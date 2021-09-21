@@ -13,6 +13,7 @@ use opencv::{
 
 use std::time::Instant;
 use std::io::Write;
+use std::fs;
 
 mod tracking;
 use tracking::{
@@ -20,15 +21,23 @@ use tracking::{
     KalmanBlobiesTracker,
 };
 
+mod settings;
+use settings::{
+    AppSettings,
+};
+
 fn run() -> opencv::Result<()> {
-    const OUTPUT_WIDTH: i32 = 500;
-    const OUTPUT_HEIGHT: i32 = 500;
-    const CONF_THRESHOLD: f32 = 0.1;
+    let app_settings = AppSettings::new_settings("./data/conf.toml");
+    println!("Settings are: {:?}", app_settings);
+
+    let output_width: i32 = app_settings.output.width;
+    let output_height: i32 = app_settings.output.height;
+    let conf_threshold: f32 = app_settings.detection.conf_threshold;
     const COCO_CLASSNAMES: &'static [&'static str] = &["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"];
     const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
     const CLASSES_NUM: usize = COCO_CLASSNAMES.len();
-    const NMS_THRESHOLD: f32 = 0.3;
-    const MAX_POINTS_IN_TRACK: usize = 100;
+    let nms_threshold: f32 = app_settings.detection.nms_threshold;
+    let max_points_in_track: usize = app_settings.tracking.max_points_in_track;
 
     // Define default tracker for detected objects (blobs storage)
     let mut tracker = KalmanBlobiesTracker::default();
@@ -45,7 +54,7 @@ fn run() -> opencv::Result<()> {
             panic!("Can't give a name to output window due the error: {:?}", err)
         }
     };
-    match highgui::resize_window(window, OUTPUT_WIDTH, OUTPUT_HEIGHT) {
+    match highgui::resize_window(window, output_width, output_height) {
         Ok(_) => {},
         Err(err) =>{
             panic!("Can't resize output window due the error: {:?}", err)
@@ -157,7 +166,7 @@ fn run() -> opencv::Result<()> {
                         let class_name = COCO_CLASSNAMES[class_id];
                         if COCO_FILTERED_CLASSNAMES.contains(&class_name) {
                             let confidence = max_probability * data_ptr[i+4];
-                            if confidence > CONF_THRESHOLD {
+                            if confidence > conf_threshold {
                                 let center_x = data_ptr[i] * frame_cols;
                                 let center_y = data_ptr[i + 1] * frame_rows;
                                 let width = data_ptr[i + 2] * frame_cols;
@@ -173,7 +182,7 @@ fn run() -> opencv::Result<()> {
                     }
                 }
                 let mut indices = core::Vector::<i32>::new();
-                match nms_boxes(&bboxes, &confidences, CONF_THRESHOLD, NMS_THRESHOLD, &mut indices, 1.0, 0) {
+                match nms_boxes(&bboxes, &confidences, conf_threshold, nms_threshold, &mut indices, 1.0, 0) {
                     Ok(_) => {},
                     Err(err) => {
                         println!("Can't run NMSBoxes on detections due the error {:?}", err);
@@ -184,7 +193,7 @@ fn run() -> opencv::Result<()> {
                     match bboxes.get(i) {
                         Ok(bbox) => {
                             let class_name = class_names[i];
-                            let mut kb = KalmanBlobie::new(&bbox, MAX_POINTS_IN_TRACK);
+                            let mut kb = KalmanBlobie::new(&bbox, max_points_in_track);
                             kb.set_class_name(class_name.to_string());
                             tmp_blobs.push(kb);
                         },
@@ -208,7 +217,7 @@ fn run() -> opencv::Result<()> {
         }
         let elapsed_detection = 1000.0 / detection_now.elapsed().as_millis() as f32;
 
-        match resize(&mut frame, &mut resized_frame, core::Size::new(OUTPUT_WIDTH, OUTPUT_HEIGHT), 1.0, 1.0, 1) {
+        match resize(&mut frame, &mut resized_frame, core::Size::new(output_width, output_height), 1.0, 1.0, 1) {
             Ok(_) => {},
             Err(err) => {
                 panic!("Can't resize output frame due the error {:?}", err);
