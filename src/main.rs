@@ -115,6 +115,8 @@ fn run() -> opencv::Result<()> {
     let frame_rows = frame.rows() as f32;
 
     loop {
+        let all_now = Instant::now();
+
         match video_capture.read(&mut frame) {
             Ok(_) => {},
             Err(_) => {
@@ -122,6 +124,8 @@ fn run() -> opencv::Result<()> {
                 break;
             }
         };
+
+        let elapsed_capture = all_now.elapsed().as_millis() as f32;
 
         let blobimg = blob_from_image(&frame, 1.0/255.0, core::Size::new(416, 416), core::Scalar::default(), true, false, core::CV_32F);
         match neural_net.set_input(&blobimg.unwrap(), "", 1.0, core::Scalar::default()){
@@ -131,7 +135,7 @@ fn run() -> opencv::Result<()> {
             }
         };
 
-        let now = Instant::now();
+        let detection_now = Instant::now();
         match neural_net.forward(&mut detections, &out_layers_names) {
             Ok(_) => {
                 let outs = detections.len();
@@ -202,13 +206,7 @@ fn run() -> opencv::Result<()> {
                 println!("Can't process input of neural network due the error {:?}", err);
             }
         }
-        print!("\rAverage FPS of detection process: {}", 1000.0 / now.elapsed().as_millis() as f32);
-        match std::io::stdout().flush() {
-            Ok(_) => {},
-            Err(err) => {
-                panic!("There is a problem with stdout().flush(): {}", err);
-            }
-        };
+        let elapsed_detection = 1000.0 / detection_now.elapsed().as_millis() as f32;
 
         match resize(&mut frame, &mut resized_frame, core::Size::new(OUTPUT_WIDTH, OUTPUT_HEIGHT), 1.0, 1.0, 1) {
             Ok(_) => {},
@@ -224,6 +222,15 @@ fn run() -> opencv::Result<()> {
         if key > 0 && key != 255 {
             break;
         }
+
+        let elapsed_all = 1000.0 / all_now.elapsed().as_millis() as f32;
+        print!("\rСapturing process millis: {} | Average FPS of detection process: {} | Average FPS of whole process: {}", elapsed_capture, elapsed_detection, elapsed_all);
+        match std::io::stdout().flush() {
+            Ok(_) => {},
+            Err(err) => {
+                panic!("There is a problem with stdout().flush(): {}", err);
+            }
+        };
     }
     Ok(())
 }
