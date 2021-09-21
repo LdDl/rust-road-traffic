@@ -1,4 +1,5 @@
 use std::fs;
+use std::collections::HashMap;
 
 use serde_derive::Deserialize;
 use toml;
@@ -9,6 +10,7 @@ pub struct AppSettings {
     pub output: OutputSettings,
     pub detection: DetectionSettings,
     pub tracking: TrackingSettings,
+    pub road_lanes: Vec<RoadLanesSettings>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -35,6 +37,14 @@ pub struct DetectionSettings {
 #[derive(Deserialize, Debug)]
 pub struct TrackingSettings {
     pub max_points_in_track: usize,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct RoadLanesSettings {
+    pub lane_number: i32,
+    pub lane_direction: i16,
+    pub geometry: Vec<Vec<i32>>,
+    pub color_rgb: Vec<f32>,
 }
 
 impl AppSettings {
