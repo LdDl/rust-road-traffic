@@ -42,8 +42,8 @@ pub struct TrackingSettings {
 pub struct RoadLanesSettings {
     pub lane_number: i32,
     pub lane_direction: i16,
-    pub geometry: Vec<Vec<i32>>,
-    pub color_rgb: Vec<f32>,
+    pub geometry: Vec<[i32; 2]>,
+    pub color_rgb: [i16; 3],
 }
 
 impl AppSettings {

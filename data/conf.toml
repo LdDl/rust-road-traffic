@@ -20,14 +20,14 @@
     lane_number = 0
     lane_direction = 0
     geometry = [[51, 286], [281, 284], [334, 80], [179, 68]]
-    color_rgb = [255.0, 0.0, 0.0]
+    color_rgb = [255, 0, 0]
 [[road_lanes]]
     lane_number = 1
     lane_direction = 0
     geometry = [[315, 287], [572, 285], [547, 66], [359, 69]]
-    color_rgb = [0.0, 255.0, 0.0]
+    color_rgb = [0, 255, 0]
 [[road_lanes]]
     lane_number = 2
     lane_direction = 0
     geometry = [[604, 287], [885, 287], [746, 58], [575, 68]]
-    color_rgb = [0.0, 0.0, 255.0]
+    color_rgb = [0, 0, 255]

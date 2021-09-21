@@ -13,7 +13,6 @@ use opencv::{
 
 use std::time::Instant;
 use std::io::Write;
-use std::fs;
 
 mod tracking;
 use tracking::{
@@ -24,6 +23,11 @@ use tracking::{
 mod settings;
 use settings::{
     AppSettings,
+};
+
+mod polygons;
+use polygons::{
+    ConvexPolygon,
 };
 
 fn run() -> opencv::Result<()> {
@@ -48,6 +52,11 @@ fn run() -> opencv::Result<()> {
     let cfg_src = &app_settings.detection.network_cfg;
     let network_type = &app_settings.detection.network_type;
     let window = &app_settings.output.window_name;
+
+    let mut convex_polygons = vec![];
+    for road_lane in app_settings.road_lanes.iter() {
+        convex_polygons.push(road_lane.convert_to_convex_polygon());
+    }
 
     // Prepare output window
     match highgui::named_window(window, 1) {
@@ -218,6 +227,10 @@ fn run() -> opencv::Result<()> {
             }
         }
         let elapsed_detection = 1000.0 / detection_now.elapsed().as_millis() as f32;
+
+        for polygon in convex_polygons.iter() {
+            polygon.draw_on_mat(&mut frame);
+        }
 
         match resize(&mut frame, &mut resized_frame, core::Size::new(output_width, output_height), 1.0, 1.0, 1) {
             Ok(_) => {},
