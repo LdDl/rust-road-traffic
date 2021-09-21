@@ -16,7 +16,6 @@ use std::io::Write;
 
 mod tracking;
 use tracking::{
-    KalmanModelType,
     KalmanBlobie,
     KalmanBlobiesTracker,
 };
@@ -29,7 +28,6 @@ fn run() -> opencv::Result<()> {
     const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
     const CLASSES_NUM: usize = COCO_CLASSNAMES.len();
     const NMS_THRESHOLD: f32 = 0.3;
-    // const PICKED_KALMAN_MODEL: KalmanModelType = KalmanModelType::ConstantVelocity;
     const MAX_POINTS_IN_TRACK: usize = 100;
 
     // Define default tracker for detected objects (blobs storage)
@@ -192,13 +190,6 @@ fn run() -> opencv::Result<()> {
                     }
                 }
                 tracker.match_to_existing(&mut tmp_blobs);
-                // for b in tmp_blobs {
-                //     b.draw_track(&mut frame);
-                //     b.draw_center(&mut frame);
-                //     b.draw_predicted(&mut frame);
-                //     b.draw_rectangle(&mut frame);
-                //     b.draw_class_name(&mut frame);
-                // }
                 for (_, b) in tracker.objects.iter() {
                     b.draw_track(&mut frame);
                     b.draw_center(&mut frame);
@@ -218,7 +209,6 @@ fn run() -> opencv::Result<()> {
                 panic!("There is a problem with stdout().flush(): {}", err);
             }
         };
-        // println!("Elapes milliseconds to detect object on image: {}", now.elapsed().as_millis());
 
         match resize(&mut frame, &mut resized_frame, core::Size::new(OUTPUT_WIDTH, OUTPUT_HEIGHT), 1.0, 1.0, 1) {
             Ok(_) => {},
