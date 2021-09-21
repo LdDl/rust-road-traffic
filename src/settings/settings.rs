@@ -1,5 +1,4 @@
 use std::fs;
-use std::collections::HashMap;
 
 use serde_derive::Deserialize;
 use toml;
