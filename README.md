@@ -30,13 +30,42 @@ Vehicle detection/tracking and speed estimation via next instruments:
     ```
     Well, actually I provide yolov4-tiny configuration and weights file from [official repository](https://github.com/AlexeyAB/darknet) (authors of YOLOv4), but you are free to use yours.
     I provide video file as sample also.
-    If you want to change those you can navigate to source code:
-    ```rust
-    const COCO_CLASSNAMES: &'static [&'static str] = &[/*place whatever classnames your network can handle*/]
-    const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &[/*place whatever classnames you want to filter*/]
-    let video_src = "./data/sample_960_540.mp4";
-    let weights_src = "./data/yolov4-tiny.weights";
-    let cfg_src = "./data/yolov4-tiny.cfg";
+    
+    If you want to change parameters of this utility then navigate to [configuration file](data/conf.toml):
+    ```toml
+    [input]
+        video_src = "./data/sample_960_540.mp4"
+
+    [output]
+        width = 500
+        height = 500
+        window_name = "Tiny YOLO v4"
+
+    [detection]
+        network_weights = "./data/yolov4-tiny.weights"
+        network_cfg = "./data/yolov4-tiny.cfg"
+        network_type = "Darknet"
+        conf_threshold = 0.1
+        nms_threshold = 0.3
+
+    [tracking]
+        max_points_in_track = 100
+
+    [[road_lanes]]
+        lane_number = 0
+        lane_direction = 0
+        geometry = [[51, 286], [281, 284], [334, 80], [179, 68]]
+        color_rgb = [255, 0, 0]
+    [[road_lanes]]
+        lane_number = 1
+        lane_direction = 0
+        geometry = [[315, 287], [572, 285], [547, 66], [359, 69]]
+        color_rgb = [0, 255, 0]
+    [[road_lanes]]
+        lane_number = 2
+        lane_direction = 0
+        geometry = [[604, 287], [885, 287], [746, 58], [575, 68]]
+        color_rgb = [0, 0, 255]
     ```
 5. Run
     ```shell
