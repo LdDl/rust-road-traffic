@@ -21,6 +21,6 @@
 .   * Installation instructions (Makefile+Ubuntu18-20)
     * TOML configuration __W.I.P.__
     * Convex polygons math __W.I.P.__
-        * Check if point is in polygon __W.I.P.__
+        * ~~Check if point is in polygon~~
         * Check if point has entered into polygon __W.I.P.__
         * Check if point has left polygon __W.I.P.__
