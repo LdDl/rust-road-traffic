@@ -30,8 +30,6 @@ pub struct ConvexPolygon {
     color: Scalar
 }
 
-
-
 impl ConvexPolygon {
     pub fn draw_on_mat(&self, img: &mut Mat) {
         // @todo: proper error handling
@@ -55,7 +53,7 @@ impl ConvexPolygon {
     pub fn contains_point(&self, x: i32, y: i32) -> bool {
         let n = self.coordinates.len();
         // @todo: math.maxInt could lead to overflow obviously. Need good workaround. PRs are welcome
-        let extreme_point = vec![99999.0, 0.0];
+        let extreme_point = vec![99999.0, y as f32];
         let mut intersections_cnt = 0;
 	    let mut previous = 0;
         let x_f32 = x as f32;
@@ -176,4 +174,85 @@ fn is_intersects(first_px: f32, first_py: f32, first_qx: f32, first_qy: f32, sec
     }
     // Segments do not intersect
     return false;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_contains_point() {
+        let convex_polygons = vec![
+            ConvexPolygon{
+                coordinates: vec![
+                    Point::new(0, 0),
+                    Point::new(5, 0),
+                    Point::new(5, 5),
+                    Point::new(0, 5),
+                ],
+                color: Scalar::default(),
+            },
+            ConvexPolygon{
+                coordinates: vec![
+                    Point::new(0, 0),
+                    Point::new(5, 0),
+                    Point::new(5, 5),
+                    Point::new(0, 5),
+                ],
+                color: Scalar::default(),
+            },
+            ConvexPolygon{
+                coordinates: vec![
+                    Point::new(0, 0),
+                    Point::new(5, 5),
+                    Point::new(5, 0),
+                ],
+                color: Scalar::default(),
+            },
+            ConvexPolygon{
+                coordinates: vec![
+                    Point::new(0, 0),
+                    Point::new(5, 5),
+                    Point::new(5, 0),
+                ],
+                color: Scalar::default(),
+            },
+            ConvexPolygon{
+                coordinates: vec![
+                    Point::new(0, 0),
+                    Point::new(5, 5),
+                    Point::new(5, 0),
+                ],
+                color: Scalar::default(),
+            },
+            ConvexPolygon{
+                coordinates: vec![
+                    Point::new(0, 0),
+                    Point::new(5, 0),
+                    Point::new(5, 5),
+                    Point::new(0, 5),
+                ],
+                color: Scalar::default(),
+            }
+        ];
+        let points = vec![
+            Point::new(20, 20),
+            Point::new(4, 4),
+            Point::new(3, 3),
+            Point::new(5, 1),
+            Point::new(7, 2),
+            Point::new(-2, 12)
+        ];
+        let correct_answers = vec![
+            false,
+            true,
+            true,
+            true,
+            false,
+            false
+        ];
+        for (i, convex_polygon) in convex_polygons.iter().enumerate() {
+            let answer = convex_polygon.contains_point(points[i].x, points[i].y);
+            assert_eq!(answer, correct_answers[i]);
+        }
+    }
 }
