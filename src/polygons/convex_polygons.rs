@@ -50,6 +50,8 @@ impl ConvexPolygon {
             }
         };
     }
+    // Checks if given polygon contains a point
+    // Code has been taken from: https://github.com/LdDl/odam/blob/master/virtual_polygons.go#L180
     pub fn contains_point(&self, x: i32, y: i32) -> bool {
         let n = self.coordinates.len();
         // @todo: math.maxInt could lead to overflow obviously. Need good workaround. PRs are welcome
