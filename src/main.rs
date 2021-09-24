@@ -1,8 +1,19 @@
 use opencv::{
     prelude::*,
-    core,
-    highgui,
-    videoio,
+    core::Scalar,
+    core::Size,
+    core::Mat,
+    core::Vector,
+    core::get_cuda_enabled_device_count,
+    core::CV_32F,
+    core::Rect,
+    highgui::named_window,
+    highgui::resize_window,
+    highgui::imshow,
+    highgui::wait_key,
+    videoio::VideoCapture,
+    videoio::CAP_ANY,
+    videoio::get_backends,
     imgproc::resize,
     dnn::DNN_BACKEND_CUDA,
     dnn::DNN_TARGET_CUDA,
@@ -28,9 +39,6 @@ use settings::{
 };
 
 mod polygons;
-use polygons::{
-    ConvexPolygon,
-};
 
 fn run() -> opencv::Result<()> {
     let app_settings = AppSettings::new_settings("./data/conf.toml");
@@ -42,7 +50,7 @@ fn run() -> opencv::Result<()> {
     let nms_threshold: f32 = app_settings.detection.nms_threshold;
     let max_points_in_track: usize = app_settings.tracking.max_points_in_track;
 
-    let default_scalar: core::Scalar = core::Scalar::default();
+    let default_scalar: Scalar = Scalar::default();
 
     // Define default tracker for detected objects (blobs storage)
     let mut tracker = KalmanBlobiesTracker::default();
@@ -59,33 +67,33 @@ fn run() -> opencv::Result<()> {
     }
 
     // Prepare output window
-    match highgui::named_window(window, 1) {
+    match named_window(window, 1) {
         Ok(_) => {},
         Err(err) =>{
             panic!("Can't give a name to output window due the error: {:?}", err)
         }
     };
-    match highgui::resize_window(window, output_width, output_height) {
+    match resize_window(window, output_width, output_height) {
         Ok(_) => {},
         Err(err) =>{
             panic!("Can't resize output window due the error: {:?}", err)
         }
     }
-    println!("Available <videoio> backends: {:?}", videoio::get_backends()?);
+    println!("Available <videoio> backends: {:?}", get_backends()?);
 
     // Check if CUDA is an option at all
-    let cuda_count = core::get_cuda_enabled_device_count()?;
+    let cuda_count = get_cuda_enabled_device_count()?;
     let cuda_available = cuda_count > 0;
     println!("CUDA is {}", if cuda_available { "available" } else { "not available" });
     
     // Prepare video
-    let mut video_capture = match videoio::VideoCapture::from_file(video_src, videoio::CAP_ANY) {
+    let mut video_capture = match VideoCapture::from_file(video_src, CAP_ANY) {
         Ok(result) => {result},
         Err(err) => {
             panic!("Can't init '{}' due the error: {:?}", video_src, err);
         }
     };
-    let opened = videoio::VideoCapture::is_opened(&video_capture)?;
+    let opened = VideoCapture::is_opened(&video_capture)?;
     if !opened {
         panic!("Unable to open video '{}'", video_src);
     }
@@ -109,7 +117,7 @@ fn run() -> opencv::Result<()> {
                 }
             };
             blob_scale = 1.0/255.0;
-            net_size = core::Size::new(416, 416);
+            net_size = Size::new(416, 416);
             blob_mean = default_scalar;
             blob_name = "";
             coco_classnames = &["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"];
@@ -122,8 +130,8 @@ fn run() -> opencv::Result<()> {
                 }
             };
             blob_scale = 0.007843;
-            net_size = core::Size::new(300, 300);
-            blob_mean = core::Scalar::from(127.5);
+            net_size = Size::new(300, 300);
+            blob_mean = Scalar::from(127.5);
             blob_name = "data";
             coco_classnames = &["background", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"];
         },
@@ -158,9 +166,9 @@ fn run() -> opencv::Result<()> {
         }
     }
     
-    let mut frame = core::Mat::default();
-    let mut resized_frame = core::Mat::default();
-    let mut detections = core::Vector::<core::Mat>::new();
+    let mut frame = Mat::default();
+    let mut resized_frame = Mat::default();
+    let mut detections = Vector::<Mat>::new();
 
     /* Read first frame to determine image width/height */
     match video_capture.read(&mut frame) {
@@ -185,7 +193,7 @@ fn run() -> opencv::Result<()> {
 
         let elapsed_capture = all_now.elapsed().as_millis() as f32;
 
-        let blobimg = blob_from_image(&frame, blob_scale, net_size, blob_mean, true, false, core::CV_32F);
+        let blobimg = blob_from_image(&frame, blob_scale, net_size, blob_mean, true, false, CV_32F);
         match neural_net.set_input(&blobimg.unwrap(), blob_name, 1.0, default_scalar){
             Ok(_) => {},
             Err(err) => {
@@ -224,7 +232,7 @@ fn run() -> opencv::Result<()> {
             polygon.draw_on_mat(&mut frame);
         }
 
-        match resize(&mut frame, &mut resized_frame, core::Size::new(output_width, output_height), 1.0, 1.0, 1) {
+        match resize(&mut frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
             Ok(_) => {},
             Err(err) => {
                 panic!("Can't resize output frame due the error {:?}", err);
@@ -232,9 +240,9 @@ fn run() -> opencv::Result<()> {
         }
 
         if resized_frame.size()?.width > 0 {
-            highgui::imshow(window, &mut resized_frame)?;
+            imshow(window, &mut resized_frame)?;
         }
-        let key = highgui::wait_key(10)?;
+        let key = wait_key(10)?;
         if key > 0 && key != 255 {
             break;
         }
@@ -251,7 +259,7 @@ fn run() -> opencv::Result<()> {
     Ok(())
 }
 
-fn process_mobilenet_detections(detections: &core::Vector::<core::Mat>, conf_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &'static [&'static str], filtered_classes: &'static [&'static str]) -> Vec<KalmanBlobie> {
+fn process_mobilenet_detections(detections: &Vector::<Mat>, conf_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &'static [&'static str], filtered_classes: &'static [&'static str]) -> Vec<KalmanBlobie> {
     let mut tmp_blobs = vec![];
     let outs = detections.len();
     for o in 0..outs {
@@ -272,7 +280,7 @@ fn process_mobilenet_detections(detections: &core::Vector::<core::Mat>, conf_thr
                     if (frame_cols as i32 - width) < 100 {
                         continue
                     }
-                    let bbox = core::Rect::new(left, top, width, height);
+                    let bbox = Rect::new(left, top, width, height);
                     let mut kb = KalmanBlobie::new(&bbox, max_points_in_track);
                     kb.set_class_name(class_name.to_string());
                     tmp_blobs.push(kb);
@@ -283,12 +291,12 @@ fn process_mobilenet_detections(detections: &core::Vector::<core::Mat>, conf_thr
     return tmp_blobs;
 }
 
-fn process_yolo_detections(detections: &core::Vector::<core::Mat>, conf_threshold: f32, nms_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &'static [&'static str], filtered_classes: &'static [&'static str], classes_num: usize) -> Vec<KalmanBlobie> {
+fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, nms_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &'static [&'static str], filtered_classes: &'static [&'static str], classes_num: usize) -> Vec<KalmanBlobie> {
     let mut tmp_blobs = vec![];
     let outs = detections.len();
     let mut class_names = vec![];
-    let mut confidences = core::Vector::<f32>::new();
-    let mut bboxes = core::Vector::<core::Rect>::new();
+    let mut confidences = Vector::<f32>::new();
+    let mut bboxes = Vector::<Rect>::new();
     for o in 0..outs {
         let output = detections.get(o).unwrap();
         let data_ptr = output.data_typed::<f32>().unwrap();
@@ -311,7 +319,7 @@ fn process_yolo_detections(detections: &core::Vector::<core::Mat>, conf_threshol
                     let height = data_ptr[i + 3] * frame_rows;
                     let left = center_x - width / 2.0;
                     let top = center_y - height / 2.0;
-                    let bbox = core::Rect::new(left as i32, top as i32, width as i32, height as i32);
+                    let bbox = Rect::new(left as i32, top as i32, width as i32, height as i32);
                     class_names.push(class_name);
                     confidences.push(confidence);
                     bboxes.push(bbox);
@@ -319,7 +327,7 @@ fn process_yolo_detections(detections: &core::Vector::<core::Mat>, conf_threshol
             }
         }
     }
-    let mut indices = core::Vector::<i32>::new();
+    let mut indices = Vector::<i32>::new();
     match nms_boxes(&bboxes, &confidences, conf_threshold, nms_threshold, &mut indices, 1.0, 0) {
         Ok(_) => {},
         Err(err) => {
