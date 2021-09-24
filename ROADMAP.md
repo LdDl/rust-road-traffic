@@ -16,7 +16,7 @@
         * ~~Tranform matrix~~
         * ~~Convert function~~
     * Speed evaluations __W.I.P.__
-        * Haversine function __W.I.P.__
+        * ~~Haversine function~~
         * Spatial converter usage
     * Read frames in one thread and do neural network's job in another one __W.I.P.__
     * Error handling __W.I.P.__
