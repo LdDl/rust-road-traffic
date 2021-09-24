@@ -39,6 +39,7 @@ use settings::{
 };
 
 mod polygons;
+mod spatial;
 
 fn run() -> opencv::Result<()> {
     let app_settings = AppSettings::new_settings("./data/conf.toml");
