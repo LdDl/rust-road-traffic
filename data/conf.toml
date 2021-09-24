@@ -4,7 +4,7 @@
 [output]
     width = 500
     height = 500
-    window_name = "Tiny YOLO v4"
+    window_name = "Caffe MobilenetSSD"
 
 [detection]
     # *.weight/*.cfg + "Darknet" for YOLO

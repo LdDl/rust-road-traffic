@@ -42,10 +42,6 @@ fn run() -> opencv::Result<()> {
     let nms_threshold: f32 = app_settings.detection.nms_threshold;
     let max_points_in_track: usize = app_settings.tracking.max_points_in_track;
 
-    const COCO_CLASSNAMES: &'static [&'static str] = &["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"];
-    // const COCO_CLASSNAMES: &'static [&'static str] = &["background", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"];
-    const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
-    const CLASSES_NUM: usize = COCO_CLASSNAMES.len();
     let default_scalar: core::Scalar = core::Scalar::default();
 
     // Define default tracker for detected objects (blobs storage)
@@ -101,6 +97,9 @@ fn run() -> opencv::Result<()> {
     let blob_mean;
     let blob_name;
 
+    let COCO_CLASSNAMES: &'static [&'static str];
+    const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
+
     match network_type.as_ref() {
         "darknet" => {
             neural_net = match read_net(weights_src, cfg_src, "Darknet"){
@@ -113,6 +112,7 @@ fn run() -> opencv::Result<()> {
             net_size = core::Size::new(416, 416);
             blob_mean = default_scalar;
             blob_name = "";
+            COCO_CLASSNAMES = &["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"];
         },
         "caffe-mobilenet-ssd" => {
             neural_net = match read_net_from_caffe(weights_src, cfg_src){
@@ -125,11 +125,15 @@ fn run() -> opencv::Result<()> {
             net_size = core::Size::new(300, 300);
             blob_mean = core::Scalar::from(127.5);
             blob_name = "data";
+            COCO_CLASSNAMES = &["background", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"];
         },
         _ => {
             panic!("Only this network types are supported: Darknet / Caffe-Mobilenet-SSD. You've provided: '{}'", app_settings.detection.network_type);
         }
     };
+
+    let classes_num: usize = COCO_CLASSNAMES.len();
+
 
     let out_layers_names = match neural_net.get_unconnected_out_layers_names() {
         Ok(result) => result,
@@ -194,7 +198,7 @@ fn run() -> opencv::Result<()> {
                 let mut tmp_blobs;
                 if network_type == "darknet" {
                     /* Tiny YOLO */
-                    tmp_blobs = process_yolo_detections(&detections, conf_threshold, nms_threshold, frame_cols, frame_rows, max_points_in_track, COCO_CLASSNAMES, COCO_FILTERED_CLASSNAMES, CLASSES_NUM);
+                    tmp_blobs = process_yolo_detections(&detections, conf_threshold, nms_threshold, frame_cols, frame_rows, max_points_in_track, COCO_CLASSNAMES, COCO_FILTERED_CLASSNAMES, classes_num);
                 } else {
                     /* Caffe's Mobilenet */
                     tmp_blobs = process_mobilenet_detections(&detections, conf_threshold, frame_cols, frame_rows, max_points_in_track, COCO_CLASSNAMES, COCO_FILTERED_CLASSNAMES);
