@@ -300,6 +300,5 @@ mod tests {
             assert_eq!(predicted_x, correct_x);
             assert_eq!(predicted_y, correct_y);
         }
-        assert_eq!(1, 0);
     }
 }

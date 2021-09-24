@@ -12,8 +12,12 @@
     * ~~Tracking via custom implementation of Kalman filter~~
     * Usage of OpenCV-based Kalman filter *Need help to figure it out. PR's are welcome* 
     * Tracking via OpenCV-based Kalman filter *PR's are welcome: for both constant velocity model and acceleration model*
-    * Spatial converter
-    * Speed evaluations
+    * ~~Spatial converter~~
+        * ~~Tranform matrix~~
+        * ~~Convert function~~
+    * Speed evaluations __W.I.P.__
+        * Haversine function __W.I.P.__
+        * Spatial converter usage
     * Read frames in one thread and do neural network's job in another one __W.I.P.__
     * Error handling __W.I.P.__
     * MJPEG streamer (via [actix-web](https://github.com/actix/actix-web#actix-web) I guess?)
