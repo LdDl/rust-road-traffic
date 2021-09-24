@@ -130,8 +130,6 @@ fn run() -> opencv::Result<()> {
             panic!("Only this network types are supported: Darknet / Caffe-Mobilenet-SSD. You've provided: '{}'", app_settings.detection.network_type);
         }
     };
-    
-
 
     let out_layers_names = match neural_net.get_unconnected_out_layers_names() {
         Ok(result) => result,
