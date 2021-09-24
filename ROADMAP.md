@@ -24,3 +24,4 @@
         * ~~Check if point is in polygon~~
         * Check if point has entered into polygon __W.I.P.__
         * Check if point has left polygon __W.I.P.__
+    * ~~Optional choice between Tiny YOLO and MobilenetSSD(Caffe)~~

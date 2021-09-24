@@ -14,7 +14,7 @@ Vehicle detection/tracking and speed estimation via next instruments:
 1. Rust programming language - https://www.rust-lang.org/
 2. OpenCV bindings - https://github.com/twistedfall/opencv-rust#rust-opencv-bindings
 3. Linear algebra - https://github.com/dimforge/nalgebra
-4. YOLO v4 (its tiny version) - https://arxiv.org/abs/2004.10934
+4. YOLO v4 (its tiny version) - https://arxiv.org/abs/2004.10934 | MobilenetSSD - https://github.com/chuanqi305/MobileNet-SSD
 
 ## Installation and usage
 1. You need installed Rust compiler obviously. Follow instruction of official site: https://www.rust-lang.org/tools/install
