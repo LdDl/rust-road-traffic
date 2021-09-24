@@ -42,10 +42,15 @@ Vehicle detection/tracking and speed estimation via next instruments:
         window_name = "Tiny YOLO v4"
 
     [detection]
+        # *.weight/*.cfg + "Darknet" for YOLO
         network_weights = "./data/yolov4-tiny.weights"
         network_cfg = "./data/yolov4-tiny.cfg"
         network_type = "Darknet"
-        conf_threshold = 0.1
+        # *.prototxt/*.caffemodel + "Caffe-MobileNet-SSD" for Caffe
+        # network_weights = "./data/MobileNetSSD_deploy.prototxt"
+        # network_cfg = "./data/MobileNetSSD_deploy.caffemodel"
+        # network_type = "Caffe-MobileNet-SSD"
+        conf_threshold = 0.15
         nms_threshold = 0.3
 
     [tracking]
