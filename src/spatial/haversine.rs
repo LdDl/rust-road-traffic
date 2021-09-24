@@ -3,7 +3,7 @@ use opencv::{
     core::Vector
 };
 use std::f32::consts::PI;
-const earth_radius_km: f32 = 6371.0;
+const EARTH_RADIUS_KM: f32 = 6371.0;
 
 // deg2rad Converts degrees to radians
 //
@@ -28,7 +28,7 @@ pub fn haversine(src: Point2f, dst: Point2f) -> f32 {
 	let diff_lon = lon2 - lon1;
     let a = f32::powi(f32::sin(diff_lat / 2.0), 2) + f32::cos(lat1)*f32::cos(lat2)*f32::powi(f32::sin(diff_lon/2.0), 2);
     let c = 2.0 * f32::atan2(f32::sqrt(a), f32::sqrt(1.0 - a));
-	let km = c * earth_radius_km;
+	let km = c * EARTH_RADIUS_KM;
     return km;
 }
 
