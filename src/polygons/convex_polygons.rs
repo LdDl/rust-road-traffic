@@ -72,6 +72,12 @@ impl ConvexPolygon {
             }
         };
     }
+    pub fn get_id(&self) -> Uuid {
+        return self.id
+    }
+    pub fn set_id(&mut self, id: Uuid) {
+        self.id = id;
+    }
     // Checks if given polygon contains a point
     // Code has been taken from: https://github.com/LdDl/odam/blob/master/virtual_polygons.go#L180
     pub fn contains_point(&self, x: i32, y: i32) -> bool {
