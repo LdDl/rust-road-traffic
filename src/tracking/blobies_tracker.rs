@@ -8,8 +8,7 @@ use std::collections::HashMap;
 pub struct KalmanBlobiesTracker {
     pub objects: HashMap<Uuid, KalmanBlobie>,
     max_no_match: usize,
-    min_threshold_distance: f32,
-    max_points_in_track: i32
+    min_threshold_distance: f32
 }
 
 impl KalmanBlobiesTracker {
@@ -17,8 +16,7 @@ impl KalmanBlobiesTracker {
         return KalmanBlobiesTracker{
             objects: HashMap::new(),
             max_no_match: 5,
-            min_threshold_distance: 15.0,
-            max_points_in_track: 100,
+            min_threshold_distance: 15.0
         }
     }
     pub fn get_objects_num(&self) -> usize {
