@@ -11,7 +11,8 @@ use opencv::{
 
 use chrono::{
     DateTime,
-    Utc
+    Utc,
+    Duration
 };
 use crate::spatial::haversine::haversine;
 
@@ -82,7 +83,7 @@ impl SpatialConverter {
     fn estimate_speed(&self, from_point: &Point2f, from_time: DateTime<Utc>, to_point: &Point2f, to_time: DateTime<Utc>) -> f32 {
         let from_point_wgs84 = self.transform_to_wgs84(from_point);
         let to_point_wgs84 = self.transform_to_wgs84(to_point);
-        let time_difference = (from_time - to_time).num_seconds() as f32 / 3600.0;
+        let time_difference = (to_time - from_time).num_seconds() as f32 / 3600.0;
         return haversine(from_point_wgs84, to_point_wgs84) / time_difference;
     }
 }
@@ -140,5 +141,29 @@ mod tests {
             assert_eq!(result_x, correct_x);
             assert_eq!(result_y, correct_y);
         }
+    }
+    #[test]
+    fn test_estimate_speed() {
+        let mut src = Vector::<Point2f>::new();
+        src.push(Point2f::new(1200.0, 278.0));
+        src.push(Point2f::new(87.0, 328.0),);
+        src.push(Point2f::new(36.0, 583.0));
+        src.push(Point2f::new(1205.0, 698.0));
+
+        let mut dst = Vector::<Point2f>::new();
+        dst.push(Point2f::new(6.602018, 52.036769));
+        dst.push(Point2f::new(6.603227, 52.036181));
+        dst.push(Point2f::new(6.603638, 52.036558));
+        dst.push(Point2f::new(6.603560, 52.036730));
+
+        let converter = SpatialConverter::new(&src, &dst);
+        let source_point = Point2f::new(1200.0, 278.0);
+        let source_time = Utc::now();
+        let target_point = Point2f::new(1205.0, 698.0);
+        let target_time = source_time + Duration::milliseconds(6000);
+        
+        let estimated_speed = converter.estimate_speed(&source_point, source_time, &target_point, target_time);
+        let correct_speed: f32 = 63.27124;
+        assert_eq!(estimated_speed, correct_speed);
     }
 }
