@@ -14,6 +14,8 @@ impl RoadLanesSettings {
                 .collect(),
             // RGB to OpenCV = [B, G, R]. So use reverse order
             color: Scalar::from((self.color_rgb[2] as f64, self.color_rgb[1] as f64, self.color_rgb[0] as f64)),
+            avg_speed: 0.0,
+            sum_intensity: 0
         }
     }
 }
@@ -27,7 +29,9 @@ use opencv::{
 #[derive(Debug)]
 pub struct ConvexPolygon {
     coordinates: Vec<Point>,
-    color: Scalar
+    color: Scalar,
+    avg_speed: f32,
+    sum_intensity: u32,
 }
 
 impl ConvexPolygon {
@@ -192,6 +196,8 @@ mod tests {
                     Point::new(0, 5),
                 ],
                 color: Scalar::default(),
+                avg_speed: 0.0,
+                sum_intensity: 0
             },
             ConvexPolygon{
                 coordinates: vec![
@@ -201,6 +207,8 @@ mod tests {
                     Point::new(0, 5),
                 ],
                 color: Scalar::default(),
+                avg_speed: 0.0,
+                sum_intensity: 0
             },
             ConvexPolygon{
                 coordinates: vec![
@@ -209,6 +217,8 @@ mod tests {
                     Point::new(5, 0),
                 ],
                 color: Scalar::default(),
+                avg_speed: 0.0,
+                sum_intensity: 0
             },
             ConvexPolygon{
                 coordinates: vec![
@@ -217,6 +227,8 @@ mod tests {
                     Point::new(5, 0),
                 ],
                 color: Scalar::default(),
+                avg_speed: 0.0,
+                sum_intensity: 0
             },
             ConvexPolygon{
                 coordinates: vec![
@@ -225,6 +237,8 @@ mod tests {
                     Point::new(5, 0),
                 ],
                 color: Scalar::default(),
+                avg_speed: 0.0,
+                sum_intensity: 0
             },
             ConvexPolygon{
                 coordinates: vec![
@@ -234,6 +248,8 @@ mod tests {
                     Point::new(0, 5),
                 ],
                 color: Scalar::default(),
+                avg_speed: 0.0,
+                sum_intensity: 0
             }
         ];
         let points = vec![
