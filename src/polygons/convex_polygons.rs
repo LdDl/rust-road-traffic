@@ -8,6 +8,7 @@ use opencv::{
 impl RoadLanesSettings {
     pub fn convert_to_convex_polygon(&self) -> ConvexPolygon{
         return ConvexPolygon{
+            id: Uuid::new_v4(),
             coordinates: self.geometry
                 .iter()
                 .map(|pt| Point::new(pt[0], pt[1]))
@@ -27,9 +28,11 @@ use opencv::{
     imgproc::LINE_8,
     imgproc::line
 };
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct ConvexPolygon {
+    id: Uuid,
     coordinates: Vec<Point>,
     color: Scalar,
     avg_speed: f32,
@@ -41,6 +44,7 @@ pub struct ConvexPolygon {
 impl ConvexPolygon {
     pub fn default_from(points: Vec<Point>) -> Self{
         return ConvexPolygon{
+            id: Uuid::new_v4(),
             coordinates: points,
             color: Scalar::from((255.0, 255.0, 255.0)),
             avg_speed: 0.0,
