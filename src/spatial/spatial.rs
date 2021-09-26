@@ -9,6 +9,13 @@ use opencv::{
     imgproc::get_perspective_transform,
 };
 
+use chrono::{
+    DateTime,
+    Utc
+};
+use crate::spatial::haversine::haversine;
+
+
 // Spatial converter around transform matrix.
 // It helps to transform coordinates from Euclidean space to WGS84 projection
 pub struct SpatialConverter {
@@ -71,6 +78,12 @@ impl SpatialConverter {
         let xattr = answ_ptr[0];
         let yattr = answ_ptr[1];
         return Point2f::new(xattr / scale, yattr / scale);
+    }
+    fn estimate_speed(&self, from_point: &Point2f, from_time: DateTime<Utc>, to_point: &Point2f, to_time: DateTime<Utc>) -> f32 {
+        let from_point_wgs84 = self.transform_to_wgs84(from_point);
+        let to_point_wgs84 = self.transform_to_wgs84(to_point);
+        let time_difference = (from_time - to_time).num_seconds() as f32 / 3600.0;
+        return haversine(from_point_wgs84, to_point_wgs84) / time_difference;
     }
 }
 
