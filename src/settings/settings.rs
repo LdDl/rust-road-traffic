@@ -40,8 +40,8 @@ pub struct TrackingSettings {
 
 #[derive(Deserialize, Debug)]
 pub struct RoadLanesSettings {
-    pub lane_number: i32,
-    pub lane_direction: i16,
+    pub lane_number: u16,
+    pub lane_direction: u8,
     pub geometry: Vec<[i32; 2]>,
     pub color_rgb: [i16; 3],
 }

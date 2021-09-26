@@ -15,7 +15,9 @@ impl RoadLanesSettings {
             // RGB to OpenCV = [B, G, R]. So use reverse order
             color: Scalar::from((self.color_rgb[2] as f64, self.color_rgb[1] as f64, self.color_rgb[0] as f64)),
             avg_speed: 0.0,
-            sum_intensity: 0
+            sum_intensity: 0,
+            road_lane_num: self.lane_number,
+            road_lane_direction: self.lane_direction,
         }
     }
 }
@@ -32,6 +34,8 @@ pub struct ConvexPolygon {
     color: Scalar,
     avg_speed: f32,
     sum_intensity: u32,
+    road_lane_num: u16,
+    road_lane_direction: u8,
 }
 
 impl ConvexPolygon {
@@ -231,7 +235,9 @@ mod tests {
                 ],
                 color: Scalar::default(),
                 avg_speed: 0.0,
-                sum_intensity: 0
+                sum_intensity: 0,
+                road_lane_num: 0,
+                road_lane_direction: 0,
             },
             ConvexPolygon{
                 coordinates: vec![
@@ -242,7 +248,9 @@ mod tests {
                 ],
                 color: Scalar::default(),
                 avg_speed: 0.0,
-                sum_intensity: 0
+                sum_intensity: 0,
+                road_lane_num: 0,
+                road_lane_direction: 0,
             },
             ConvexPolygon{
                 coordinates: vec![
@@ -252,7 +260,9 @@ mod tests {
                 ],
                 color: Scalar::default(),
                 avg_speed: 0.0,
-                sum_intensity: 0
+                sum_intensity: 0,
+                road_lane_num: 0,
+                road_lane_direction: 0,
             },
             ConvexPolygon{
                 coordinates: vec![
@@ -262,7 +272,9 @@ mod tests {
                 ],
                 color: Scalar::default(),
                 avg_speed: 0.0,
-                sum_intensity: 0
+                sum_intensity: 0,
+                road_lane_num: 0,
+                road_lane_direction: 0,
             },
             ConvexPolygon{
                 coordinates: vec![
@@ -272,7 +284,9 @@ mod tests {
                 ],
                 color: Scalar::default(),
                 avg_speed: 0.0,
-                sum_intensity: 0
+                sum_intensity: 0,
+                road_lane_num: 0,
+                road_lane_direction: 0,
             },
             ConvexPolygon{
                 coordinates: vec![
@@ -283,7 +297,9 @@ mod tests {
                 ],
                 color: Scalar::default(),
                 avg_speed: 0.0,
-                sum_intensity: 0
+                sum_intensity: 0,
+                road_lane_num: 0,
+                road_lane_direction: 0,
             }
         ];
         let points = vec![
@@ -318,7 +334,9 @@ mod tests {
             ],
             color: Scalar::default(),
             avg_speed: 0.0,
-            sum_intensity: 0
+            sum_intensity: 0,
+            road_lane_num: 0,
+            road_lane_direction: 0,
         };
 
         let a_track_must_enter = vec![
@@ -364,7 +382,9 @@ mod tests {
             ],
             color: Scalar::default(),
             avg_speed: 0.0,
-            sum_intensity: 0
+            sum_intensity: 0,
+            road_lane_num: 0,
+            road_lane_direction: 0,
         };
 
         let a_track_must_enter = vec![
