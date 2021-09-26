@@ -1,58 +1,27 @@
-use crate::settings::RoadLanesSettings;
-
 use opencv::{
     core::Point,
-    core::Point2f,
     core::Scalar,
-};
-
-impl RoadLanesSettings {
-    pub fn convert_to_convex_polygon(&self) -> ConvexPolygon{
-        let geom = self.geometry
-            .iter()
-            .map(|pt| Point::new(pt[0], pt[1]))
-            .collect();
-        let geom_f32 = self.geometry
-            .iter()
-            .map(|pt| Point2f::new(pt[0] as f32, pt[1] as f32))
-            .collect();
-        let geom_wgs84 = self.geometry_wgs84
-            .iter()
-            .map(|pt| Point2f::new(pt[0], pt[1]))
-            .collect();
-        return ConvexPolygon{
-            id: Uuid::new_v4(),
-            coordinates: geom,
-            // RGB to OpenCV = [B, G, R]. So use reverse order
-            color: Scalar::from((self.color_rgb[2] as f64, self.color_rgb[1] as f64, self.color_rgb[0] as f64)),
-            avg_speed: 0.0,
-            sum_intensity: 0,
-            road_lane_num: self.lane_number,
-            road_lane_direction: self.lane_direction,
-            spatial_converter: SpatialConverter::new(&geom_f32, &geom_wgs84)
-        }
-    }
-}
-
-use opencv::{
     core::Mat,
     imgproc::LINE_8,
     imgproc::line
 };
 use uuid::Uuid;
 pub type PolygonID = Uuid;
+use std::collections::HashSet;
+use crate::lib::tracking::BlobID;
 use crate::lib::spatial::SpatialConverter;
 
 #[derive(Debug)]
 pub struct ConvexPolygon {
-    id: PolygonID,
-    coordinates: Vec<Point>,
-    color: Scalar,
-    avg_speed: f32,
-    sum_intensity: u32,
-    road_lane_num: u16,
-    road_lane_direction: u8,
-    spatial_converter: SpatialConverter,
+    pub id: PolygonID,
+    pub coordinates: Vec<Point>,
+    pub color: Scalar,
+    pub avg_speed: f32,
+    pub sum_intensity: u32,
+    pub road_lane_num: u16,
+    pub road_lane_direction: u8,
+    pub spatial_converter: SpatialConverter,
+    pub blobs: HashSet<BlobID>,
 }
 
 impl ConvexPolygon {
@@ -66,6 +35,7 @@ impl ConvexPolygon {
             road_lane_num: 0,
             road_lane_direction: 0,
             spatial_converter: SpatialConverter::empty(),
+            blobs: HashSet::new(),
         }
     }
     pub fn draw_on_mat(&self, img: &mut Mat) {
@@ -178,6 +148,15 @@ impl ConvexPolygon {
             return true;
         }
         return false;
+    }
+    pub fn blob_registered(&self, blob_id: &BlobID) -> bool {
+        return self.blobs.contains(blob_id);
+    }
+    pub fn register_blob(&mut self, blob_id: BlobID) {
+        self.blobs.insert(blob_id);
+    }
+    pub fn deregister_blob(&mut self, blob_id: &BlobID) {
+        self.blobs.remove(blob_id);
     }
 }
 

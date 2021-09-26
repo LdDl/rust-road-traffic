@@ -47,6 +47,43 @@ pub struct RoadLanesSettings {
     pub color_rgb: [i16; 3],
 }
 
+use crate::lib::polygons::ConvexPolygon;
+use crate::lib::spatial::SpatialConverter;
+use std::collections::HashSet;
+use opencv::core::Point;
+use opencv::core::Point2f;
+use opencv::core::Scalar;
+use uuid::Uuid;
+
+impl RoadLanesSettings {
+    pub fn convert_to_convex_polygon(&self) -> ConvexPolygon{
+        let geom = self.geometry
+            .iter()
+            .map(|pt| Point::new(pt[0], pt[1]))
+            .collect();
+        let geom_f32 = self.geometry
+            .iter()
+            .map(|pt| Point2f::new(pt[0] as f32, pt[1] as f32))
+            .collect();
+        let geom_wgs84 = self.geometry_wgs84
+            .iter()
+            .map(|pt| Point2f::new(pt[0], pt[1]))
+            .collect();
+        return ConvexPolygon{
+            id: Uuid::new_v4(),
+            coordinates: geom,
+            // RGB to OpenCV = [B, G, R]. So use reverse order
+            color: Scalar::from((self.color_rgb[2] as f64, self.color_rgb[1] as f64, self.color_rgb[0] as f64)),
+            avg_speed: 0.0,
+            sum_intensity: 0,
+            road_lane_num: self.lane_number,
+            road_lane_direction: self.lane_direction,
+            spatial_converter: SpatialConverter::new(&geom_f32, &geom_wgs84),
+            blobs: HashSet::new(),
+        }
+    }
+}
+
 impl AppSettings {
     pub fn new_settings(filename: &str) -> Self {
         let toml_contents = fs::read_to_string(filename).expect("Something went wrong reading the file");

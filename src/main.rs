@@ -214,13 +214,35 @@ fn run() -> opencv::Result<()> {
 
                 // Match blobs
                 tracker.match_to_existing(&mut tmp_blobs);
+
+                // Run through the blobs and check if some of them either entered or left road lanes polygons
                 for (_, b) in tracker.objects.iter() {
+                    let blob_id = b.get_id();
+                    for polygon in convex_polygons.iter_mut() {
+                        if polygon.object_entered(b.get_track()) {
+                            // If blob is not registered in polygon
+                            if !polygon.blob_registered(&blob_id) {
+                                // Then register it
+                                println!("income {:?}", blob_id);
+                                polygon.register_blob(blob_id);
+                            };
+                        } else if polygon.object_left(b.get_track()) {
+                            // If blob registered in polygon
+                            if polygon.blob_registered(&blob_id) {
+                                // Then deregister it
+                                println!("outcome {:?}", blob_id);
+                                polygon.deregister_blob(&blob_id);
+                            };
+                        }
+                    }
                     b.draw_track(&mut frame);
                     b.draw_center(&mut frame);
                     b.draw_predicted(&mut frame);
                     b.draw_rectangle(&mut frame);
                     b.draw_class_name(&mut frame);
                 }
+
+
             }
             Err(err) => {
                 println!("Can't process input of neural network due the error {:?}", err);
@@ -247,14 +269,14 @@ fn run() -> opencv::Result<()> {
             break;
         }
 
-        let elapsed_all = 1000.0 / all_now.elapsed().as_millis() as f32;
-        print!("\rСapturing process millis: {} | Average FPS of detection process: {} | Average FPS of whole process: {}", elapsed_capture, elapsed_detection, elapsed_all);
-        match std::io::stdout().flush() {
-            Ok(_) => {},
-            Err(err) => {
-                panic!("There is a problem with stdout().flush(): {}", err);
-            }
-        };
+        // let elapsed_all = 1000.0 / all_now.elapsed().as_millis() as f32;
+        // print!("\rСapturing process millis: {} | Average FPS of detection process: {} | Average FPS of whole process: {}", elapsed_capture, elapsed_detection, elapsed_all);
+        // match std::io::stdout().flush() {
+        //     Ok(_) => {},
+        //     Err(err) => {
+        //         panic!("There is a problem with stdout().flush(): {}", err);
+        //     }
+        // };
     }
     Ok(())
 }

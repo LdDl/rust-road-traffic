@@ -1,1 +1,5 @@
 /target
+/data/yolov4-tiny_custom.cfg
+/data/yolov4-tiny_custom.names
+/data/yolov4-tiny_custom.weights
+/data/video.mp4

@@ -109,6 +109,9 @@ impl KalmanBlobie {
     pub fn get_diagonal(&self) -> f32 {
         return self.diagonal;
     }
+    pub fn get_track(&self) -> Vec<Point> {
+        return self.track.clone();
+    }
     pub fn get_max_points_in_track(&self) -> usize {
         return self.max_points_in_track;
     }
