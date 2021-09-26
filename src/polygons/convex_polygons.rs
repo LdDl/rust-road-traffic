@@ -305,19 +305,14 @@ mod tests {
     }
     #[test]
     fn test_object_entered() {
-        let polygon = ConvexPolygon{
-            coordinates: vec![
+        let polygon = ConvexPolygon::default_from(
+            vec![
                 Point::new(23, 15),
                 Point::new(67, 15),
                 Point::new(67, 41),
                 Point::new(23, 41),
-            ],
-            color: Scalar::default(),
-            avg_speed: 0.0,
-            sum_intensity: 0,
-            road_lane_num: 0,
-            road_lane_direction: 0,
-        };
+            ]
+        );
 
         let a_track_must_enter = vec![
             Point::new(36, 7),
@@ -353,19 +348,14 @@ mod tests {
     }
     #[test]
     fn test_object_left() {
-        let polygon = ConvexPolygon{
-            coordinates: vec![
+        let polygon = ConvexPolygon::default_from(
+            vec![
                 Point::new(23, 15),
                 Point::new(67, 15),
                 Point::new(67, 41),
                 Point::new(23, 41),
-            ],
-            color: Scalar::default(),
-            avg_speed: 0.0,
-            sum_intensity: 0,
-            road_lane_num: 0,
-            road_lane_direction: 0,
-        };
+            ]
+        );
 
         let a_track_must_enter = vec![
             Point::new(36, 7),
