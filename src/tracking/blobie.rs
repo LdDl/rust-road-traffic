@@ -69,29 +69,32 @@ impl KalmanBlobie {
     pub fn set_id(&mut self, id: Uuid) {
         self.id = id;
     }
+    pub fn get_id(&self) -> Uuid {
+        return self.id;
+    }
     pub fn set_class_name(&mut self, class_name: String) {
         self.class_name = class_name;
+    }
+    pub fn get_class_name(&self) -> String {
+        return self.class_name.clone();
+    }
+    pub fn get_exists(&self) -> bool {
+        return self.exists;
     }
     pub fn set_exists(&mut self, exists: bool) {
         self.exists = exists;
     }
-    pub fn increment_no_match_times(&mut self) {
-        self.no_match_times += 1;
+    pub fn get_tracking(&self) -> bool{
+        return self.is_still_tracked;
     }
     pub fn set_tracking(&mut self, is_still_tracked: bool) {
         self.is_still_tracked = is_still_tracked;
     }
-    pub fn exists(&self) -> bool {
-        return self.exists;
+    pub fn increment_no_match_times(&mut self) {
+        self.no_match_times += 1;
     }
-    pub fn no_match_times(&self) -> usize {
+    pub fn get_no_match_times(&self) -> usize {
         return self.no_match_times;
-    }
-    pub fn get_id(&self) -> Uuid {
-        return self.id;
-    }
-    pub fn get_class_name(&self) -> String {
-        return self.class_name.clone();
     }
     pub fn get_center(&self) -> Point {
         return self.center;

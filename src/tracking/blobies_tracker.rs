@@ -33,10 +33,10 @@ impl KalmanBlobiesTracker {
     fn refresh_no_match(&mut self) -> Vec<Uuid> {
         let mut delete_blobs = vec![];
         for (blob_id, b) in self.objects.iter_mut() {
-            if b.exists() == false {
+            if b.get_exists() == false {
                 b.increment_no_match_times()
             }
-            if b.no_match_times() > self.max_no_match {
+            if b.get_no_match_times() > self.max_no_match {
                 b.set_tracking(false);
                 delete_blobs.push(*blob_id);
             }
