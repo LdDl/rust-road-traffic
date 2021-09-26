@@ -36,7 +36,7 @@ impl SpatialConverter {
     // src_points - OpenCV vector of source points in Euclidean space
     // dest_points - OpenCV vector of destination points (for further transformation) in WGS84 projection
     //
-    fn new(src_points: &Vector<Point2f>, dest_points: &Vector<Point2f>) -> Self {
+    pub fn new(src_points: &Vector<Point2f>, dest_points: &Vector<Point2f>) -> Self {
         let transform_mat_f64 = get_perspective_transform(&src_points, &dest_points, DECOMP_LU).unwrap();
         let mut transform_mat_f32 = Mat::default();
         match transform_mat_f64.convert_to(&mut transform_mat_f32, CV_32F, 1.0, 0.0) {
@@ -54,7 +54,7 @@ impl SpatialConverter {
     // src_points - built-in vector of source points in Euclidean space
     // dest_points - built-in vector of destination points (for further transformation) in WGS84 projection
     //
-    fn new_from(src_points: Vec<Point2f>, dest_points: Vec<Point2f>) -> Self {
+    pub fn new_from(src_points: Vec<Point2f>, dest_points: Vec<Point2f>) -> Self {
         let src = Vector::<Point2f>::from(src_points);
         let trgt = Vector::<Point2f>::from(dest_points);
         let transform_mat_f64 = get_perspective_transform(&src, &trgt, DECOMP_LU).unwrap();
