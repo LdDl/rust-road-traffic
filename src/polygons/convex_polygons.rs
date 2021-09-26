@@ -123,6 +123,23 @@ impl ConvexPolygon {
         }
         return false;
     }
+    // Checks if an object has left the polygon
+    // Let's clarify for future questions: we are assuming the object is represented by a center, not a bounding box
+    // So object has left polygon when its center had left polygon too
+    pub fn object_left(&self, track: Vec<Point>) -> bool {
+	    let n = track.len();
+        if n < 2 {
+            // Blob had to enter the polygon before leaving it. So track must contain atleast 2 points
+            return false
+        }
+        let last_position = track[n-1];
+	    let second_last_position = track[n-2];
+        // If P(xN-1,yN-1) is not inside of polygon and P(xN,yN) is inside of polygon then object has entered the polygon
+        if self.contains_cv_point(&second_last_position) && !self.contains_cv_point(&last_position) {
+            return true;
+        }
+        return false;
+    }
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -336,4 +353,5 @@ mod tests {
         let entered = polygon.object_entered(d_track_must_not_enter);
         assert_eq!(entered, false);
     }
+    
 }
