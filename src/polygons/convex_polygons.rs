@@ -353,5 +353,50 @@ mod tests {
         let entered = polygon.object_entered(d_track_must_not_enter);
         assert_eq!(entered, false);
     }
-    
+    #[test]
+    fn test_object_left() {
+        let polygon = ConvexPolygon{
+            coordinates: vec![
+                Point::new(23, 15),
+                Point::new(67, 15),
+                Point::new(67, 41),
+                Point::new(23, 41),
+            ],
+            color: Scalar::default(),
+            avg_speed: 0.0,
+            sum_intensity: 0
+        };
+
+        let a_track_must_enter = vec![
+            Point::new(36, 7),
+            Point::new(34, 13),
+            Point::new(36, 21),
+        ];
+        let left = polygon.object_left(a_track_must_enter);
+        assert_eq!(left, false);
+
+        let b_track_must_not_enter = vec![
+            Point::new(45, 35),
+            Point::new(46, 38),
+            Point::new(49, 46),
+        ];
+        let left = polygon.object_left(b_track_must_not_enter);
+        assert_eq!(left, true);
+
+        let c_track_must_not_enter = vec![
+            Point::new(56, 19),
+            Point::new(55, 23),
+            Point::new(55, 29),
+        ];
+        let left = polygon.object_left(c_track_must_not_enter);
+        assert_eq!(left, false);
+
+        let d_track_must_not_enter = vec![
+            Point::new(17, 13),
+            Point::new(19, 20),
+            Point::new(19, 25),
+        ];
+        let left = polygon.object_left(d_track_must_not_enter);
+        assert_eq!(left, false);
+    }
 }
