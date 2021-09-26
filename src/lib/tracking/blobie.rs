@@ -19,10 +19,11 @@ use opencv::{
 };
 
 use uuid::Uuid;
+pub type BlobID = Uuid;
 use crate::lib::tracking::utils;
 
 pub struct KalmanBlobie {
-    id: Uuid,
+    id: BlobID,
     class_name: String,
     center: Point,
     predicted_next_position: Point,

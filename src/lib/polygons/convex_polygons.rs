@@ -19,6 +19,7 @@ impl RoadLanesSettings {
             sum_intensity: 0,
             road_lane_num: self.lane_number,
             road_lane_direction: self.lane_direction,
+            spatial_converter: SpatialConverter::empty()
         }
     }
 }
@@ -29,16 +30,19 @@ use opencv::{
     imgproc::line
 };
 use uuid::Uuid;
+pub type PolygonID = Uuid;
+use crate::lib::spatial::SpatialConverter;
 
 #[derive(Debug)]
 pub struct ConvexPolygon {
-    id: Uuid,
+    id: PolygonID,
     coordinates: Vec<Point>,
     color: Scalar,
     avg_speed: f32,
     sum_intensity: u32,
     road_lane_num: u16,
     road_lane_direction: u8,
+    spatial_converter: SpatialConverter,
 }
 
 impl ConvexPolygon {
@@ -51,6 +55,7 @@ impl ConvexPolygon {
             sum_intensity: 0,
             road_lane_num: 0,
             road_lane_direction: 0,
+            spatial_converter: SpatialConverter::empty(),
         }
     }
     pub fn draw_on_mat(&self, img: &mut Mat) {

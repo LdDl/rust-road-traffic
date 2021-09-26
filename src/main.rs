@@ -38,6 +38,8 @@ use settings::{
     AppSettings,
 };
 
+mod storage;
+
 fn run() -> opencv::Result<()> {
     let app_settings = AppSettings::new_settings("./data/conf.toml");
     println!("Settings are: {:?}", app_settings);

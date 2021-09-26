@@ -19,11 +19,18 @@ use crate::lib::spatial::haversine::haversine;
 
 // Spatial converter around transform matrix.
 // It helps to transform coordinates from Euclidean space to WGS84 projection
+#[derive(Debug)]
 pub struct SpatialConverter {
     transform_mat: Mat
 }
 
 impl SpatialConverter {
+    // Just empty initialization
+    pub fn empty() -> Self {
+        return SpatialConverter{
+            transform_mat: Mat::default(),
+        }
+    }
     // Constructor for SpatialConverter
     //
     // src_points - OpenCV vector of source points in Euclidean space
