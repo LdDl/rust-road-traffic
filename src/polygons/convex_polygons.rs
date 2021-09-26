@@ -106,6 +106,23 @@ impl ConvexPolygon {
     pub fn contains_cv_point(&self, pt: &Point) -> bool {
         return self.contains_point(pt.x, pt.y);
     }
+    // Checks if an object has entered the polygon
+    // Let's clarify for future questions: we are assuming the object is represented by a center, not a bounding box
+    // So object has entered polygon when its center had entered polygon too
+    pub fn object_entered(&self, track: Vec<Point>) -> bool {
+	    let n = track.len();
+        if n < 2 {
+            // If blob has been met for the first time
+            return self.contains_cv_point(&track[0]);
+        }
+        let last_position = track[n-1];
+	    let second_last_position = track[n-2];
+        // If P(xN-1,yN-1) is not inside of polygon and P(xN,yN) is inside of polygon then object has entered the polygon
+        if !self.contains_cv_point(&second_last_position) && self.contains_cv_point(&last_position) {
+            return true;
+        }
+        return false;
+    }
 }
 
 #[derive(Copy, Clone, PartialEq)]
