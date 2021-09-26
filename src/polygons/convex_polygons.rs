@@ -39,6 +39,16 @@ pub struct ConvexPolygon {
 }
 
 impl ConvexPolygon {
+    pub fn default_from(points: Vec<Point>) -> Self{
+        return ConvexPolygon{
+            coordinates: points,
+            color: Scalar::from((255.0, 255.0, 255.0)),
+            avg_speed: 0.0,
+            sum_intensity: 0,
+            road_lane_num: 0,
+            road_lane_direction: 0,
+        }
+    }
     pub fn draw_on_mat(&self, img: &mut Mat) {
         // @todo: proper error handling
         for i in 1..self.coordinates.len() {
