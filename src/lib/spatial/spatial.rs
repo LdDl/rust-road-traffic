@@ -14,7 +14,7 @@ use chrono::{
     Utc,
     Duration
 };
-use crate::spatial::haversine::haversine;
+use crate::lib::spatial::haversine::haversine;
 
 
 // Spatial converter around transform matrix.

@@ -1,4 +1,4 @@
-use crate::kalman::{
+use crate::lib::kalman::{
     KalmanWrapper,
     KalmanModelType,
     KalmanFilterLinear,
@@ -19,7 +19,7 @@ use opencv::{
 };
 
 use uuid::Uuid;
-use crate::tracking::utils;
+use crate::lib::tracking::utils;
 
 pub struct KalmanBlobie {
     id: Uuid,
