@@ -236,81 +236,51 @@ mod tests {
     #[test]
     fn test_contains_point() {
         let convex_polygons = vec![
-            ConvexPolygon{
-                coordinates: vec![
+            ConvexPolygon::default_from(
+                vec![
                     Point::new(0, 0),
                     Point::new(5, 0),
                     Point::new(5, 5),
                     Point::new(0, 5),
-                ],
-                color: Scalar::default(),
-                avg_speed: 0.0,
-                sum_intensity: 0,
-                road_lane_num: 0,
-                road_lane_direction: 0,
-            },
-            ConvexPolygon{
-                coordinates: vec![
+                ]
+            ),
+            ConvexPolygon::default_from(
+                vec![
                     Point::new(0, 0),
                     Point::new(5, 0),
                     Point::new(5, 5),
                     Point::new(0, 5),
-                ],
-                color: Scalar::default(),
-                avg_speed: 0.0,
-                sum_intensity: 0,
-                road_lane_num: 0,
-                road_lane_direction: 0,
-            },
-            ConvexPolygon{
-                coordinates: vec![
+                ]
+            ),
+            ConvexPolygon::default_from(
+                vec![
                     Point::new(0, 0),
                     Point::new(5, 5),
                     Point::new(5, 0),
-                ],
-                color: Scalar::default(),
-                avg_speed: 0.0,
-                sum_intensity: 0,
-                road_lane_num: 0,
-                road_lane_direction: 0,
-            },
-            ConvexPolygon{
-                coordinates: vec![
+                ]
+            ),
+            ConvexPolygon::default_from(
+                vec![
                     Point::new(0, 0),
                     Point::new(5, 5),
                     Point::new(5, 0),
-                ],
-                color: Scalar::default(),
-                avg_speed: 0.0,
-                sum_intensity: 0,
-                road_lane_num: 0,
-                road_lane_direction: 0,
-            },
-            ConvexPolygon{
-                coordinates: vec![
+                ]
+            ),
+            ConvexPolygon::default_from(
+                vec![
                     Point::new(0, 0),
                     Point::new(5, 5),
                     Point::new(5, 0),
-                ],
-                color: Scalar::default(),
-                avg_speed: 0.0,
-                sum_intensity: 0,
-                road_lane_num: 0,
-                road_lane_direction: 0,
-            },
-            ConvexPolygon{
-                coordinates: vec![
+                ]
+            ),
+            ConvexPolygon::default_from(
+                vec![
                     Point::new(0, 0),
                     Point::new(5, 0),
                     Point::new(5, 5),
                     Point::new(0, 5),
-                ],
-                color: Scalar::default(),
-                avg_speed: 0.0,
-                sum_intensity: 0,
-                road_lane_num: 0,
-                road_lane_direction: 0,
-            }
+                ]
+            )
         ];
         let points = vec![
             Point::new(20, 20),
