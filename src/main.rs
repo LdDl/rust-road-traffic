@@ -234,16 +234,32 @@ fn run() -> opencv::Result<()> {
 
                 // Run through the blobs and check if some of them either entered or left road lanes polygons
                 for (_, b) in tracker.objects.iter() {
-                    for polygon in convex_polygons.iter_mut() {
-                        let n = b.get_track().len();
-                        let blob_center = b.get_center();
-                        if n > 2 {
+                    let n = b.get_track().len();
+                    let blob_center = b.get_center();
+                    if n > 2 {
+                        for polygon in convex_polygons.iter_mut() {
                             if polygon.contains_cv_point(&blob_center) {
                                 let speed = b.estimate_speed(&polygon.spatial_converter);
-                                // println!("speedy: {}", speed);
                             }
                         }
                     }
+                    // let blob_id = b.get_id();
+                    // let blob_center = b.get_center();
+                    // let blob_track = b.get_track();
+                    // let blob_track_time = b.get_timestamps();
+                    // let n = blob_track.len();
+                    // if n > 2 {
+                    //     let last_pt = blob_track[n-1];
+                    //     let second_last_pt = blob_track[n-2];
+                    //     let last_tm = blob_track_time[n-1];
+                    //     let second_last_tm = blob_track_time[n-2];
+                    //     for polygon in convex_polygons.iter_mut() {
+                    //         if polygon.contains_cv_point(&blob_center) {
+                    //             let speed = polygon.estimate_speed(&second_last_pt, second_last_tm, &last_pt, last_tm);
+                    //             // println!("speedy {:?} {} {:?} {} {}", second_last_pt, second_last_tm, last_pt, last_tm, speed);
+                    //         }
+                    //     }
+                    // }
                     // for polygon in convex_polygons.iter_mut() {
                     //     if polygon.object_entered(b.get_track()) {
                     //         // If blob is not registered in polygon
