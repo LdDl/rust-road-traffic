@@ -43,7 +43,8 @@ pub struct KalmanBlobie {
     custom_kf: KalmanFilterLinear,
     time: DateTime<Utc>,
     delta_time: f64,
-    track_time: Vec<DateTime<Utc>>
+    track_time: Vec<DateTime<Utc>>,
+    avg_speed: f32
 }
 
 impl KalmanBlobie {
@@ -71,7 +72,8 @@ impl KalmanBlobie {
             custom_kf: custom_kf,
             time: current_time,
             delta_time: 0.0,
-            track_time: vec![current_time]
+            track_time: vec![current_time],
+            avg_speed: -1.0,
         };
         return kb 
     }
@@ -98,7 +100,8 @@ impl KalmanBlobie {
             custom_kf: custom_kf,
             time: tm,
             delta_time: sec_diff,
-            track_time: vec![tm]
+            track_time: vec![tm],
+            avg_speed: -1.0,
         };
         return kb 
     }
@@ -243,6 +246,30 @@ impl KalmanBlobie {
         let second_last_pt_f32 = Point2f::new(second_last_pt.x as f32, second_last_pt.y as f32);
         let second_last_tm = self.track_time[n-2];
         return sc.estimate_speed(&second_last_pt_f32, second_last_tm, &last_pt_f32, last_tm)
+    }
+    pub fn estimate_speed_mut(&mut self, sc: &SpatialConverter) -> f32 {
+        let n = self.track.len();
+        if n < 2 {
+            return -1.0;
+        }
+        let last_pt = self.track[n-1];
+        let last_pt_f32 = Point2f::new(last_pt.x as f32, last_pt.y as f32);
+        let last_tm = self.track_time[n-1];
+
+        let second_last_pt = self.track[n-2];
+        let second_last_pt_f32 = Point2f::new(second_last_pt.x as f32, second_last_pt.y as f32);
+        let second_last_tm = self.track_time[n-2];
+        
+        let speed = sc.estimate_speed(&second_last_pt_f32, second_last_tm, &last_pt_f32, last_tm);
+        if self.avg_speed < 0.0 {
+            self.avg_speed = speed;
+        } else {
+            self.avg_speed = (self.avg_speed + speed) / 2.0;
+        }
+        return speed;
+    }
+    pub fn get_avg_speed(&self) -> f32 {
+        return self.avg_speed;
     }
     pub fn draw_center(&self, img: &mut Mat) {
         match circle(img, self.center, 5, Scalar::from((255.0, 0.0, 0.0)), 2, LINE_8, 0) {

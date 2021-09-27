@@ -233,50 +233,31 @@ fn run() -> opencv::Result<()> {
                 tracker.match_to_existing(&mut tmp_blobs);
 
                 // Run through the blobs and check if some of them either entered or left road lanes polygons
-                for (_, b) in tracker.objects.iter() {
+                for (_, b) in tracker.objects.iter_mut() {
                     let n = b.get_track().len();
                     let blob_center = b.get_center();
                     if n > 2 {
+                        let blob_id = b.get_id();
                         for polygon in convex_polygons.iter_mut() {
-                            if polygon.contains_cv_point(&blob_center) {
-                                let speed = b.estimate_speed(&polygon.spatial_converter);
+                            let contains_blob = polygon.contains_cv_point(&blob_center);
+                            if contains_blob {
+                                let speed = b.estimate_speed_mut(&polygon.spatial_converter);
+                                // If blob is not registered in polygon
+                                if !polygon.blob_registered(&blob_id) {
+                                    // Register it
+                                    polygon.register_blob(blob_id);
+                                    // println!("income {:?} with speed {}", blob_id, speed);
+                                }
+                            } else {
+                                // Otherwise
+                                // If blob is registered in polygon and left it (since contains_blob == false)
+                                if polygon.blob_registered(&blob_id) {
+                                    polygon.deregister_blob(&blob_id);
+                                    // println!("outcome {:?} with speed {}", blob_id, b.get_avg_speed());
+                                }
                             }
                         }
                     }
-                    // let blob_id = b.get_id();
-                    // let blob_center = b.get_center();
-                    // let blob_track = b.get_track();
-                    // let blob_track_time = b.get_timestamps();
-                    // let n = blob_track.len();
-                    // if n > 2 {
-                    //     let last_pt = blob_track[n-1];
-                    //     let second_last_pt = blob_track[n-2];
-                    //     let last_tm = blob_track_time[n-1];
-                    //     let second_last_tm = blob_track_time[n-2];
-                    //     for polygon in convex_polygons.iter_mut() {
-                    //         if polygon.contains_cv_point(&blob_center) {
-                    //             let speed = polygon.estimate_speed(&second_last_pt, second_last_tm, &last_pt, last_tm);
-                    //             // println!("speedy {:?} {} {:?} {} {}", second_last_pt, second_last_tm, last_pt, last_tm, speed);
-                    //         }
-                    //     }
-                    // }
-                    // for polygon in convex_polygons.iter_mut() {
-                    //     if polygon.object_entered(b.get_track()) {
-                    //         // If blob is not registered in polygon
-                    //         if !polygon.blob_registered(&blob_id) {
-                    //             // Then register it
-                    //             // println!("income {:?}", blob_id);
-                    //             polygon.register_blob(blob_id);
-                    //         };
-                    //     } else if polygon.object_left(b.get_track()) {
-                    //         // If blob registered in polygon
-                    //         if polygon.blob_registered(&blob_id) {
-                    //             // Then deregister it
-                    //             // println!("outcome {:?}", blob_id);
-                    //             polygon.deregister_blob(&blob_id);
-                    //         };
-                    //     }
-                    // }
                     b.draw_track(&mut frame);
                     b.draw_center(&mut frame);
                     // b.draw_predicted(&mut frame);
