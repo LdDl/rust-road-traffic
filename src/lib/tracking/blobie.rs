@@ -5,11 +5,13 @@ use crate::lib::kalman::{
     Matrix2x1f32,
     Matrix4x1f32
 };
+use crate::lib::spatial::SpatialConverter;
 
 use opencv::{
     core::Mat,
     core::Rect,
     core::Point,
+    core::Point2f,
     core::Scalar,
     imgproc::LINE_8,
     imgproc::FONT_HERSHEY_SIMPLEX,
@@ -23,8 +25,7 @@ pub type BlobID = Uuid;
 use crate::lib::tracking::utils;
 use chrono::{
     DateTime,
-    Utc,
-    Duration
+    Utc
 };
 
 pub struct KalmanBlobie {
@@ -228,6 +229,20 @@ impl KalmanBlobie {
         if self.track.len() > self.max_points_in_track {
             self.track = self.track[1..].to_vec();
         }
+    }
+    pub fn estimate_speed(&self, sc: &SpatialConverter) -> f32 {
+        let n = self.track.len();
+        if n < 2 {
+            return -1.0;
+        }
+        let last_pt = self.track[n-1];
+        let last_pt_f32 = Point2f::new(last_pt.x as f32, last_pt.y as f32);
+        let last_tm = self.track_time[n-1];
+
+        let second_last_pt = self.track[n-2];
+        let second_last_pt_f32 = Point2f::new(second_last_pt.x as f32, second_last_pt.y as f32);
+        let second_last_tm = self.track_time[n-2];
+        return sc.estimate_speed(&second_last_pt_f32, second_last_tm, &last_pt_f32, last_tm)
     }
     pub fn draw_center(&self, img: &mut Mat) {
         match circle(img, self.center, 5, Scalar::from((255.0, 0.0, 0.0)), 2, LINE_8, 0) {

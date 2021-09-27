@@ -1,6 +1,5 @@
 use opencv::{
     core::Point,
-    core::Point2f,
     core::Scalar,
     core::Mat,
     imgproc::LINE_8,
@@ -11,10 +10,6 @@ pub type PolygonID = Uuid;
 use std::collections::HashSet;
 use crate::lib::tracking::BlobID;
 use crate::lib::spatial::SpatialConverter;
-use chrono::{
-    DateTime,
-    Utc,
-};
 
 #[derive(Debug)]
 pub struct ConvexPolygon {
@@ -162,11 +157,6 @@ impl ConvexPolygon {
     }
     pub fn deregister_blob(&mut self, blob_id: &BlobID) {
         self.blobs.remove(blob_id);
-    }
-    pub fn estimate_speed(&self, from_point: &Point, from_time: DateTime<Utc>, to_point: &Point, to_time: DateTime<Utc>) -> f32 {
-        let from_f32 = Point2f::new(from_point.x as f32, from_point.y as f32);
-        let to_f32 = Point2f::new(to_point.x as f32, to_point.y as f32);
-        return self.spatial_converter.estimate_speed(&from_f32, from_time, &to_f32, to_time);
     }
 }
 
