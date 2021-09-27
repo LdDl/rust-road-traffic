@@ -260,7 +260,7 @@ impl KalmanBlobie {
         let second_last_pt_f32 = Point2f::new(second_last_pt.x as f32, second_last_pt.y as f32);
         let second_last_tm = self.track_time[n-2];
         
-        let speed = sc.estimate_speed(&second_last_pt_f32, second_last_tm, &last_pt_f32, last_tm);
+        let mut speed = sc.estimate_speed(&second_last_pt_f32, second_last_tm, &last_pt_f32, last_tm);
         if self.avg_speed < 0.0 {
             self.avg_speed = speed;
         } else {

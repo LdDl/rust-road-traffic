@@ -241,7 +241,7 @@ fn run() -> opencv::Result<()> {
                         for polygon in convex_polygons.iter_mut() {
                             let contains_blob = polygon.contains_cv_point(&blob_center);
                             if contains_blob {
-                                let speed = b.estimate_speed_mut(&polygon.spatial_converter);
+                                b.estimate_speed_mut(&polygon.spatial_converter);
                                 // If blob is not registered in polygon
                                 if !polygon.blob_registered(&blob_id) {
                                     // Register it
@@ -253,6 +253,8 @@ fn run() -> opencv::Result<()> {
                                 // If blob is registered in polygon and left it (since contains_blob == false)
                                 if polygon.blob_registered(&blob_id) {
                                     polygon.deregister_blob(&blob_id);
+                                    polygon.increment_intensity();
+                                    polygon.consider_speed(b.get_avg_speed());
                                     // println!("outcome {:?} with speed {}", blob_id, b.get_avg_speed());
                                 }
                             }
@@ -273,7 +275,8 @@ fn run() -> opencv::Result<()> {
         let elapsed_detection = 1000.0 / detection_now.elapsed().as_millis() as f32;
 
         for polygon in convex_polygons.iter() {
-            polygon.draw_on_mat(&mut frame);
+            polygon.draw_geom(&mut frame);
+            polygon.draw_params(&mut frame);
         }
 
         match resize(&mut frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {

@@ -91,7 +91,14 @@ impl SpatialConverter {
         let from_point_wgs84 = self.transform_to_wgs84(from_point);
         let to_point_wgs84 = self.transform_to_wgs84(to_point);
         let time_difference = (to_time - from_time).num_milliseconds() as f32 / 3600000.0;
-        return haversine(from_point_wgs84, to_point_wgs84) / time_difference;
+        if time_difference == 0.0 {
+            return 0.0
+        }
+        let distance = haversine(from_point_wgs84, to_point_wgs84);
+        if distance == 0.0 {
+            return 0.0
+        }
+        return distance / time_difference;
     }
 }
 

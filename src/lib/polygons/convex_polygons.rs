@@ -2,6 +2,8 @@ use opencv::{
     core::Point,
     core::Scalar,
     core::Mat,
+    imgproc::put_text,
+    imgproc::FONT_HERSHEY_SIMPLEX,
     imgproc::LINE_8,
     imgproc::line
 };
@@ -30,32 +32,13 @@ impl ConvexPolygon {
             id: Uuid::new_v4(),
             coordinates: points,
             color: Scalar::from((255.0, 255.0, 255.0)),
-            avg_speed: 0.0,
+            avg_speed: -1.0,
             sum_intensity: 0,
             road_lane_num: 0,
             road_lane_direction: 0,
             spatial_converter: SpatialConverter::empty(),
             blobs: HashSet::new(),
         }
-    }
-    pub fn draw_on_mat(&self, img: &mut Mat) {
-        // @todo: proper error handling
-        for i in 1..self.coordinates.len() {
-            let prev_pt = self.coordinates[i - 1];
-            let current_pt = self.coordinates[i];
-            match line(img, prev_pt, current_pt, self.color, 2, LINE_8, 0) {
-                Ok(_) => {},
-                Err(err) => {
-                    panic!("Can't draw line for polygon due the error: {:?}", err)
-                }
-            };
-        }
-        match line(img, self.coordinates[self.coordinates.len() - 1], self.coordinates[0], self.color, 2, LINE_8, 0) {
-            Ok(_) => {},
-            Err(err) => {
-                panic!("Can't draw line for polygon due the error: {:?}", err)
-            }
-        };
     }
     pub fn get_id(&self) -> Uuid {
         return self.id
@@ -157,6 +140,55 @@ impl ConvexPolygon {
     }
     pub fn deregister_blob(&mut self, blob_id: &BlobID) {
         self.blobs.remove(blob_id);
+    }
+    pub fn increment_intensity(&mut self) {
+        self.sum_intensity += 1;
+    }
+    pub fn consider_speed(&mut self, speed_value: f32) {
+        if self.avg_speed < 0.0 {
+            self.avg_speed = speed_value;
+        } else if self.avg_speed == f32::NAN {
+            self.avg_speed = speed_value;
+        } else if self.avg_speed == f32::INFINITY {
+            self.avg_speed = speed_value;
+        } else {
+            self.avg_speed = (self.avg_speed + speed_value) / 2.0;
+        }
+    }
+    pub fn draw_geom(&self, img: &mut Mat) {
+        // @todo: proper error handling
+        for i in 1..self.coordinates.len() {
+            let prev_pt = self.coordinates[i - 1];
+            let current_pt = self.coordinates[i];
+            match line(img, prev_pt, current_pt, self.color, 2, LINE_8, 0) {
+                Ok(_) => {},
+                Err(err) => {
+                    panic!("Can't draw line for polygon due the error: {:?}", err)
+                }
+            };
+        }
+        match line(img, self.coordinates[self.coordinates.len() - 1], self.coordinates[0], self.color, 2, LINE_8, 0) {
+            Ok(_) => {},
+            Err(err) => {
+                panic!("Can't draw line for polygon due the error: {:?}", err)
+            }
+        };
+    }
+    pub fn draw_params(&self, img: &mut Mat) {
+        let anchor_speed = Point::new(self.coordinates[0].x, self.coordinates[0].y + 15);
+        match put_text(img, &format!("speed: {:.2} km/h", self.avg_speed), anchor_speed, FONT_HERSHEY_SIMPLEX, 0.7, Scalar::from((0.0, 255.0, 255.0)), 2, LINE_8, false) {
+            Ok(_) => {},
+            Err(err) => {
+                println!("Can't display average speed for polygon due the error {:?}", err);
+            }
+        };
+        let anchor_intensity = Point::new(self.coordinates[0].x, self.coordinates[0].y + 35);
+        match put_text(img, &format!("count: {}", self.sum_intensity), anchor_intensity, FONT_HERSHEY_SIMPLEX, 0.7, Scalar::from((0.0, 255.0, 255.0)), 2, LINE_8, false) {
+            Ok(_) => {},
+            Err(err) => {
+                println!("Can't display summary intensity for polygon due the error {:?}", err);
+            }
+        };
     }
 }
 
