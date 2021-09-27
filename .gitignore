@@ -3,3 +3,6 @@
 /data/yolov4-tiny_custom.names
 /data/yolov4-tiny_custom.weights
 /data/video.mp4
+/data/sample-2_960_540.mp4
+/data/yolov4.cfg
+/data/yolov4.weights

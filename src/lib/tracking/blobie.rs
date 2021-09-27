@@ -21,6 +21,11 @@ use opencv::{
 use uuid::Uuid;
 pub type BlobID = Uuid;
 use crate::lib::tracking::utils;
+use chrono::{
+    DateTime,
+    Utc,
+    Duration
+};
 
 pub struct KalmanBlobie {
     id: BlobID,
@@ -34,11 +39,42 @@ pub struct KalmanBlobie {
     max_points_in_track: usize,
     is_still_tracked: bool,
     track: Vec<Point>,
-    custom_kf: KalmanFilterLinear
+    custom_kf: KalmanFilterLinear,
+    time: DateTime<Utc>,
+    delta_time: f64,
+    track_time: Vec<DateTime<Utc>>
 }
 
 impl KalmanBlobie {
     pub fn new(rect: &Rect, max_points_in_track: usize) -> Self {
+        let center_x = rect.x as f32 + 0.5 * rect.width as f32;
+        let center_y = rect.y as f32 + 0.5 * rect.height as f32;
+        // let center = Point::new(center_x.round() as i32, center_y.round() as i32);
+        let center = Point::new(center_x as i32, center_y as i32);
+        let diagonal = f32::sqrt((i32::pow(rect.width, 2) + i32::pow(rect.height, 2)) as f32);
+        let mut custom_kf = KalmanFilterLinear::new();
+        custom_kf.set_time(1.0);
+        let current_time = Utc::now();
+        let kb = KalmanBlobie {
+            id : Uuid::new_v4(),
+            class_name: "Undefined".to_string(),
+            center: center,
+            predicted_next_position: Point::default(),
+            current_rect: *rect,
+            diagonal: diagonal,
+            exists: true,
+            no_match_times: 0,
+            max_points_in_track: max_points_in_track,
+            is_still_tracked: true,
+            track: vec![center],
+            custom_kf: custom_kf,
+            time: current_time,
+            delta_time: 0.0,
+            track_time: vec![current_time]
+        };
+        return kb 
+    }
+    pub fn new_with_time(rect: &Rect, max_points_in_track: usize, tm: DateTime<Utc>, sec_diff: f64) -> Self {
         let center_x = rect.x as f32 + 0.5 * rect.width as f32;
         let center_y = rect.y as f32 + 0.5 * rect.height as f32;
         // let center = Point::new(center_x.round() as i32, center_y.round() as i32);
@@ -58,7 +94,10 @@ impl KalmanBlobie {
             max_points_in_track: max_points_in_track,
             is_still_tracked: true,
             track: vec![center],
-            custom_kf: custom_kf
+            custom_kf: custom_kf,
+            time: tm,
+            delta_time: sec_diff,
+            track_time: vec![tm]
         };
         return kb 
     }
@@ -111,6 +150,9 @@ impl KalmanBlobie {
     }
     pub fn get_track(&self) -> Vec<Point> {
         return self.track.clone();
+    }
+    pub fn get_timestamps(&self) -> Vec<DateTime<Utc>> {
+        return self.track_time.clone();
     }
     pub fn get_max_points_in_track(&self) -> usize {
         return self.max_points_in_track;
@@ -181,6 +223,7 @@ impl KalmanBlobie {
         self.is_still_tracked = true;
         self.exists = true;
         self.track.push(self.center);
+        self.track_time.push(newb.track_time[newb.track_time.len() - 1]);
         // Restrict number of points in track (shift to the left)
         if self.track.len() > self.max_points_in_track {
             self.track = self.track[1..].to_vec();
@@ -223,6 +266,15 @@ impl KalmanBlobie {
     pub fn draw_class_name(&self, img: &mut Mat) {
         let anchor = Point::new(self.current_rect.x + 2, self.current_rect.y + 3);
         match put_text(img, &self.class_name, anchor, FONT_HERSHEY_SIMPLEX, 1.5, Scalar::from((0.0, 255.0, 255.0)), 2, LINE_8, false) {
+            Ok(_) => {},
+            Err(err) => {
+                println!("Can't display classname of object due the error {:?}", err);
+            }
+        };
+    }
+    pub fn draw_id(&self, img: &mut Mat) {
+        let anchor = Point::new(self.current_rect.x + 2, self.current_rect.y + 10);
+        match put_text(img, &self.id.to_string(), anchor, FONT_HERSHEY_SIMPLEX, 0.5, Scalar::from((0.0, 255.0, 255.0)), 2, LINE_8, false) {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't display classname of object due the error {:?}", err);

@@ -8,7 +8,7 @@
 
 [detection]
     # *.weight/*.cfg + "Darknet" for YOLO
-    # network_weights = "./data/yolov4-tiny.weights"
+    # network_weights = "./data/yolov4-tiny/.weights"
     # network_cfg = "./data/yolov4-tiny.cfg"
     # network_type = "Darknet"
     # *.prototxt/*.caffemodel + "Caffe-MobileNet-SSD" for Caffe

@@ -87,10 +87,10 @@ impl SpatialConverter {
         let yattr = answ_ptr[1];
         return Point2f::new(xattr / scale, yattr / scale);
     }
-    fn estimate_speed(&self, from_point: &Point2f, from_time: DateTime<Utc>, to_point: &Point2f, to_time: DateTime<Utc>) -> f32 {
+    pub fn estimate_speed(&self, from_point: &Point2f, from_time: DateTime<Utc>, to_point: &Point2f, to_time: DateTime<Utc>) -> f32 {
         let from_point_wgs84 = self.transform_to_wgs84(from_point);
         let to_point_wgs84 = self.transform_to_wgs84(to_point);
-        let time_difference = (to_time - from_time).num_seconds() as f32 / 3600.0;
+        let time_difference = (to_time - from_time).num_milliseconds() as f32 / 3600000.0;
         return haversine(from_point_wgs84, to_point_wgs84) / time_difference;
     }
 }

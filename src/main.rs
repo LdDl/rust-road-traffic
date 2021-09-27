@@ -3,6 +3,7 @@ use opencv::{
     core::Scalar,
     core::Size,
     core::Mat,
+    core::Point,
     core::Vector,
     core::get_cuda_enabled_device_count,
     core::CV_32F,
@@ -26,6 +27,11 @@ use opencv::{
 
 use std::time::Instant;
 use std::io::Write;
+use chrono::{
+    DateTime,
+    Utc,
+    Duration
+};
 
 mod lib;
 use lib::tracking::{
@@ -56,6 +62,7 @@ fn run() -> opencv::Result<()> {
     let mut tracker = KalmanBlobiesTracker::default();
 
     let video_src = &app_settings.input.video_src;
+    const VIDEOCAPTURE_POS_MSEC: i32 = 0;
     let weights_src = &app_settings.detection.network_weights;
     let cfg_src = &app_settings.detection.network_cfg;
     let network_type = app_settings.detection.network_type.to_lowercase();
@@ -180,6 +187,9 @@ fn run() -> opencv::Result<()> {
     let frame_cols = frame.cols() as f32;
     let frame_rows = frame.rows() as f32;
 
+    let mut last_ms: f64 = 0.0;
+	let mut last_time = Utc::now();
+
     loop {
         let all_now = Instant::now();
 
@@ -190,6 +200,13 @@ fn run() -> opencv::Result<()> {
                 break;
             }
         };
+        /* Evaluate time difference */
+        let current_ms = video_capture.get(VIDEOCAPTURE_POS_MSEC).unwrap();
+        let ms_diff = current_ms - last_ms;
+        let sec_diff = ms_diff / 1000.0;
+        let prev_time = last_time;
+        last_time = prev_time + Duration::milliseconds(ms_diff as i64);
+        last_ms = current_ms;
 
         let elapsed_capture = all_now.elapsed().as_millis() as f32;
 
@@ -206,10 +223,10 @@ fn run() -> opencv::Result<()> {
                 let mut tmp_blobs;
                 if network_type == "darknet" {
                     /* Tiny YOLO */
-                    tmp_blobs = process_yolo_detections(&detections, conf_threshold, nms_threshold, frame_cols, frame_rows, max_points_in_track, coco_classnames, COCO_FILTERED_CLASSNAMES, classes_num);
+                    tmp_blobs = process_yolo_detections(&detections, conf_threshold, nms_threshold, frame_cols, frame_rows, max_points_in_track, coco_classnames, COCO_FILTERED_CLASSNAMES, classes_num, last_time, sec_diff);
                 } else {
                     /* Caffe's Mobilenet */
-                    tmp_blobs = process_mobilenet_detections(&detections, conf_threshold, frame_cols, frame_rows, max_points_in_track, coco_classnames, COCO_FILTERED_CLASSNAMES);
+                    tmp_blobs = process_mobilenet_detections(&detections, conf_threshold, frame_cols, frame_rows, max_points_in_track, coco_classnames, COCO_FILTERED_CLASSNAMES, last_time, sec_diff);
                 }
 
                 // Match blobs
@@ -218,31 +235,46 @@ fn run() -> opencv::Result<()> {
                 // Run through the blobs and check if some of them either entered or left road lanes polygons
                 for (_, b) in tracker.objects.iter() {
                     let blob_id = b.get_id();
-                    for polygon in convex_polygons.iter_mut() {
-                        if polygon.object_entered(b.get_track()) {
-                            // If blob is not registered in polygon
-                            if !polygon.blob_registered(&blob_id) {
-                                // Then register it
-                                println!("income {:?}", blob_id);
-                                polygon.register_blob(blob_id);
-                            };
-                        } else if polygon.object_left(b.get_track()) {
-                            // If blob registered in polygon
-                            if polygon.blob_registered(&blob_id) {
-                                // Then deregister it
-                                println!("outcome {:?}", blob_id);
-                                polygon.deregister_blob(&blob_id);
-                            };
+                    let blob_center = b.get_center();
+                    let blob_track = b.get_track();
+                    let blob_track_time = b.get_timestamps();
+                    let n = blob_track.len();
+                    if n > 2 {
+                        let last_pt = blob_track[n-1];
+                        let second_last_pt = blob_track[n-2];
+                        let last_tm = blob_track_time[n-1];
+                        let second_last_tm = blob_track_time[n-2];
+                        for polygon in convex_polygons.iter_mut() {
+                            if polygon.contains_cv_point(&blob_center) {
+                                let speed = polygon.estimate_speed(&second_last_pt, second_last_tm, &last_pt, last_tm);
+                                // println!("speedy {:?} {} {:?} {} {}", second_last_pt, second_last_tm, last_pt, last_tm, speed);
+                            }
                         }
                     }
+                    // for polygon in convex_polygons.iter_mut() {
+                    //     if polygon.object_entered(b.get_track()) {
+                    //         // If blob is not registered in polygon
+                    //         if !polygon.blob_registered(&blob_id) {
+                    //             // Then register it
+                    //             // println!("income {:?}", blob_id);
+                    //             polygon.register_blob(blob_id);
+                    //         };
+                    //     } else if polygon.object_left(b.get_track()) {
+                    //         // If blob registered in polygon
+                    //         if polygon.blob_registered(&blob_id) {
+                    //             // Then deregister it
+                    //             // println!("outcome {:?}", blob_id);
+                    //             polygon.deregister_blob(&blob_id);
+                    //         };
+                    //     }
+                    // }
                     b.draw_track(&mut frame);
                     b.draw_center(&mut frame);
-                    b.draw_predicted(&mut frame);
+                    // b.draw_predicted(&mut frame);
                     b.draw_rectangle(&mut frame);
                     b.draw_class_name(&mut frame);
+                    b.draw_id(&mut frame);
                 }
-
-
             }
             Err(err) => {
                 println!("Can't process input of neural network due the error {:?}", err);
@@ -269,19 +301,19 @@ fn run() -> opencv::Result<()> {
             break;
         }
 
-        // let elapsed_all = 1000.0 / all_now.elapsed().as_millis() as f32;
-        // print!("\rСapturing process millis: {} | Average FPS of detection process: {} | Average FPS of whole process: {}", elapsed_capture, elapsed_detection, elapsed_all);
-        // match std::io::stdout().flush() {
-        //     Ok(_) => {},
-        //     Err(err) => {
-        //         panic!("There is a problem with stdout().flush(): {}", err);
-        //     }
-        // };
+        let elapsed_all = 1000.0 / all_now.elapsed().as_millis() as f32;
+        print!("\rСapturing process millis: {} | Average FPS of detection process: {} | Average FPS of whole process: {}", elapsed_capture, elapsed_detection, elapsed_all);
+        match std::io::stdout().flush() {
+            Ok(_) => {},
+            Err(err) => {
+                panic!("There is a problem with stdout().flush(): {}", err);
+            }
+        };
     }
     Ok(())
 }
 
-fn process_mobilenet_detections(detections: &Vector::<Mat>, conf_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &'static [&'static str], filtered_classes: &'static [&'static str]) -> Vec<KalmanBlobie> {
+fn process_mobilenet_detections(detections: &Vector::<Mat>, conf_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &'static [&'static str], filtered_classes: &'static [&'static str], last_time: DateTime<Utc>, sec_diff: f64) -> Vec<KalmanBlobie> {
     let mut tmp_blobs = vec![];
     let outs = detections.len();
     for o in 0..outs {
@@ -303,7 +335,7 @@ fn process_mobilenet_detections(detections: &Vector::<Mat>, conf_threshold: f32,
                         continue
                     }
                     let bbox = Rect::new(left, top, width, height);
-                    let mut kb = KalmanBlobie::new(&bbox, max_points_in_track);
+                    let mut kb = KalmanBlobie::new_with_time(&bbox, max_points_in_track, last_time, sec_diff);
                     kb.set_class_name(class_name.to_string());
                     tmp_blobs.push(kb);
                 }
@@ -313,7 +345,7 @@ fn process_mobilenet_detections(detections: &Vector::<Mat>, conf_threshold: f32,
     return tmp_blobs;
 }
 
-fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, nms_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &'static [&'static str], filtered_classes: &'static [&'static str], classes_num: usize) -> Vec<KalmanBlobie> {
+fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, nms_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &'static [&'static str], filtered_classes: &'static [&'static str], classes_num: usize, last_time: DateTime<Utc>, sec_diff: f64) -> Vec<KalmanBlobie> {
     let mut tmp_blobs = vec![];
     let outs = detections.len();
     let mut class_names = vec![];
@@ -360,7 +392,7 @@ fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, nms_
         match bboxes.get(i) {
             Ok(bbox) => {
                 let class_name = class_names[i];
-                let mut kb = KalmanBlobie::new(&bbox, max_points_in_track);
+                let mut kb = KalmanBlobie::new_with_time(&bbox, max_points_in_track, last_time, sec_diff);
                 kb.set_class_name(class_name.to_string());
                 tmp_blobs.push(kb);
             },
