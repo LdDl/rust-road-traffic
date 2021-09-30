@@ -31,3 +31,4 @@
         * ~~Check if point has left polygon~~
     * Hashmap and timer for estimating average values of traffic (speed, intensity)
     * ~~Optional choice between Tiny YOLO and MobilenetSSD(Caffe)~~
+    * Fill Jetson Nano instructions
