@@ -27,9 +27,6 @@ use opencv::{
 use std::time::Instant;
 use std::io::Write;
 use std::thread;
-use std::time::Duration as STDDuration;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex, RwLock};
 use chrono::{
     DateTime,
     Utc,
@@ -40,38 +37,12 @@ use lib::tracking::{
     KalmanBlobie,
     KalmanBlobiesTracker,
 };
-use lib::polygons::ConvexPolygon;
-use lib::polygons::PolygonID;
+use lib::polygons::{ConvexPolygons};
 mod settings;
 use settings::{
     AppSettings,
 };
 mod storage;
-
-struct ConvexPolygons(Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>>);
-impl ConvexPolygons {
-    fn new() -> Self {
-        return ConvexPolygons(Arc::new(RwLock::new(HashMap::<PolygonID, Mutex<ConvexPolygon>>::new())))
-    }
-    fn insert_polygon(&self, polygon: ConvexPolygon) {
-        let cloned = Arc::clone(&self.0);
-        let mut write_mutex = cloned.write().expect("RwLock poisoned");
-        write_mutex.insert(polygon.id, Mutex::new(polygon));
-        drop(write_mutex);
-    }
-    fn send_data_worker(&self, millis: u64) {
-        let cloned = Arc::clone(&self.0);
-        loop {
-            let read_mutex = cloned.read().expect("RwLock poisoned");
-            for (_, v) in read_mutex.iter() {
-                let element = v.lock().expect("Mutex poisoned");
-                drop(element);
-            }
-            drop(read_mutex);
-            thread::sleep(STDDuration::from_millis(millis));
-        }
-    }
-}
 
 fn run() -> opencv::Result<()> {
     let app_settings = AppSettings::new_settings("./data/conf.toml");
@@ -96,14 +67,14 @@ fn run() -> opencv::Result<()> {
     let window = &app_settings.output.window_name;
 
     let convex_polygons = ConvexPolygons::new();
-    let convex_polygons_cloned = Arc::clone(&convex_polygons.0);
+    let convex_polygons_cloned = convex_polygons.clone_arc();
     for road_lane in app_settings.road_lanes.iter() {
         let polygon = road_lane.convert_to_convex_polygon();
         convex_polygons.insert_polygon(polygon);
     }
-    let worker_millis = app_settings.worker.milliseconds;
+    let worker_reset_millis = app_settings.worker.reset_data_milliseconds;
     thread::spawn(move || {
-        convex_polygons.send_data_worker(worker_millis);
+        convex_polygons.send_data_worker(worker_reset_millis);
     });
     
     // Prepare output window

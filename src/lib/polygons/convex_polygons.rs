@@ -1,3 +1,35 @@
+use std::thread;
+use std::time::Duration as Duration;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, RwLock};
+pub struct ConvexPolygons(Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>>);
+impl ConvexPolygons {
+    pub fn new() -> Self {
+        return ConvexPolygons(Arc::new(RwLock::new(HashMap::<PolygonID, Mutex<ConvexPolygon>>::new())))
+    }
+    pub fn clone_arc(&self) -> Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>> {
+        return Arc::clone(&self.0);
+    }
+    pub fn insert_polygon(&self, polygon: ConvexPolygon) {
+        let cloned = Arc::clone(&self.0);
+        let mut write_mutex = cloned.write().expect("RwLock poisoned");
+        write_mutex.insert(polygon.id, Mutex::new(polygon));
+        drop(write_mutex);
+    }
+    pub fn send_data_worker(&self, millis: u64) {
+        let cloned = Arc::clone(&self.0);
+        loop {
+            let read_mutex = cloned.read().expect("RwLock poisoned");
+            for (_, v) in read_mutex.iter() {
+                let element = v.lock().expect("Mutex poisoned");
+                drop(element);
+            }
+            drop(read_mutex);
+            thread::sleep(Duration::from_millis(millis));
+        }
+    }
+}
+
 use opencv::{
     core::Point,
     core::Scalar,

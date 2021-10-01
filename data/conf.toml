@@ -41,4 +41,4 @@
     color_rgb = [0, 0, 255]
 
 [worker]
-    milliseconds = 1000
+    reset_data_milliseconds = 1000

@@ -50,7 +50,7 @@ pub struct RoadLanesSettings {
 
 #[derive(Deserialize, Debug)]
 pub struct WorkerSettings {
-    pub milliseconds: u64,
+    pub reset_data_milliseconds: u64,
 }
 
 use crate::lib::polygons::ConvexPolygon;
