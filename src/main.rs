@@ -66,7 +66,7 @@ fn run() -> opencv::Result<()> {
     let network_type = app_settings.detection.network_type.to_lowercase();
     let window = &app_settings.output.window_name;
 
-    let convex_polygons = ConvexPolygons::new();
+    let mut convex_polygons = ConvexPolygons::new();
     let convex_polygons_cloned = convex_polygons.clone_arc();
     for road_lane in app_settings.road_lanes.iter() {
         let polygon = road_lane.convert_to_convex_polygon();
@@ -74,7 +74,7 @@ fn run() -> opencv::Result<()> {
     }
     let worker_reset_millis = app_settings.worker.reset_data_milliseconds;
     thread::spawn(move || {
-        convex_polygons.send_data_worker(worker_reset_millis);
+        convex_polygons.start_data_worker(worker_reset_millis);
     });
     
     // Prepare output window

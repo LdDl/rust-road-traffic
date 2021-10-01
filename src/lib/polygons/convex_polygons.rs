@@ -1,11 +1,13 @@
 use std::thread;
-use std::time::Duration as Duration;
+use std::time::Duration as STDDuration;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
-pub struct ConvexPolygons(Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>>);
+use chrono::{DateTime, Utc, Duration};
+pub struct ConvexPolygons(Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>>, DateTime<Utc>, Option<DateTime<Utc>>);
 impl ConvexPolygons {
     pub fn new() -> Self {
-        return ConvexPolygons(Arc::new(RwLock::new(HashMap::<PolygonID, Mutex<ConvexPolygon>>::new())))
+        let now = Utc::now();
+        return ConvexPolygons(Arc::new(RwLock::new(HashMap::<PolygonID, Mutex<ConvexPolygon>>::new())), now, None);
     }
     pub fn clone_arc(&self) -> Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>> {
         return Arc::clone(&self.0);
@@ -16,16 +18,29 @@ impl ConvexPolygons {
         write_mutex.insert(polygon.id, Mutex::new(polygon));
         drop(write_mutex);
     }
-    pub fn send_data_worker(&self, millis: u64) {
+    pub fn start_data_worker(&mut self, millis: u64) {
+        let millis_asi64 = millis as i64;
         let cloned = Arc::clone(&self.0);
+        // First run
+        self.1 = Utc::now();
+        let read_mutex = cloned.read().expect("RwLock poisoned");
+        for (_, v) in read_mutex.iter() {
+            let element = v.lock().expect("Mutex poisoned");
+            drop(element);
+        }
+        drop(read_mutex);
+        thread::sleep(STDDuration::from_millis(millis));
+        // Next runs
         loop {
+            self.1 = Utc::now();
             let read_mutex = cloned.read().expect("RwLock poisoned");
             for (_, v) in read_mutex.iter() {
                 let element = v.lock().expect("Mutex poisoned");
                 drop(element);
             }
             drop(read_mutex);
-            thread::sleep(Duration::from_millis(millis));
+            self.2 = Some(self.1 + Duration::milliseconds(millis_asi64));
+            thread::sleep(STDDuration::from_millis(millis));
         }
     }
 }
