@@ -42,3 +42,8 @@
 
 [worker]
     reset_data_milliseconds = 1000
+
+[rest_api]
+    host = "0.0.0.0"
+    back_endport = 42001
+    api_scope = "/api"

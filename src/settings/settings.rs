@@ -11,6 +11,7 @@ pub struct AppSettings {
     pub tracking: TrackingSettings,
     pub road_lanes: Vec<RoadLanesSettings>,
     pub worker: WorkerSettings,
+    pub rest_api: RestAPISettings
 }
 
 #[derive(Deserialize, Debug)]
@@ -52,6 +53,14 @@ pub struct RoadLanesSettings {
 pub struct WorkerSettings {
     pub reset_data_milliseconds: u64,
 }
+
+#[derive(Deserialize, Debug)]
+pub struct RestAPISettings {
+    pub host: String,
+    pub back_end_port: String,
+    pub api_scope: String,
+}
+
 
 use crate::lib::polygons::ConvexPolygon;
 use crate::lib::spatial::SpatialConverter;
