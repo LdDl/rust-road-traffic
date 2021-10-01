@@ -1,5 +1,5 @@
 [input]
-    video_src = "./data/sample_960_540.mp4"
+    video_src = "./data/sample-2_960_540.mp4"
 
 [output]
     width = 500
