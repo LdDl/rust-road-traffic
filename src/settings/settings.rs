@@ -10,6 +10,7 @@ pub struct AppSettings {
     pub detection: DetectionSettings,
     pub tracking: TrackingSettings,
     pub road_lanes: Vec<RoadLanesSettings>,
+    pub worker: WorkerSettings,
 }
 
 #[derive(Deserialize, Debug)]
@@ -45,6 +46,11 @@ pub struct RoadLanesSettings {
     pub geometry: Vec<[i32; 2]>,
     pub geometry_wgs84: Vec<[f32; 2]>,
     pub color_rgb: [i16; 3],
+}
+
+#[derive(Deserialize, Debug)]
+pub struct WorkerSettings {
+    pub milliseconds: u64,
 }
 
 use crate::lib::polygons::ConvexPolygon;

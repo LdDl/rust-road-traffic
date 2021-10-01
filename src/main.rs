@@ -3,7 +3,6 @@ use opencv::{
     core::Scalar,
     core::Size,
     core::Mat,
-    core::Point,
     core::Vector,
     core::get_cuda_enabled_device_count,
     core::CV_32F,
@@ -27,24 +26,52 @@ use opencv::{
 
 use std::time::Instant;
 use std::io::Write;
+use std::thread;
+use std::time::Duration as STDDuration;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, RwLock};
 use chrono::{
     DateTime,
     Utc,
     Duration
 };
-
 mod lib;
 use lib::tracking::{
     KalmanBlobie,
     KalmanBlobiesTracker,
 };
-
+use lib::polygons::ConvexPolygon;
+use lib::polygons::PolygonID;
 mod settings;
 use settings::{
     AppSettings,
 };
-
 mod storage;
+
+struct ConvexPolygons(Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>>);
+impl ConvexPolygons {
+    fn new() -> Self {
+        return ConvexPolygons(Arc::new(RwLock::new(HashMap::<PolygonID, Mutex<ConvexPolygon>>::new())))
+    }
+    fn insert_polygon(&self, polygon: ConvexPolygon) {
+        let cloned = Arc::clone(&self.0);
+        let mut write_mutex = cloned.write().expect("RwLock poisoned");
+        write_mutex.insert(polygon.id, Mutex::new(polygon));
+        drop(write_mutex);
+    }
+    fn send_data_worker(&self, millis: u64) {
+        let cloned = Arc::clone(&self.0);
+        loop {
+            let read_mutex = cloned.read().expect("RwLock poisoned");
+            for (_, v) in read_mutex.iter() {
+                let element = v.lock().expect("Mutex poisoned");
+                drop(element);
+            }
+            drop(read_mutex);
+            thread::sleep(STDDuration::from_millis(millis));
+        }
+    }
+}
 
 fn run() -> opencv::Result<()> {
     let app_settings = AppSettings::new_settings("./data/conf.toml");
@@ -68,11 +95,17 @@ fn run() -> opencv::Result<()> {
     let network_type = app_settings.detection.network_type.to_lowercase();
     let window = &app_settings.output.window_name;
 
-    let mut convex_polygons = vec![];
+    let convex_polygons = ConvexPolygons::new();
+    let convex_polygons_cloned = Arc::clone(&convex_polygons.0);
     for road_lane in app_settings.road_lanes.iter() {
-        convex_polygons.push(road_lane.convert_to_convex_polygon());
+        let polygon = road_lane.convert_to_convex_polygon();
+        convex_polygons.insert_polygon(polygon);
     }
-
+    let worker_millis = app_settings.worker.milliseconds;
+    thread::spawn(move || {
+        convex_polygons.send_data_worker(worker_millis);
+    });
+    
     // Prepare output window
     match named_window(window, 1) {
         Ok(_) => {},
@@ -238,7 +271,9 @@ fn run() -> opencv::Result<()> {
                     let blob_center = b.get_center();
                     if n > 2 {
                         let blob_id = b.get_id();
-                        for polygon in convex_polygons.iter_mut() {
+                        let mut convex_polygons_write = convex_polygons_cloned.write().expect("RwLock poisoned");
+                        for (_, v) in convex_polygons_write.iter_mut() {
+                            let mut polygon = v.lock().expect("Mutex poisoned");
                             let contains_blob = polygon.contains_cv_point(&blob_center);
                             if contains_blob {
                                 b.estimate_speed_mut(&polygon.spatial_converter);
@@ -258,7 +293,9 @@ fn run() -> opencv::Result<()> {
                                     // println!("outcome {:?} with speed {}", blob_id, b.get_avg_speed());
                                 }
                             }
+                            drop(polygon);
                         }
+                        drop(convex_polygons_write);
                     }
                     b.draw_track(&mut frame);
                     b.draw_center(&mut frame);
@@ -274,10 +311,14 @@ fn run() -> opencv::Result<()> {
         }
         let elapsed_detection = 1000.0 / detection_now.elapsed().as_millis() as f32;
 
-        for polygon in convex_polygons.iter() {
+        let convex_polygons_read = convex_polygons_cloned.read().expect("RwLock poisoned");
+        for (_, v) in convex_polygons_read.iter() {
+            let polygon = v.lock().expect("Mutex poisoned");
             polygon.draw_geom(&mut frame);
             polygon.draw_params(&mut frame);
+            drop(polygon);
         }
+        drop(convex_polygons_read);
 
         match resize(&mut frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
             Ok(_) => {},
@@ -399,5 +440,8 @@ fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, nms_
 
 
 fn main() {
+    // thread::spawn(|| {
+    //     job_worker();
+    // });
     run().unwrap()
 }
