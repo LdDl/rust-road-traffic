@@ -34,6 +34,6 @@
     * Hashmap and timer for estimating average values of traffic (speed, intensity) __W.I.P.__
         * Hashmap and thread __W.I.P.__
         * Reset values __W.I.P.__
-        * Time intervals __W.I.P.__
+        * Time intervals (threads) __W.I.P.__ (
     * ~~Optional choice between Tiny YOLO and MobilenetSSD(Caffe)~~
     * Fill Jetson Nano instructions
