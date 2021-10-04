@@ -15,10 +15,10 @@
     * ~~Spatial converter~~
         * ~~Tranform matrix~~
         * ~~Convert function~~
-    * Speed evaluations __W.I.P.__
+    * ~~Speed evaluations~~
         * ~~Haversine function~~
         * ~~Spatial converter usage~~
-        * Apply math function to objects __W.I.P.__
+        * ~~Apply math function to objects~~
     * Read frames in one thread and do neural network's job in another one __W.I.P.__
     * Error handling __W.I.P.__
     * MJPEG streamer (via [actix-web](https://github.com/actix/actix-web#actix-web) I guess?)
@@ -36,4 +36,4 @@
         * Reset values __W.I.P.__
         * Time intervals (threads) __W.I.P.__ (
     * ~~Optional choice between Tiny YOLO and MobilenetSSD(Caffe)~~
-    * Fill Jetson Nano instructions
+    * ~~Fill Jetson Nano instructions~~

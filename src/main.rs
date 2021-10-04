@@ -44,6 +44,8 @@ use settings::{
 };
 mod storage;
 
+use lib::rest_api;
+
 fn run() -> opencv::Result<()> {
     let app_settings = AppSettings::new_settings("./data/conf.toml");
     println!("Settings are: {:?}", app_settings);
@@ -76,7 +78,7 @@ fn run() -> opencv::Result<()> {
     thread::spawn(move || {
         convex_polygons.start_data_worker(worker_reset_millis);
     });
-    
+
     // Prepare output window
     match named_window(window, 1) {
         Ok(_) => {},

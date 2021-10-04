@@ -3,6 +3,7 @@ use std::time::Duration as STDDuration;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 use chrono::{DateTime, Utc, Duration};
+use serde::{Deserialize, Serialize};
 pub struct ConvexPolygons(Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>>, DateTime<Utc>, Option<DateTime<Utc>>);
 impl ConvexPolygons {
     pub fn new() -> Self {
@@ -52,6 +53,19 @@ impl ConvexPolygons {
             previous_tm = self.2.unwrap();
             thread::sleep(STDDuration::from_millis(millis));
         }
+    }
+    pub fn to_geojson(&self) -> PolygonsGeoJSON {
+        let mut ans = PolygonsGeoJSON::new();
+        let cloned = Arc::clone(&self.0);
+        let read_mutex = cloned.read().expect("RwLock poisoned");
+        for (_, v) in read_mutex.iter() {
+            let element = v.lock().expect("Mutex poisoned");
+            let geo_feature = element.to_geojson();
+            drop(element);
+            ans.features.push(geo_feature);
+        }
+        drop(read_mutex);
+        return ans;
     }
 }
 
@@ -247,6 +261,21 @@ impl ConvexPolygon {
             }
         };
     }
+    pub fn to_geojson(&self) -> PolygonFeatureGeoJSON{
+        return PolygonFeatureGeoJSON{
+            typ: "Feature".to_string(),
+            id: self.get_id(),
+            properties: PolygonFeaturePropertiesGeoJSON{
+                road_lane_num: self.road_lane_num,
+                road_lane_direction: self.road_lane_direction,
+                coordinates: vec![], // @todo
+            },
+            geometry: GeoPolygon{
+                geometry_type: "Polygon".to_string(),
+                coordinates: vec![] // @todo
+            },
+        };
+    }
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -321,6 +350,44 @@ fn is_intersects(first_px: f32, first_py: f32, first_qx: f32, first_qy: f32, sec
     }
     // Segments do not intersect
     return false;
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PolygonsGeoJSON {
+    #[serde(rename(serialize = "type"))]
+    typ: String,
+    features: Vec<PolygonFeatureGeoJSON>
+}
+
+impl PolygonsGeoJSON {
+    fn new() -> Self {
+        return PolygonsGeoJSON {
+            typ: "FeatureCollection".to_string(),
+            features: vec![]
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct PolygonFeatureGeoJSON {
+    #[serde(rename(serialize = "type"))]
+    typ: String,
+    id: Uuid,
+    properties: PolygonFeaturePropertiesGeoJSON,
+    geometry: GeoPolygon,
+}
+#[derive(Debug, Deserialize, Serialize)]
+struct PolygonFeaturePropertiesGeoJSON {
+    road_lane_num: u16,
+    road_lane_direction: u8,
+    coordinates: Vec<[i32; 2]>,
+}
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct GeoPolygon {
+    #[serde(rename(serialize = "type", deserialize = "type"))]
+    pub geometry_type: String,
+    #[serde(rename(serialize = "coordinates", deserialize = "coordinates"))]
+    pub coordinates: Vec<Vec<Vec<f64>>>,
 }
 
 #[cfg(test)]
