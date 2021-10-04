@@ -10,6 +10,8 @@ My hardware setup is:
 My software setup is:
 1. Jetson Nano image by NVIDIA: https://developer.download.nvidia.com/embedded/L4T/r32_Release_v6.1/Jeston_Nano/jetson-nano-jp46-sd-card-image.zip
 
+    It does have all feature you will need: CUDA, cuDNN and etc.
+    
     Follow official [instruction](https://developer.nvidia.com/embedded/learn/get-started-jetson-nano-devkit#write) for OS installation.
 2. [OpenCV](https://opencv.org/) v4.5.3.
 
