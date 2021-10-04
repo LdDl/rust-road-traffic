@@ -41,6 +41,14 @@ impl ConvexPolygons {
             }
             drop(read_mutex);
             self.2 = Some(self.1 + Duration::milliseconds(millis_asi64));
+            println!("\nPeriod start: {} | Period end: {}", self.1, self.2.unwrap());
+            let read_mutex = cloned.read().expect("RwLock poisoned");
+            for (_, v) in read_mutex.iter() {
+                let element = v.lock().expect("Mutex poisoned");
+                println!("\tPolygon: {} | Intensity: {} | Speed: {}", element.get_id(), element.sum_intensity, element.avg_speed);
+                drop(element);
+            }
+            drop(read_mutex);
             previous_tm = self.2.unwrap();
             thread::sleep(STDDuration::from_millis(millis));
         }

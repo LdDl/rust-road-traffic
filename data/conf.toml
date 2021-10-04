@@ -41,7 +41,7 @@
     color_rgb = [0, 0, 255]
 
 [worker]
-    reset_data_milliseconds = 1000
+    reset_data_milliseconds = 5000
 
 [rest_api]
     host = "0.0.0.0"
