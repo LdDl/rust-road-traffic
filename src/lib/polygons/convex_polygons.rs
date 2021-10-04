@@ -31,8 +31,9 @@ impl ConvexPolygons {
         drop(read_mutex);
         thread::sleep(STDDuration::from_millis(millis));
         // Next runs
+        let mut previous_tm = self.1;
         loop {
-            self.1 = Utc::now();
+            self.1 = previous_tm;
             let read_mutex = cloned.read().expect("RwLock poisoned");
             for (_, v) in read_mutex.iter() {
                 let element = v.lock().expect("Mutex poisoned");
@@ -40,6 +41,7 @@ impl ConvexPolygons {
             }
             drop(read_mutex);
             self.2 = Some(self.1 + Duration::milliseconds(millis_asi64));
+            previous_tm = self.2.unwrap();
             thread::sleep(STDDuration::from_millis(millis));
         }
     }
