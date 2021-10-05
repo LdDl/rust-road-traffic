@@ -95,6 +95,8 @@ pub struct ConvexPolygon {
     pub road_lane_direction: u8,
     pub spatial_converter: SpatialConverter,
     pub blobs: HashSet<BlobID>,
+    pub estimated_avg_speed: f32,
+    pub estimated_sum_intensity: u32,
 }
 
 impl ConvexPolygon {
@@ -105,6 +107,8 @@ impl ConvexPolygon {
             color: Scalar::from((255.0, 255.0, 255.0)),
             avg_speed: -1.0,
             sum_intensity: 0,
+            estimated_avg_speed: 0.0,
+            estimated_sum_intensity: 0,
             road_lane_num: 0,
             road_lane_direction: 0,
             spatial_converter: SpatialConverter::empty(),

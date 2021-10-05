@@ -91,6 +91,8 @@ impl RoadLanesSettings {
             color: Scalar::from((self.color_rgb[2] as f64, self.color_rgb[1] as f64, self.color_rgb[0] as f64)),
             avg_speed: 0.0,
             sum_intensity: 0,
+            estimated_avg_speed: 0.0,
+            estimated_sum_intensity: 0,
             road_lane_num: self.lane_number,
             road_lane_direction: self.lane_direction,
             spatial_converter: SpatialConverter::new(&geom_f32, &geom_wgs84),
