@@ -37,3 +37,4 @@
         * Time intervals (threads) __W.I.P.__ (
     * ~~Optional choice between Tiny YOLO and MobilenetSSD(Caffe)~~
     * ~~Fill Jetson Nano instructions~~
+    * Estimate speed and intensity for each vehicle type
