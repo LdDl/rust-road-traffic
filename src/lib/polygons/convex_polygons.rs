@@ -40,11 +40,20 @@ impl ConvexPolygons {
             let write_mutex = cloned.write().expect("RwLock poisoned");
             for (_, v) in write_mutex.iter() {
                 let mut element = v.lock().expect("Mutex poisoned");
+                // Summary
                 element.estimated_avg_speed = element.avg_speed;
                 element.estimated_sum_intensity = element.sum_intensity;
                 element.avg_speed = -1.0;
                 element.sum_intensity = 0;
                 println!("\tPolygon: {} | Intensity: {} | Speed: {}", element.get_id(), element.estimated_sum_intensity, element.estimated_avg_speed);
+                // Certain vehicle type
+                for (vehicle_type, statistics) in element.statistics.iter_mut() {
+                    statistics.estimated_avg_speed = statistics.avg_speed;
+                    statistics.estimated_sum_intensity = statistics.sum_intensity;
+                    statistics.avg_speed = -1.0;
+                    statistics.sum_intensity = 0;
+                    println!("\t\tVehicle type: {} | Intensity: {} | Speed: {}", vehicle_type, statistics.estimated_sum_intensity, statistics.estimated_avg_speed);
+                }
                 drop(element);
             }
             drop(write_mutex);
@@ -95,8 +104,27 @@ pub struct ConvexPolygon {
     pub blobs: HashSet<BlobID>,
     pub estimated_avg_speed: f32,
     pub estimated_sum_intensity: u32,
+    pub statistics: HashMap<String, VehicleTypeParameters>
 }
 
+#[derive(Debug)]
+pub struct VehicleTypeParameters {
+    pub avg_speed: f32,
+    pub sum_intensity: u32,
+    pub estimated_avg_speed: f32,
+    pub estimated_sum_intensity: u32
+}
+
+impl VehicleTypeParameters {
+    pub fn default() -> Self {
+        return VehicleTypeParameters{
+            avg_speed: -1.0,
+            sum_intensity: 0,
+            estimated_avg_speed: 0.0,
+            estimated_sum_intensity: 0
+        }
+    }
+}
 impl ConvexPolygon {
     pub fn default_from(points: Vec<Point>) -> Self{
         return ConvexPolygon{
@@ -111,6 +139,7 @@ impl ConvexPolygon {
             road_lane_direction: 0,
             spatial_converter: SpatialConverter::empty(),
             blobs: HashSet::new(),
+            statistics: HashMap::new(),
         }
     }
     pub fn get_id(&self) -> Uuid {
@@ -118,6 +147,11 @@ impl ConvexPolygon {
     }
     pub fn set_id(&mut self, id: Uuid) {
         self.id = id;
+    }
+    pub fn set_target_classes(&mut self, vehicle_types: &'static [&'static str]) {
+        for class in vehicle_types.iter() {
+            self.statistics.insert(class.to_string(), VehicleTypeParameters::default());
+        }
     }
     // Checks if given polygon contains a point
     // Code has been taken from: https://github.com/LdDl/odam/blob/master/virtual_polygons.go#L180
@@ -214,10 +248,26 @@ impl ConvexPolygon {
     pub fn deregister_blob(&mut self, blob_id: &BlobID) {
         self.blobs.remove(blob_id);
     }
-    pub fn increment_intensity(&mut self) {
+    pub fn increment_intensity(&mut self, vehicle_type: String) {
+        // Certain vehicle type
+        let mut vehicle_type_statistics = self.statistics.entry(vehicle_type).or_insert(VehicleTypeParameters::default());
+        vehicle_type_statistics.sum_intensity += 1;
+        // Summary
         self.sum_intensity += 1;
     }
-    pub fn consider_speed(&mut self, speed_value: f32) {
+    pub fn consider_speed(&mut self, vehicle_type: String, speed_value: f32) {
+        // Certain vehicle type
+        let mut vehicle_type_statistics = self.statistics.entry(vehicle_type).or_insert(VehicleTypeParameters::default());
+        if vehicle_type_statistics.avg_speed < 0.0 {
+            vehicle_type_statistics.avg_speed = speed_value;
+        } else if vehicle_type_statistics.avg_speed == f32::NAN {
+            vehicle_type_statistics.avg_speed = speed_value;
+        } else if vehicle_type_statistics.avg_speed == f32::INFINITY {
+            vehicle_type_statistics.avg_speed = speed_value;
+        } else {
+            vehicle_type_statistics.avg_speed = (vehicle_type_statistics.avg_speed + speed_value) / 2.0;
+        }
+        // Summary
         if self.avg_speed < 0.0 {
             self.avg_speed = speed_value;
         } else if self.avg_speed == f32::NAN {
@@ -227,6 +277,7 @@ impl ConvexPolygon {
         } else {
             self.avg_speed = (self.avg_speed + speed_value) / 2.0;
         }
+
     }
     pub fn draw_geom(&self, img: &mut Mat) {
         // @todo: proper error handling

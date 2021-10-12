@@ -68,10 +68,12 @@ fn run() -> opencv::Result<()> {
     let network_type = app_settings.detection.network_type.to_lowercase();
     let window = &app_settings.output.window_name;
 
+    const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
     let mut convex_polygons = ConvexPolygons::new();
     let convex_polygons_cloned = convex_polygons.clone_arc();
     for road_lane in app_settings.road_lanes.iter() {
-        let polygon = road_lane.convert_to_convex_polygon();
+        let mut polygon = road_lane.convert_to_convex_polygon();
+        polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
         convex_polygons.insert_polygon(polygon);
     }
     let worker_reset_millis = app_settings.worker.reset_data_milliseconds;
@@ -119,7 +121,6 @@ fn run() -> opencv::Result<()> {
     let blob_name;
 
     let coco_classnames: &'static [&'static str];
-    const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
 
     match network_type.as_ref() {
         "darknet" => {
@@ -154,7 +155,6 @@ fn run() -> opencv::Result<()> {
     };
 
     let classes_num: usize = coco_classnames.len();
-
 
     let out_layers_names = match neural_net.get_unconnected_out_layers_names() {
         Ok(result) => result,
@@ -254,16 +254,14 @@ fn run() -> opencv::Result<()> {
                                 if !polygon.blob_registered(&blob_id) {
                                     // Register it
                                     polygon.register_blob(blob_id);
-                                    // println!("income {:?} with speed {}", blob_id, speed);
                                 }
                             } else {
                                 // Otherwise
                                 // If blob is registered in polygon and left it (since contains_blob == false)
                                 if polygon.blob_registered(&blob_id) {
                                     polygon.deregister_blob(&blob_id);
-                                    polygon.increment_intensity();
-                                    polygon.consider_speed(b.get_avg_speed());
-                                    // println!("outcome {:?} with speed {}", blob_id, b.get_avg_speed());
+                                    polygon.increment_intensity(b.get_class_name());
+                                    polygon.consider_speed(b.get_class_name(), b.get_avg_speed());
                                 }
                             }
                             drop(polygon);

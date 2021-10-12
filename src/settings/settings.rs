@@ -65,6 +65,7 @@ pub struct RestAPISettings {
 use crate::lib::polygons::ConvexPolygon;
 use crate::lib::spatial::SpatialConverter;
 use std::collections::HashSet;
+use std::collections::HashMap;
 use opencv::core::Point;
 use opencv::core::Point2f;
 use opencv::core::Scalar;
@@ -89,7 +90,7 @@ impl RoadLanesSettings {
             coordinates: geom,
             // RGB to OpenCV = [B, G, R]. So use reverse order
             color: Scalar::from((self.color_rgb[2] as f64, self.color_rgb[1] as f64, self.color_rgb[0] as f64)),
-            avg_speed: 0.0,
+            avg_speed: -1.0,
             sum_intensity: 0,
             estimated_avg_speed: 0.0,
             estimated_sum_intensity: 0,
@@ -97,6 +98,7 @@ impl RoadLanesSettings {
             road_lane_direction: self.lane_direction,
             spatial_converter: SpatialConverter::new(&geom_f32, &geom_wgs84),
             blobs: HashSet::new(),
+            statistics: HashMap::new(),
         }
     }
 }
