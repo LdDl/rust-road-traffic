@@ -5,6 +5,7 @@
     # typ = "local"
 
 [output]
+    enable = true
     width = 500
     height = 500
     window_name = "Caffe MobilenetSSD"

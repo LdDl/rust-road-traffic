@@ -42,6 +42,7 @@ Vehicle detection/tracking and speed estimation via next instruments:
         # typ = "local" 
 
     [output]
+        enable = true
         width = 500
         height = 500
         window_name = "Tiny YOLO v4"

@@ -90,16 +90,18 @@ fn run() -> opencv::Result<()> {
     });
 
     // Prepare output window
-    match named_window(window, 1) {
-        Ok(_) => {},
-        Err(err) =>{
-            panic!("Can't give a name to output window due the error: {:?}", err)
-        }
-    };
-    match resize_window(window, output_width, output_height) {
-        Ok(_) => {},
-        Err(err) =>{
-            panic!("Can't resize output window due the error: {:?}", err)
+    if app_settings.output.enable {
+        match named_window(window, 1) {
+            Ok(_) => {},
+            Err(err) =>{
+                panic!("Can't give a name to output window due the error: {:?}", err)
+            }
+        };
+        match resize_window(window, output_width, output_height) {
+            Ok(_) => {},
+            Err(err) =>{
+                panic!("Can't resize output window due the error: {:?}", err)
+            }
         }
     }
     println!("Available <videoio> backends: {:?}", get_backends()?);
@@ -271,12 +273,14 @@ fn run() -> opencv::Result<()> {
                         }
                         drop(convex_polygons_write);
                     }
-                    b.draw_track(&mut frame);
-                    b.draw_center(&mut frame);
-                    // b.draw_predicted(&mut frame);
-                    b.draw_rectangle(&mut frame);
-                    b.draw_class_name(&mut frame);
-                    b.draw_id(&mut frame);
+                    if app_settings.output.enable {
+                        b.draw_track(&mut frame);
+                        b.draw_center(&mut frame);
+                        // b.draw_predicted(&mut frame);
+                        b.draw_rectangle(&mut frame);
+                        b.draw_class_name(&mut frame);
+                        b.draw_id(&mut frame);
+                    }
                 }
             }
             Err(err) => {
@@ -285,30 +289,29 @@ fn run() -> opencv::Result<()> {
         }
         let elapsed_detection = 1000.0 / detection_now.elapsed().as_millis() as f32;
 
-        let convex_polygons_read = convex_polygons_cloned.read().expect("RwLock poisoned");
-        for (_, v) in convex_polygons_read.iter() {
-            let polygon = v.lock().expect("Mutex poisoned");
-            polygon.draw_geom(&mut frame);
-            polygon.draw_params(&mut frame);
-            drop(polygon);
-        }
-        drop(convex_polygons_read);
-
-        match resize(&mut frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
-            Ok(_) => {},
-            Err(err) => {
-                panic!("Can't resize output frame due the error {:?}", err);
+        if app_settings.output.enable {
+            let convex_polygons_read = convex_polygons_cloned.read().expect("RwLock poisoned");
+            for (_, v) in convex_polygons_read.iter() {
+                let polygon = v.lock().expect("Mutex poisoned");
+                polygon.draw_geom(&mut frame);
+                polygon.draw_params(&mut frame);
+                drop(polygon);
+            }
+            drop(convex_polygons_read);
+            match resize(&mut frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
+                Ok(_) => {},
+                Err(err) => {
+                    panic!("Can't resize output frame due the error {:?}", err);
+                }
+            }
+            if resized_frame.size()?.width > 0 {
+                imshow(window, &mut resized_frame)?;
+            }
+            let key = wait_key(10)?;
+            if key > 0 && key != 255 {
+                break;
             }
         }
-
-        if resized_frame.size()?.width > 0 {
-            imshow(window, &mut resized_frame)?;
-        }
-        let key = wait_key(10)?;
-        if key > 0 && key != 255 {
-            break;
-        }
-
         let elapsed_all = 1000.0 / all_now.elapsed().as_millis() as f32;
         print!("\rСapturing process millis: {} | Average FPS of detection process: {} | Average FPS of whole process: {}", elapsed_capture, elapsed_detection, elapsed_all);
         match std::io::stdout().flush() {

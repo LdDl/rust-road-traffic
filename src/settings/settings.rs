@@ -23,6 +23,7 @@ pub struct InputSettings {
 
 #[derive(Deserialize, Debug)]
 pub struct OutputSettings {
+    pub enable: bool,
     pub width: i32,
     pub height: i32,
     pub window_name: String,
