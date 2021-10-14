@@ -45,6 +45,9 @@ use settings::{
 
 use lib::rest_api;
 use std::env;
+use std::time::Duration as STDDuration;
+use std::process;
+use ctrlc;
 
 fn run(config_file: &str) -> opencv::Result<()> {
 
@@ -205,6 +208,14 @@ fn run(config_file: &str) -> opencv::Result<()> {
 
     let mut last_ms: f64 = 0.0;
 	let mut last_time = Utc::now();
+
+    
+    println!("Waiting for Ctrl-C...");
+    ctrlc::set_handler(move || {
+        println!("\nCtrl+C has been pressed! Exit in 2 seconds");
+        thread::sleep(STDDuration::from_secs(2));
+        process::exit(1);
+    }).expect("\nError setting Ctrl-C handler");
 
     loop {
         let all_now = Instant::now();
