@@ -48,6 +48,7 @@ use lib::rest_api;
 use std::sync::{Arc, Mutex, RwLock};
 use std::env;
 
+
 fn run(config_file: &str) -> opencv::Result<()> {
 
     let app_settings = AppSettings::new_settings(config_file);
@@ -309,11 +310,12 @@ fn run(config_file: &str) -> opencv::Result<()> {
             if resized_frame.size()?.width > 0 {
                 imshow(window, &mut resized_frame)?;
             }
-            let key = wait_key(10)?;
-            if key > 0 && key != 255 {
-                break;
-            }
         }
+        let key = wait_key(10)?;
+        if key > 0 && key != 255 {
+            break;
+        }
+
         let elapsed_all = 1000.0 / all_now.elapsed().as_millis() as f32;
         print!("\rСapturing process millis: {} | Average FPS of detection process: {} | Average FPS of whole process: {}", elapsed_capture, elapsed_detection, elapsed_all);
         match std::io::stdout().flush() {
