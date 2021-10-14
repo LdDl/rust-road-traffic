@@ -95,6 +95,10 @@ Vehicle detection/tracking and speed estimation via next instruments:
     ```shell
     cargo build --release && ./target/release/rust-road-traffic path-to-toml-file
     ```
+    If you want both optimized in term of perfomance and stripped executable binary (thanks to https://github.com/rust-lang/cargo/issues/3483)
+    ```shell
+    export RUSTFLAGS='-C link-arg=-s' && cargo build --release && ./target/release/rust-road-traffic path-to-toml-file
+    ```
     If you want to do some REST calls you can do following (based on *rest_api* field in TOML configuration files)
     ```bash
     # Get polygons (GeoJSON) in which road traffic monitoring is requested
