@@ -86,7 +86,12 @@ fn run(config_file: &str) -> opencv::Result<()> {
     let server_host = app_settings.rest_api.host;
     let server_port = app_settings.rest_api.back_end_port;
     thread::spawn(move || {
-        rest_api::start_rest_api(server_host, server_port, convex_polygons_rest);
+        match rest_api::start_rest_api(server_host, server_port, convex_polygons_rest) {
+            Ok(_) => {},
+            Err(err) => {
+                panic!("Can't start API due the error: {:?}", err)
+            }
+        }
     });
 
     // Prepare output window
