@@ -9,6 +9,7 @@ pub struct AppSettings {
     pub output: OutputSettings,
     pub detection: DetectionSettings,
     pub tracking: TrackingSettings,
+    pub equipment_info: EquipmentInfo,
     pub road_lanes: Vec<RoadLanesSettings>,
     pub worker: WorkerSettings,
     pub rest_api: RestAPISettings
@@ -41,6 +42,11 @@ pub struct TrackingSettings {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct EquipmentInfo {
+    pub id: String,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct RoadLanesSettings {
     pub lane_number: u16,
     pub lane_direction: u8,
@@ -70,6 +76,7 @@ use opencv::core::Point;
 use opencv::core::Point2f;
 use opencv::core::Scalar;
 use uuid::Uuid;
+use chrono::Utc;
 
 impl RoadLanesSettings {
     pub fn convert_to_convex_polygon(&self) -> ConvexPolygon{
@@ -85,9 +92,19 @@ impl RoadLanesSettings {
             .iter()
             .map(|pt| Point2f::new(pt[0], pt[1]))
             .collect();
+
+        let mut geojson_poly = vec![];
+        let mut poly_element = vec![];
+        for v in self.geometry_wgs84.iter() {
+            poly_element.push(vec![v[0], v[1]]);
+        }
+        poly_element.push(vec![self.geometry_wgs84[0][0], self.geometry_wgs84[0][1]]);
+        geojson_poly.push(poly_element);
+
         return ConvexPolygon{
             id: Uuid::new_v4(),
             coordinates: geom,
+            coordinates_wgs84: geojson_poly,
             // RGB to OpenCV = [B, G, R]. So use reverse order
             color: Scalar::from((self.color_rgb[2] as f64, self.color_rgb[1] as f64, self.color_rgb[0] as f64)),
             avg_speed: -1.0,
@@ -99,6 +116,8 @@ impl RoadLanesSettings {
             spatial_converter: SpatialConverter::new(&geom_f32, &geom_wgs84),
             blobs: HashSet::new(),
             statistics: HashMap::new(),
+            period_start: Utc::now(),
+            period_end: None,
         }
     }
 }

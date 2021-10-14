@@ -21,6 +21,10 @@
 [tracking]
     max_points_in_track = 100
 
+[equipment_info]
+    # Just field for future identification of application. Could be any string. I've used https://www.uuidgenerator.net/version4 for ID generation
+    id = "1e23985f-1fa3-45d0-a365-2d8525a23ddd"
+
 [[road_lanes]]
     lane_number = 0
     lane_direction = 0

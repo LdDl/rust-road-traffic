@@ -45,6 +45,7 @@ use settings::{
 mod storage;
 
 use lib::rest_api;
+use std::sync::{Arc, Mutex, RwLock};
 
 fn run() -> opencv::Result<()> {
     let app_settings = AppSettings::new_settings("./data/conf.toml");
@@ -69,16 +70,23 @@ fn run() -> opencv::Result<()> {
     let window = &app_settings.output.window_name;
 
     const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
-    let mut convex_polygons = ConvexPolygons::new();
+    let mut convex_polygons = ConvexPolygons::new_with_id(app_settings.equipment_info.id);
     let convex_polygons_cloned = convex_polygons.clone_arc();
     for road_lane in app_settings.road_lanes.iter() {
         let mut polygon = road_lane.convert_to_convex_polygon();
         polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
         convex_polygons.insert_polygon(polygon);
     }
+    let convex_polygons_rest = convex_polygons.clone_arc();
     let worker_reset_millis = app_settings.worker.reset_data_milliseconds;
     thread::spawn(move || {
         convex_polygons.start_data_worker(worker_reset_millis);
+    });
+
+    let server_host = app_settings.rest_api.host;
+    let server_port = app_settings.rest_api.back_end_port;
+    thread::spawn(move || {
+        rest_api::start_rest_api(server_host, server_port, convex_polygons_rest);
     });
 
     // Prepare output window
