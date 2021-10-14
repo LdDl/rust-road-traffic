@@ -89,11 +89,11 @@ Vehicle detection/tracking and speed estimation via next instruments:
     ```
 5. Run
     ```shell
-    cargo run
+    cargo run path-to-toml-file
     ```
     If you want to use some Rust's optimizations then call build and run
     ```shell
-    cargo build --release && ./target/release/rust-road-traffic
+    cargo build --release && ./target/release/rust-road-traffic path-to-toml-file
     ```
     If you want to do some REST calls you can do following (based on *rest_api* field in TOML configuration files)
     ```bash
