@@ -42,7 +42,6 @@ mod settings;
 use settings::{
     AppSettings,
 };
-mod storage;
 
 use lib::rest_api;
 use std::env;
