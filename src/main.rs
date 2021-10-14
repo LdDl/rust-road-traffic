@@ -310,10 +310,10 @@ fn run(config_file: &str) -> opencv::Result<()> {
             if resized_frame.size()?.width > 0 {
                 imshow(window, &mut resized_frame)?;
             }
-        }
-        let key = wait_key(10)?;
-        if key > 0 && key != 255 {
-            break;
+            let key = wait_key(10)?;
+            if key > 0 && key != 255 {
+                break;
+            }
         }
 
         let elapsed_all = 1000.0 / all_now.elapsed().as_millis() as f32;
