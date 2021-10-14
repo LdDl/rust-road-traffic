@@ -36,6 +36,10 @@ Vehicle detection/tracking and speed estimation via next instruments:
     ```toml
     [input]
         video_src = "./data/sample_960_540.mp4"
+        # Two options: rtsp / local
+        typ = "rtsp"
+        # use 'local' when video_src = "0"
+        # typ = "local" 
 
     [output]
         width = 500

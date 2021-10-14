@@ -18,6 +18,7 @@ pub struct AppSettings {
 #[derive(Deserialize, Debug)]
 pub struct InputSettings {
     pub video_src: String,
+    pub typ: String,
 }
 
 #[derive(Deserialize, Debug)]

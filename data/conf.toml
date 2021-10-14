@@ -1,5 +1,8 @@
 [input]
     video_src = "./data/sample-2_960_540.mp4"
+    # Two options: rtsp / any number corresponding to local camera
+    typ = "rtsp"
+    # typ = "local"
 
 [output]
     width = 500
