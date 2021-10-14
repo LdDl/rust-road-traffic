@@ -42,13 +42,17 @@ mod settings;
 use settings::{
     AppSettings,
 };
-mod storage;
 
 use lib::rest_api;
+use std::env;
+use std::time::Duration as STDDuration;
+use std::process;
+use ctrlc;
 
-fn run() -> opencv::Result<()> {
-    let app_settings = AppSettings::new_settings("./data/conf.toml");
-    println!("Settings are: {:?}", app_settings);
+fn run(config_file: &str) -> opencv::Result<()> {
+
+    let app_settings = AppSettings::new_settings(config_file);
+    println!("Settings are:\n\t{}", app_settings);
 
     let output_width: i32 = app_settings.output.width;
     let output_height: i32 = app_settings.output.height;
@@ -69,29 +73,43 @@ fn run() -> opencv::Result<()> {
     let window = &app_settings.output.window_name;
 
     const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
-    let mut convex_polygons = ConvexPolygons::new();
+    let mut convex_polygons = ConvexPolygons::new_with_id(app_settings.equipment_info.id);
     let convex_polygons_cloned = convex_polygons.clone_arc();
     for road_lane in app_settings.road_lanes.iter() {
         let mut polygon = road_lane.convert_to_convex_polygon();
         polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
         convex_polygons.insert_polygon(polygon);
     }
+    let convex_polygons_rest = convex_polygons.clone_arc();
     let worker_reset_millis = app_settings.worker.reset_data_milliseconds;
     thread::spawn(move || {
         convex_polygons.start_data_worker(worker_reset_millis);
     });
 
-    // Prepare output window
-    match named_window(window, 1) {
-        Ok(_) => {},
-        Err(err) =>{
-            panic!("Can't give a name to output window due the error: {:?}", err)
+    let server_host = app_settings.rest_api.host;
+    let server_port = app_settings.rest_api.back_end_port;
+    thread::spawn(move || {
+        match rest_api::start_rest_api(server_host, server_port, convex_polygons_rest) {
+            Ok(_) => {},
+            Err(err) => {
+                panic!("Can't start API due the error: {:?}", err)
+            }
         }
-    };
-    match resize_window(window, output_width, output_height) {
-        Ok(_) => {},
-        Err(err) =>{
-            panic!("Can't resize output window due the error: {:?}", err)
+    });
+
+    // Prepare output window
+    if app_settings.output.enable {
+        match named_window(window, 1) {
+            Ok(_) => {},
+            Err(err) =>{
+                panic!("Can't give a name to output window due the error: {:?}", err)
+            }
+        };
+        match resize_window(window, output_width, output_height) {
+            Ok(_) => {},
+            Err(err) =>{
+                panic!("Can't resize output window due the error: {:?}", err)
+            }
         }
     }
     println!("Available <videoio> backends: {:?}", get_backends()?);
@@ -102,12 +120,7 @@ fn run() -> opencv::Result<()> {
     println!("CUDA is {}", if cuda_available { "available" } else { "not available" });
     
     // Prepare video
-    let mut video_capture = match VideoCapture::from_file(video_src, CAP_ANY) {
-        Ok(result) => {result},
-        Err(err) => {
-            panic!("Can't init '{}' due the error: {:?}", video_src, err);
-        }
-    };
+    let mut video_capture = get_capture(video_src, app_settings.input.typ);
     let opened = VideoCapture::is_opened(&video_capture)?;
     if !opened {
         panic!("Unable to open video '{}'", video_src);
@@ -196,6 +209,14 @@ fn run() -> opencv::Result<()> {
     let mut last_ms: f64 = 0.0;
 	let mut last_time = Utc::now();
 
+    
+    println!("Waiting for Ctrl-C...");
+    ctrlc::set_handler(move || {
+        println!("\nCtrl+C has been pressed! Exit in 2 seconds");
+        thread::sleep(STDDuration::from_secs(2));
+        process::exit(1);
+    }).expect("\nError setting Ctrl-C handler");
+
     loop {
         let all_now = Instant::now();
 
@@ -268,12 +289,14 @@ fn run() -> opencv::Result<()> {
                         }
                         drop(convex_polygons_write);
                     }
-                    b.draw_track(&mut frame);
-                    b.draw_center(&mut frame);
-                    // b.draw_predicted(&mut frame);
-                    b.draw_rectangle(&mut frame);
-                    b.draw_class_name(&mut frame);
-                    b.draw_id(&mut frame);
+                    if app_settings.output.enable {
+                        b.draw_track(&mut frame);
+                        b.draw_center(&mut frame);
+                        // b.draw_predicted(&mut frame);
+                        b.draw_rectangle(&mut frame);
+                        b.draw_class_name(&mut frame);
+                        b.draw_id(&mut frame);
+                    }
                 }
             }
             Err(err) => {
@@ -282,28 +305,28 @@ fn run() -> opencv::Result<()> {
         }
         let elapsed_detection = 1000.0 / detection_now.elapsed().as_millis() as f32;
 
-        let convex_polygons_read = convex_polygons_cloned.read().expect("RwLock poisoned");
-        for (_, v) in convex_polygons_read.iter() {
-            let polygon = v.lock().expect("Mutex poisoned");
-            polygon.draw_geom(&mut frame);
-            polygon.draw_params(&mut frame);
-            drop(polygon);
-        }
-        drop(convex_polygons_read);
-
-        match resize(&mut frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
-            Ok(_) => {},
-            Err(err) => {
-                panic!("Can't resize output frame due the error {:?}", err);
+        if app_settings.output.enable {
+            let convex_polygons_read = convex_polygons_cloned.read().expect("RwLock poisoned");
+            for (_, v) in convex_polygons_read.iter() {
+                let polygon = v.lock().expect("Mutex poisoned");
+                polygon.draw_geom(&mut frame);
+                polygon.draw_params(&mut frame);
+                drop(polygon);
             }
-        }
-
-        if resized_frame.size()?.width > 0 {
-            imshow(window, &mut resized_frame)?;
-        }
-        let key = wait_key(10)?;
-        if key > 0 && key != 255 {
-            break;
+            drop(convex_polygons_read);
+            match resize(&mut frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
+                Ok(_) => {},
+                Err(err) => {
+                    panic!("Can't resize output frame due the error {:?}", err);
+                }
+            }
+            if resized_frame.size()?.width > 0 {
+                imshow(window, &mut resized_frame)?;
+            }
+            let key = wait_key(10)?;
+            if key > 0 && key != 255 {
+                break;
+            }
         }
 
         let elapsed_all = 1000.0 / all_now.elapsed().as_millis() as f32;
@@ -409,10 +432,39 @@ fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, nms_
     return tmp_blobs;
 }
 
+fn get_capture(video_src: &str, typ: String) -> VideoCapture {
+    if typ == "rtsp" {
+        let video_capture = match VideoCapture::from_file(video_src, CAP_ANY) {
+            Ok(result) => {result},
+            Err(err) => {
+                panic!("Can't init '{}' due the error: {:?}", video_src, err);
+            }
+        };
+        return video_capture;
+    }
+    let device_id = match video_src.parse::<i32>() {
+        Ok(result) => {result},
+        Err(err) => {
+            panic!("Can't parse '{}' as device_id (i32) due the error: {:?}", video_src, err);
+        }
+    };
+    let video_capture = match VideoCapture::new(device_id, CAP_ANY) {
+        Ok(result) => {result},
+        Err(err) => {
+            panic!("Can't init '{}' due the error: {:?}", video_src, err);
+        }
+    };
+    return video_capture;
+}
 
 fn main() {
-    // thread::spawn(|| {
-    //     job_worker();
-    // });
-    run().unwrap()
+    let args: Vec<String> = env::args().collect();
+    let mut path_to_config = "";
+    if args.len() != 2 {
+        println!("Args should contain exactly one string: path to TOML configuration file. Setting to default './data/conf.toml'");
+        path_to_config = "./data/conf.toml";
+    } else {
+        path_to_config = &args[1]
+    };
+    run(path_to_config).unwrap()
 }

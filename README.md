@@ -36,8 +36,13 @@ Vehicle detection/tracking and speed estimation via next instruments:
     ```toml
     [input]
         video_src = "./data/sample_960_540.mp4"
+        # Two options: rtsp / local
+        typ = "rtsp"
+        # use 'local' when video_src = "0"
+        # typ = "local" 
 
     [output]
+        enable = true
         width = 500
         height = 500
         window_name = "Tiny YOLO v4"
@@ -57,6 +62,10 @@ Vehicle detection/tracking and speed estimation via next instruments:
     [tracking]
         max_points_in_track = 100
 
+    [equipment_info]
+        # Just field for future identification of application. Could be any string. I've used https://www.uuidgenerator.net/version4 for ID generation
+        id = "1e23985f-1fa3-45d0-a365-2d8525a23ddd"
+
     [[road_lanes]]
         lane_number = 0
         lane_direction = 0
@@ -72,14 +81,26 @@ Vehicle detection/tracking and speed estimation via next instruments:
         lane_direction = 0
         geometry = [[604, 287], [885, 287], [746, 58], [575, 68]]
         color_rgb = [0, 0, 255]
+
+    [rest_api]
+    host = "0.0.0.0"
+    back_end_port = 42001
+    api_scope = "/api"
     ```
 5. Run
     ```shell
-    cargo run
+    cargo run path-to-toml-file
     ```
     If you want to use some Rust's optimizations then call build and run
     ```shell
-    cargo build --release && ./target/release/rust-road-traffic
+    cargo build --release && ./target/release/rust-road-traffic path-to-toml-file
+    ```
+    If you want to do some REST calls you can do following (based on *rest_api* field in TOML configuration files)
+    ```bash
+    # Get polygons (GeoJSON) in which road traffic monitoring is requested
+    curl -XGET 'http://localhost:42001/api/polygons/geojson'
+    # Get statistics info for each polygon and each vehicle type in that polygon
+    curl -XGET 'http://localhost:42001/api/stats/all'
     ```
 
 ## Screenshots

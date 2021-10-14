@@ -1,14 +1,18 @@
 [input]
-    video_src = "./data/sample-2_960_540.mp4"
+    video_src = "./data/sample_960_540.mp4"
+    # Two options: rtsp / any number corresponding to local camera
+    typ = "rtsp"
+    # typ = "local"
 
 [output]
+    enable = true
     width = 500
     height = 500
     window_name = "Caffe MobilenetSSD"
 
 [detection]
     # *.weight/*.cfg + "Darknet" for YOLO
-    # network_weights = "./data/yolov4-tiny/.weights"
+    # network_weights = "./data/yolov4-tiny.weights"
     # network_cfg = "./data/yolov4-tiny.cfg"
     # network_type = "Darknet"
     # *.prototxt/*.caffemodel + "Caffe-MobileNet-SSD" for Caffe
@@ -20,6 +24,10 @@
 
 [tracking]
     max_points_in_track = 100
+
+[equipment_info]
+    # Just field for future identification of application. Could be any string. I've used https://www.uuidgenerator.net/version4 for ID generation
+    id = "1e23985f-1fa3-45d0-a365-2d8525a23ddd"
 
 [[road_lanes]]
     lane_number = 0

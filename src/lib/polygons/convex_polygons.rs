@@ -4,11 +4,15 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 use chrono::{DateTime, Utc, Duration};
 use serde::{Deserialize, Serialize};
-pub struct ConvexPolygons(Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>>, DateTime<Utc>, Option<DateTime<Utc>>);
+pub struct ConvexPolygons(Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>>, DateTime<Utc>, Option<DateTime<Utc>>, String);
 impl ConvexPolygons {
     pub fn new() -> Self {
         let now = Utc::now();
-        return ConvexPolygons(Arc::new(RwLock::new(HashMap::<PolygonID, Mutex<ConvexPolygon>>::new())), now, None);
+        return ConvexPolygons(Arc::new(RwLock::new(HashMap::<PolygonID, Mutex<ConvexPolygon>>::new())), now, None, "Empty ID".to_string());
+    }
+    pub fn new_with_id(id: String) -> Self {
+        let now = Utc::now();
+        return ConvexPolygons(Arc::new(RwLock::new(HashMap::<PolygonID, Mutex<ConvexPolygon>>::new())), now, None, id);
     }
     pub fn clone_arc(&self) -> Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>> {
         return Arc::clone(&self.0);
@@ -41,6 +45,8 @@ impl ConvexPolygons {
             for (_, v) in write_mutex.iter() {
                 let mut element = v.lock().expect("Mutex poisoned");
                 // Summary
+                element.period_start = self.1;
+                element.period_end = self.2;
                 element.estimated_avg_speed = element.avg_speed;
                 element.estimated_sum_intensity = element.sum_intensity;
                 element.avg_speed = -1.0;
@@ -95,6 +101,7 @@ use crate::lib::spatial::SpatialConverter;
 pub struct ConvexPolygon {
     pub id: PolygonID,
     pub coordinates: Vec<Point>,
+    pub coordinates_wgs84:  Vec<Vec<Vec<f32>>>,
     pub color: Scalar,
     pub avg_speed: f32,
     pub sum_intensity: u32,
@@ -104,7 +111,9 @@ pub struct ConvexPolygon {
     pub blobs: HashSet<BlobID>,
     pub estimated_avg_speed: f32,
     pub estimated_sum_intensity: u32,
-    pub statistics: HashMap<String, VehicleTypeParameters>
+    pub statistics: HashMap<String, VehicleTypeParameters>,
+    pub period_start: DateTime<Utc>,
+    pub period_end: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug)]
@@ -130,6 +139,7 @@ impl ConvexPolygon {
         return ConvexPolygon{
             id: Uuid::new_v4(),
             coordinates: points,
+            coordinates_wgs84: vec![],
             color: Scalar::from((255.0, 255.0, 255.0)),
             avg_speed: -1.0,
             sum_intensity: 0,
@@ -140,6 +150,8 @@ impl ConvexPolygon {
             spatial_converter: SpatialConverter::empty(),
             blobs: HashSet::new(),
             statistics: HashMap::new(),
+            period_start: Utc::now(),
+            period_end: None,
         }
     }
     pub fn get_id(&self) -> Uuid {
@@ -315,17 +327,21 @@ impl ConvexPolygon {
         };
     }
     pub fn to_geojson(&self) -> PolygonFeatureGeoJSON{
+        let mut euclidean: Vec<Vec<i32>> = Vec::new();
+        for pt in self.coordinates.iter() {
+            euclidean.push(vec![pt.x, pt.y]);
+        }
         return PolygonFeatureGeoJSON{
             typ: "Feature".to_string(),
             id: self.get_id(),
             properties: PolygonFeaturePropertiesGeoJSON{
                 road_lane_num: self.road_lane_num,
                 road_lane_direction: self.road_lane_direction,
-                coordinates: vec![], // @todo
+                coordinates: euclidean
             },
             geometry: GeoPolygon{
                 geometry_type: "Polygon".to_string(),
-                coordinates: vec![] // @todo
+                coordinates: self.coordinates_wgs84.clone()
             },
         };
     }
@@ -408,12 +424,12 @@ fn is_intersects(first_px: f32, first_py: f32, first_qx: f32, first_qy: f32, sec
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PolygonsGeoJSON {
     #[serde(rename(serialize = "type"))]
-    typ: String,
-    features: Vec<PolygonFeatureGeoJSON>
+    pub typ: String,
+    pub features: Vec<PolygonFeatureGeoJSON>
 }
 
 impl PolygonsGeoJSON {
-    fn new() -> Self {
+    pub fn new() -> Self {
         return PolygonsGeoJSON {
             typ: "FeatureCollection".to_string(),
             features: vec![]
@@ -422,25 +438,25 @@ impl PolygonsGeoJSON {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct PolygonFeatureGeoJSON {
+pub struct PolygonFeatureGeoJSON {
     #[serde(rename(serialize = "type"))]
-    typ: String,
-    id: Uuid,
-    properties: PolygonFeaturePropertiesGeoJSON,
-    geometry: GeoPolygon,
+    pub typ: String,
+    pub id: Uuid,
+    pub properties: PolygonFeaturePropertiesGeoJSON,
+    pub geometry: GeoPolygon,
 }
 #[derive(Debug, Deserialize, Serialize)]
-struct PolygonFeaturePropertiesGeoJSON {
-    road_lane_num: u16,
-    road_lane_direction: u8,
-    coordinates: Vec<[i32; 2]>,
+pub struct PolygonFeaturePropertiesGeoJSON {
+    pub road_lane_num: u16,
+    pub road_lane_direction: u8,
+    pub coordinates: Vec<Vec<i32>>,
 }
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct GeoPolygon {
     #[serde(rename(serialize = "type", deserialize = "type"))]
     pub geometry_type: String,
     #[serde(rename(serialize = "coordinates", deserialize = "coordinates"))]
-    pub coordinates: Vec<Vec<Vec<f64>>>,
+    pub coordinates: Vec<Vec<Vec<f32>>>,
 }
 
 #[cfg(test)]
