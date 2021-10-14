@@ -136,3 +136,19 @@ impl AppSettings {
         return app_settings;
     }
 }
+
+use std::fmt;
+impl fmt::Display for AppSettings {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Equipment ID: {}\n\tVideo input: {}\n\tNetwork type:{}\n\tNetwork configuration:{}\n\tNetwork weights:{}\n\tRefresh data (millis): {}\n\tBack-end host: {}\n\tBack-end port: {}",
+            self.equipment_info.id,
+            self.input.video_src,
+            self.detection.network_type,
+            self.detection.network_weights,
+            self.detection.network_cfg,
+            self.worker.reset_data_milliseconds,
+            self.rest_api.host,
+            self.rest_api.back_end_port,
+        )
+    }
+}

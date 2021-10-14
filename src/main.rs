@@ -45,14 +45,12 @@ use settings::{
 mod storage;
 
 use lib::rest_api;
-use std::sync::{Arc, Mutex, RwLock};
 use std::env;
-
 
 fn run(config_file: &str) -> opencv::Result<()> {
 
     let app_settings = AppSettings::new_settings(config_file);
-    println!("Settings are: {:?}", app_settings);
+    println!("Settings are:\n\t{}", app_settings);
 
     let output_width: i32 = app_settings.output.width;
     let output_height: i32 = app_settings.output.height;
