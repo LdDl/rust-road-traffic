@@ -46,9 +46,11 @@ mod storage;
 
 use lib::rest_api;
 use std::sync::{Arc, Mutex, RwLock};
+use std::env;
 
-fn run() -> opencv::Result<()> {
-    let app_settings = AppSettings::new_settings("./data/conf.toml");
+fn run(config_file: &str) -> opencv::Result<()> {
+
+    let app_settings = AppSettings::new_settings(config_file);
     println!("Settings are: {:?}", app_settings);
 
     let output_width: i32 = app_settings.output.width;
@@ -441,8 +443,13 @@ fn get_capture(video_src: &str, typ: String) -> VideoCapture {
 }
 
 fn main() {
-    // thread::spawn(|| {
-    //     job_worker();
-    // });
-    run().unwrap()
+    let args: Vec<String> = env::args().collect();
+    let mut path_to_config = "";
+    if args.len() != 2 {
+        println!("Args should contain exactly one string: path to TOML configuration file. Setting to default './data/conf.toml'");
+        path_to_config = "./data/conf.toml";
+    } else {
+        path_to_config = &args[1]
+    };
+    run(path_to_config).unwrap()
 }
