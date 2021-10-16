@@ -32,9 +32,9 @@
         * ~~Check if point has entered into polygon~~
         * ~~Check if point has left polygon~~
     * Hashmap and timer for estimating average values of traffic (speed, intensity) __W.I.P.__
-        ~~* Hashmap and thread ~~
-        ~~Reset values ~~
-        ~~* Time intervals (threads) ~~
+        * ~~ Hashmap and thread ~~
+        * ~~ Reset values ~~
+        * ~~ Time intervals (threads) ~~
         * Refactor
     * ~~Optional choice between Tiny YOLO and MobilenetSSD(Caffe)~~
     * ~~Fill Jetson Nano instructions~~
