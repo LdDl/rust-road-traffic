@@ -23,7 +23,7 @@
     * Error handling __W.I.P.__
     * MJPEG streamer (via [actix-web](https://github.com/actix/actix-web#actix-web) I guess?)
     * gRPC for clients (do we need this?)
-    * REST JSON for clients __W.I.P. Still ugly__ 
+    * REST JSON for clients __W.I.P. Still ugly. Need to figure out best way to pass Arc<...> or references to API part of application__ 
     * REST Websockets for clients (do we need this?)
     * Installation instructions (Makefile+Ubuntu18-20)
     * TOML configuration __W.I.P.__
@@ -40,3 +40,4 @@
     * ~~Fill Jetson Nano instructions~~
     * ~~Estimate speed and intensity for each vehicle type~~
     * RabbitMQ / Redis integration modules? Do we need those?
+    
