@@ -219,6 +219,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
 
     loop {
         let all_now = Instant::now();
+        let capture_now = Instant::now();
 
         match video_capture.read(&mut frame) {
             Ok(_) => {},
@@ -235,7 +236,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
         last_time = prev_time + Duration::milliseconds(ms_diff as i64);
         last_ms = current_ms;
 
-        let elapsed_capture = all_now.elapsed().as_millis() as f32;
+        let elapsed_capture = capture_now.elapsed().as_millis() as f32;
 
         let blobimg = blob_from_image(&frame, blob_scale, net_size, blob_mean, true, false, CV_32F);
         match neural_net.set_input(&blobimg.unwrap(), blob_name, 1.0, default_scalar){

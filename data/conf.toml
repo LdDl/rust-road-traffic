@@ -14,13 +14,13 @@
 
 [detection]
     # *.weight/*.cfg + "Darknet" for YOLO
-    # network_weights = "./data/yolov4-tiny.weights"
-    # network_cfg = "./data/yolov4-tiny.cfg"
-    # network_type = "Darknet"
+    network_weights = "./data/yolov4-tiny.weights"
+    network_cfg = "./data/yolov4-tiny.cfg"
+    network_type = "Darknet"
     # *.prototxt/*.caffemodel + "Caffe-MobileNet-SSD" for Caffe
-    network_weights = "./data/MobileNetSSD_deploy.prototxt"
-    network_cfg = "./data/MobileNetSSD_deploy.caffemodel"
-    network_type = "Caffe-MobileNet-SSD"
+    # network_weights = "./data/MobileNetSSD_deploy.prototxt"
+    # network_cfg = "./data/MobileNetSSD_deploy.caffemodel"
+    # network_type = "Caffe-MobileNet-SSD"
     conf_threshold = 0.25
     nms_threshold = 0.3
 
