@@ -39,5 +39,6 @@
     * ~~Optional choice between Tiny YOLO and MobilenetSSD(Caffe)~~
     * ~~Fill Jetson Nano instructions~~
     * ~~Estimate speed and intensity for each vehicle type~~
-    * RabbitMQ / Redis integration modules? Do we need those?
+    * RabbitMQ integration module? Do we need those?
+    * Redis (pub to user defined channel + consider password usage)
     
