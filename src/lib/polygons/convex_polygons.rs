@@ -4,49 +4,70 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 use chrono::{DateTime, Utc, Duration};
 use serde::{Deserialize, Serialize};
-pub struct ConvexPolygons(Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>>, DateTime<Utc>, Option<DateTime<Utc>>, String);
+
+#[derive(Clone)]
+pub struct ConvexPolygons {
+    pub polygons: Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>>,
+    pub period_start: DateTime<Utc>,
+    pub period_end: Option<DateTime<Utc>>,
+    pub id: String,
+}
+
 impl ConvexPolygons {
     pub fn new() -> Self {
         let now = Utc::now();
-        return ConvexPolygons(Arc::new(RwLock::new(HashMap::<PolygonID, Mutex<ConvexPolygon>>::new())), now, None, "Empty ID".to_string());
+        return ConvexPolygons {
+            polygons: Arc::new(RwLock::new(HashMap::<PolygonID, Mutex<ConvexPolygon>>::new())),
+            period_start: now,
+            period_end: None,
+            id: "Empty ID".to_string(),
+        };
     }
-    pub fn new_with_id(id: String) -> Self {
+    pub fn new_with_id(_id: String) -> Self {
         let now = Utc::now();
-        return ConvexPolygons(Arc::new(RwLock::new(HashMap::<PolygonID, Mutex<ConvexPolygon>>::new())), now, None, id);
+        return ConvexPolygons {
+            polygons: Arc::new(RwLock::new(HashMap::<PolygonID, Mutex<ConvexPolygon>>::new())),
+            period_start: now,
+            period_end: None,
+            id: _id,
+        };
     }
     pub fn clone_arc(&self) -> Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>> {
-        return Arc::clone(&self.0);
+        return Arc::clone(&self.polygons);
     }
     pub fn insert_polygon(&self, polygon: ConvexPolygon) {
-        let cloned = Arc::clone(&self.0);
+        let cloned = Arc::clone(&self.polygons);
         let mut write_mutex = cloned.write().expect("RwLock poisoned");
         write_mutex.insert(polygon.id, Mutex::new(polygon));
         drop(write_mutex);
     }
-    pub fn start_data_worker(&mut self, millis: u64) {
+    pub fn start_data_worker_thread(st: Arc<RwLock<ConvexPolygons>>, millis: u64) {
+        println!("start with millis {}", millis);
+
         let millis_asi64 = millis as i64;
-        let cloned = Arc::clone(&self.0);
-        // First run
-        self.1 = Utc::now();
-        let read_mutex = cloned.read().expect("RwLock poisoned");
-        for (_, v) in read_mutex.iter() {
-            let element = v.lock().expect("Mutex poisoned");
-            drop(element);
-        }
-        drop(read_mutex);
+        let mut write_mutex = st.write().expect("RwLock poisoned");
+        write_mutex.period_start = Utc::now();
+        drop(write_mutex);
         thread::sleep(STDDuration::from_millis(millis));
+
         // Next runs
-        let mut previous_tm = self.1;
+        let read_mutex = st.read().expect("RwLock poisoned");
+        let mut previous_tm = read_mutex.period_start;
+        let cloned = Arc::clone(&read_mutex.polygons);
+        drop(read_mutex);
+
         loop {
-            self.1 = previous_tm;
-            self.2 = Some(self.1 + Duration::milliseconds(millis_asi64));
-            println!("\nPeriod start: {} | Period end: {}", self.1, self.2.unwrap());
-            let write_mutex = cloned.write().expect("RwLock poisoned");
-            for (_, v) in write_mutex.iter() {
+            let mut write_mutex = st.write().expect("RwLock poisoned");
+            write_mutex.period_start = previous_tm;
+            write_mutex.period_end = Some(write_mutex.period_start + Duration::milliseconds(millis_asi64));
+            println!("\nPeriod start: {} | Period end: {}", write_mutex.period_start, write_mutex.period_end.unwrap());
+            previous_tm = write_mutex.period_end.unwrap();
+            let write_mutex_polygons = cloned.write().expect("RwLock poisoned");
+            for (_, v) in write_mutex_polygons.iter() {
                 let mut element = v.lock().expect("Mutex poisoned");
                 // Summary
-                element.period_start = self.1;
-                element.period_end = self.2;
+                element.period_start = write_mutex.period_start;
+                element.period_end = write_mutex.period_end;
                 element.estimated_avg_speed = element.avg_speed;
                 element.estimated_sum_intensity = element.sum_intensity;
                 element.avg_speed = -1.0;
@@ -62,14 +83,14 @@ impl ConvexPolygons {
                 }
                 drop(element);
             }
+            drop(write_mutex_polygons);
             drop(write_mutex);
-            previous_tm = self.2.unwrap();
             thread::sleep(STDDuration::from_millis(millis));
         }
     }
     pub fn to_geojson(&self) -> PolygonsGeoJSON {
         let mut ans = PolygonsGeoJSON::new();
-        let cloned = Arc::clone(&self.0);
+        let cloned = Arc::clone(&self.polygons);
         let read_mutex = cloned.read().expect("RwLock poisoned");
         for (_, v) in read_mutex.iter() {
             let element = v.lock().expect("Mutex poisoned");
@@ -326,7 +347,7 @@ impl ConvexPolygon {
             }
         };
     }
-    pub fn to_geojson(&self) -> PolygonFeatureGeoJSON{
+    pub fn to_geojson(&self) -> PolygonFeatureGeoJSON {
         let mut euclidean: Vec<Vec<i32>> = Vec::new();
         for pt in self.coordinates.iter() {
             euclidean.push(vec![pt.x, pt.y]);

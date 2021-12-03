@@ -1,20 +1,20 @@
 use actix_web::{HttpResponse, web, Responder};
 
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
 use std::collections::HashMap;
-use crate::lib::polygons::ConvexPolygon;
-use crate::lib::polygons::PolygonID;
+use crate::lib::polygons::ConvexPolygons;
 use crate::lib::polygons::PolygonsGeoJSON;
 
 async fn say_ping() -> impl Responder {
     HttpResponse::Ok().body("pong")
 }
 
-pub fn polygons_list(data: web::Data<Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>>>) -> HttpResponse {
+pub fn polygons_list(data: web::Data<Arc<RwLock<ConvexPolygons>>>) -> HttpResponse {
     let data_storage = data.get_ref().clone();
     let data_expected = data_storage.read().expect("expect: polygons_list");
+    let data_expected_polygons = data_expected.polygons.read().expect("expect: polygons_list");
     let mut ans = PolygonsGeoJSON::new();
-    for (_, v) in data_expected.iter() {
+    for (_, v) in data_expected_polygons.iter() {
         let element = v.lock().expect("Mutex poisoned");
         let geo_feature = element.to_geojson();
         drop(element);
@@ -47,14 +47,15 @@ pub struct VehicleTypeParameters {
     pub estimated_sum_intensity: u32
 }
 
-pub fn all_polygons_stats(data: web::Data<Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>>>) -> HttpResponse {
+pub fn all_polygons_stats(data: web::Data<Arc<RwLock<ConvexPolygons>>>) -> HttpResponse {
     let data_storage = data.get_ref().clone();
     let data_expected = data_storage.read().expect("expect: all_polygons_stats");
+    let data_expected_polygons = data_expected.polygons.read().expect("expect: all_polygons_stats");
     let mut ans = AllPolygonsStats{
         equipment_id: "".to_string(),
         data: vec![]
     };
-    for (_, v) in data_expected.iter() {
+    for (_, v) in data_expected_polygons.iter() {
         let element = v.lock().expect("Mutex poisoned");
         let mut stats = PolygonStats{
             lane_number: element.road_lane_num,
