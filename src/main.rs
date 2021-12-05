@@ -49,6 +49,8 @@ use std::time::Duration as STDDuration;
 use std::process;
 use ctrlc;
 
+use std::sync::{Arc, RwLock};
+
 fn run(config_file: &str) -> opencv::Result<()> {
 
     let app_settings = AppSettings::new_settings(config_file);
@@ -73,21 +75,27 @@ fn run(config_file: &str) -> opencv::Result<()> {
     let window = &app_settings.output.window_name;
 
     const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
-    let mut convex_polygons = ConvexPolygons::new_with_id(app_settings.equipment_info.id);
-    let convex_polygons_cloned = convex_polygons.clone_arc();
+
+    let convex_polygons = ConvexPolygons::new_with_id(app_settings.equipment_info.id);
+    let convex_polygons_arc = Arc::new(RwLock::new(convex_polygons));
+
+    let convex_polygons_populate = convex_polygons_arc.clone();
     for road_lane in app_settings.road_lanes.iter() {
         let mut polygon = road_lane.convert_to_convex_polygon();
         polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
-        convex_polygons.insert_polygon(polygon);
+        let guarded = convex_polygons_populate.write().unwrap();
+        guarded.insert_polygon(polygon);
+        drop(guarded);
     }
-    let convex_polygons_rest = convex_polygons.clone_arc();
     let worker_reset_millis = app_settings.worker.reset_data_milliseconds;
+    let convex_polygons_analytics = convex_polygons_arc.clone();
     thread::spawn(move || {
-        convex_polygons.start_data_worker(worker_reset_millis);
+        ConvexPolygons::start_data_worker_thread(convex_polygons_analytics, worker_reset_millis);
     });
 
     let server_host = app_settings.rest_api.host;
     let server_port = app_settings.rest_api.back_end_port;
+    let convex_polygons_rest = convex_polygons_arc.clone();
     thread::spawn(move || {
         match rest_api::start_rest_api(server_host, server_port, convex_polygons_rest) {
             Ok(_) => {},
@@ -96,6 +104,11 @@ fn run(config_file: &str) -> opencv::Result<()> {
             }
         }
     });
+
+    let convex_polygons_cv = convex_polygons_arc.clone();
+    let convex_polygons_cv_read = convex_polygons_cv.read().unwrap();
+    let convex_polygons_cloned = convex_polygons_cv_read.clone_arc();
+    drop(convex_polygons_cv_read);
 
     // Prepare output window
     if app_settings.output.enable {
