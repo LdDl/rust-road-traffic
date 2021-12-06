@@ -52,7 +52,7 @@ pub fn all_polygons_stats(data: web::Data<Arc<RwLock<ConvexPolygons>>>) -> HttpR
     let data_expected = data_storage.read().expect("expect: all_polygons_stats");
     let data_expected_polygons = data_expected.polygons.read().expect("expect: all_polygons_stats");
     let mut ans = AllPolygonsStats{
-        equipment_id: "".to_string(),
+        equipment_id: data_expected.id.clone(),
         data: vec![]
     };
     for (_, v) in data_expected_polygons.iter() {
@@ -73,6 +73,8 @@ pub fn all_polygons_stats(data: web::Data<Arc<RwLock<ConvexPolygons>>>) -> HttpR
         drop(element);
         ans.data.push(stats);
     }
+    drop(data_expected_polygons);
+    drop(data_expected);
     return HttpResponse::Ok().json(ans);
 }
 
