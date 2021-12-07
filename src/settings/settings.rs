@@ -77,7 +77,6 @@ use std::collections::HashMap;
 use opencv::core::Point;
 use opencv::core::Point2f;
 use opencv::core::Scalar;
-use uuid::Uuid;
 use chrono::Utc;
 
 impl RoadLanesSettings {
@@ -104,7 +103,7 @@ impl RoadLanesSettings {
         geojson_poly.push(poly_element);
 
         return ConvexPolygon{
-            id: Uuid::new_v4(),
+            id: format!("dir_{}_lane_{}", self.lane_direction, self.lane_number),
             coordinates: geom,
             coordinates_wgs84: geojson_poly,
             // RGB to OpenCV = [B, G, R]. So use reverse order

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
 pub struct ConvexPolygons {
-    pub polygons: Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>>,
+    pub polygons: Arc<RwLock<HashMap<String, Mutex<ConvexPolygon>>>>,
     pub period_start: DateTime<Utc>,
     pub period_end: Option<DateTime<Utc>>,
     pub id: String,
@@ -17,7 +17,7 @@ impl ConvexPolygons {
     pub fn new() -> Self {
         let now = Utc::now();
         return ConvexPolygons {
-            polygons: Arc::new(RwLock::new(HashMap::<PolygonID, Mutex<ConvexPolygon>>::new())),
+            polygons: Arc::new(RwLock::new(HashMap::<String, Mutex<ConvexPolygon>>::new())),
             period_start: now,
             period_end: None,
             id: "Empty ID".to_string(),
@@ -26,19 +26,19 @@ impl ConvexPolygons {
     pub fn new_with_id(_id: String) -> Self {
         let now = Utc::now();
         return ConvexPolygons {
-            polygons: Arc::new(RwLock::new(HashMap::<PolygonID, Mutex<ConvexPolygon>>::new())),
+            polygons: Arc::new(RwLock::new(HashMap::<String, Mutex<ConvexPolygon>>::new())),
             period_start: now,
             period_end: None,
             id: _id,
         };
     }
-    pub fn clone_arc(&self) -> Arc<RwLock<HashMap<PolygonID, Mutex<ConvexPolygon>>>> {
+    pub fn clone_arc(&self) -> Arc<RwLock<HashMap<String, Mutex<ConvexPolygon>>>> {
         return Arc::clone(&self.polygons);
     }
     pub fn insert_polygon(&self, polygon: ConvexPolygon) {
         let cloned = Arc::clone(&self.polygons);
         let mut write_mutex = cloned.write().expect("RwLock poisoned");
-        write_mutex.insert(polygon.id, Mutex::new(polygon));
+        write_mutex.insert(polygon.get_id(), Mutex::new(polygon));
         drop(write_mutex);
     }
     pub fn start_data_worker_thread(st: Arc<RwLock<ConvexPolygons>>, millis: u64) {
@@ -113,14 +113,13 @@ use opencv::{
     imgproc::line
 };
 use uuid::Uuid;
-pub type PolygonID = Uuid;
 use std::collections::HashSet;
 use crate::lib::tracking::BlobID;
 use crate::lib::spatial::SpatialConverter;
 
 #[derive(Debug)]
 pub struct ConvexPolygon {
-    pub id: PolygonID,
+    pub id: String,
     pub coordinates: Vec<Point>,
     pub coordinates_wgs84:  Vec<Vec<Vec<f32>>>,
     pub color: Scalar,
@@ -158,7 +157,7 @@ impl VehicleTypeParameters {
 impl ConvexPolygon {
     pub fn default_from(points: Vec<Point>) -> Self{
         return ConvexPolygon{
-            id: Uuid::new_v4(),
+            id: "dir_0_lane_0".to_string(),
             coordinates: points,
             coordinates_wgs84: vec![],
             color: Scalar::from((255.0, 255.0, 255.0)),
@@ -175,10 +174,10 @@ impl ConvexPolygon {
             period_end: None,
         }
     }
-    pub fn get_id(&self) -> Uuid {
-        return self.id
+    pub fn get_id(&self) -> String {
+        return self.id.clone();
     }
-    pub fn set_id(&mut self, id: Uuid) {
+    pub fn set_id(&mut self, id: String) {
         self.id = id;
     }
     pub fn set_target_classes(&mut self, vehicle_types: &'static [&'static str]) {
@@ -354,7 +353,7 @@ impl ConvexPolygon {
         }
         return PolygonFeatureGeoJSON{
             typ: "Feature".to_string(),
-            id: self.get_id(),
+            id: format!("dir_{}_lane_{}", self.road_lane_direction, self.road_lane_num),
             properties: PolygonFeaturePropertiesGeoJSON{
                 road_lane_num: self.road_lane_num,
                 road_lane_direction: self.road_lane_direction,
@@ -462,7 +461,7 @@ impl PolygonsGeoJSON {
 pub struct PolygonFeatureGeoJSON {
     #[serde(rename(serialize = "type"))]
     pub typ: String,
-    pub id: Uuid,
+    pub id: String,
     pub properties: PolygonFeaturePropertiesGeoJSON,
     pub geometry: GeoPolygon,
 }
