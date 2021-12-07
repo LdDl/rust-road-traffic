@@ -112,7 +112,6 @@ use opencv::{
     imgproc::LINE_8,
     imgproc::line
 };
-use uuid::Uuid;
 use std::collections::HashSet;
 use crate::lib::tracking::BlobID;
 use crate::lib::spatial::SpatialConverter;
