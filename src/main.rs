@@ -37,7 +37,7 @@ use lib::tracking::{
     KalmanBlobie,
     KalmanBlobiesTracker,
 };
-use lib::polygons::{ConvexPolygons};
+use lib::polygons::{DataStorage};
 mod settings;
 use settings::{
     AppSettings,
@@ -76,7 +76,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
 
     const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
 
-    let convex_polygons = ConvexPolygons::new_with_id(app_settings.equipment_info.id);
+    let convex_polygons = DataStorage::new_with_id(app_settings.equipment_info.id);
     let convex_polygons_arc = Arc::new(RwLock::new(convex_polygons));
 
     let convex_polygons_populate = convex_polygons_arc.clone();
@@ -90,7 +90,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
     let worker_reset_millis = app_settings.worker.reset_data_milliseconds;
     let convex_polygons_analytics = convex_polygons_arc.clone();
     thread::spawn(move || {
-        ConvexPolygons::start_data_worker_thread(convex_polygons_analytics, worker_reset_millis);
+        DataStorage::start_data_worker_thread(convex_polygons_analytics, worker_reset_millis);
     });
 
     let server_host = app_settings.rest_api.host;

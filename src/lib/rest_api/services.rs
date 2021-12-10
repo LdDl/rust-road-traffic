@@ -2,14 +2,14 @@ use actix_web::{HttpResponse, web, Responder};
 
 use std::sync::{Arc, RwLock, Mutex};
 use std::collections::HashMap;
-use crate::lib::polygons::ConvexPolygons;
+use crate::lib::polygons::DataStorage;
 use crate::lib::polygons::PolygonsGeoJSON;
 
 async fn say_ping() -> impl Responder {
     HttpResponse::Ok().body("pong")
 }
 
-pub fn polygons_list(data: web::Data<Arc<RwLock<ConvexPolygons>>>) -> HttpResponse {
+pub fn polygons_list(data: web::Data<Arc<RwLock<DataStorage>>>) -> HttpResponse {
     let data_storage = data.get_ref().clone();
     let data_expected = data_storage.read().expect("expect: polygons_list");
     let data_expected_polygons = data_expected.polygons.read().expect("expect: polygons_list");
@@ -47,7 +47,7 @@ pub struct VehicleTypeParameters {
     pub estimated_sum_intensity: u32
 }
 
-pub fn all_polygons_stats(data: web::Data<Arc<RwLock<ConvexPolygons>>>) -> HttpResponse {
+pub fn all_polygons_stats(data: web::Data<Arc<RwLock<DataStorage>>>) -> HttpResponse {
     let data_storage = data.get_ref().clone();
     let data_expected = data_storage.read().expect("expect: all_polygons_stats");
     let data_expected_polygons = data_expected.polygons.read().expect("expect: all_polygons_stats");

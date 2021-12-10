@@ -6,17 +6,17 @@ use chrono::{DateTime, Utc, Duration};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
-pub struct ConvexPolygons {
+pub struct DataStorage {
     pub polygons: Arc<RwLock<HashMap<String, Mutex<ConvexPolygon>>>>,
     pub period_start: DateTime<Utc>,
     pub period_end: Option<DateTime<Utc>>,
     pub id: String,
 }
 
-impl ConvexPolygons {
+impl DataStorage {
     pub fn new() -> Self {
         let now = Utc::now();
-        return ConvexPolygons {
+        return DataStorage {
             polygons: Arc::new(RwLock::new(HashMap::<String, Mutex<ConvexPolygon>>::new())),
             period_start: now,
             period_end: None,
@@ -25,7 +25,7 @@ impl ConvexPolygons {
     }
     pub fn new_with_id(_id: String) -> Self {
         let now = Utc::now();
-        return ConvexPolygons {
+        return DataStorage {
             polygons: Arc::new(RwLock::new(HashMap::<String, Mutex<ConvexPolygon>>::new())),
             period_start: now,
             period_end: None,
@@ -41,7 +41,7 @@ impl ConvexPolygons {
         write_mutex.insert(polygon.get_id(), Mutex::new(polygon));
         drop(write_mutex);
     }
-    pub fn start_data_worker_thread(st: Arc<RwLock<ConvexPolygons>>, millis: u64) {
+    pub fn start_data_worker_thread(st: Arc<RwLock<DataStorage>>, millis: u64) {
         println!("start with millis {}", millis);
 
         let millis_asi64 = millis as i64;
