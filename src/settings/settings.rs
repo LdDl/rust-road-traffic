@@ -12,7 +12,8 @@ pub struct AppSettings {
     pub equipment_info: EquipmentInfo,
     pub road_lanes: Vec<RoadLanesSettings>,
     pub worker: WorkerSettings,
-    pub rest_api: RestAPISettings
+    pub rest_api: RestAPISettings,
+    pub redis_publisher: RedisPublisherSettings
 }
 
 #[derive(Deserialize, Debug)]
@@ -69,6 +70,15 @@ pub struct RestAPISettings {
     pub api_scope: String,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct RedisPublisherSettings {
+    pub enable: bool,
+    pub host: String,
+    pub port: i32,
+    pub password: String,
+    pub db_index: i32,
+    pub channel_name: String,
+}
 
 use crate::lib::polygons::ConvexPolygon;
 use crate::lib::spatial::SpatialConverter;

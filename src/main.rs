@@ -51,6 +51,9 @@ use ctrlc;
 
 use std::sync::{Arc, RwLock};
 
+mod publisher;
+use publisher::{ RedisConnection };
+
 fn run(config_file: &str) -> opencv::Result<()> {
 
     let app_settings = AppSettings::new_settings(config_file);
@@ -92,6 +95,29 @@ fn run(config_file: &str) -> opencv::Result<()> {
     thread::spawn(move || {
         DataStorage::start_data_worker_thread(convex_polygons_analytics, worker_reset_millis);
     });
+
+    if app_settings.redis_publisher.enable {
+        let convex_polygons_redis = convex_polygons_arc.clone();
+        let redis_host = app_settings.redis_publisher.host;
+        let redis_port = app_settings.redis_publisher.port;
+        let redis_password = app_settings.redis_publisher.password;
+        let redis_db_index = app_settings.redis_publisher.db_index;
+        let redis_channel = app_settings.redis_publisher.channel_name;
+        thread::spawn(move || {
+            let mut redis_conn = match redis_password.chars().count() {
+                0 => {
+                    RedisConnection::new(redis_host, redis_port, redis_db_index)
+                },
+                _ => {
+                    RedisConnection::new_with_password(redis_host, redis_port, redis_db_index, redis_password)
+                }
+            };
+            if redis_channel.chars().count() != 0 {
+                redis_conn.set_channel(redis_channel);
+            }
+            redis_conn.start_worker(convex_polygons_redis, worker_reset_millis);
+        });
+    }
 
     let server_host = app_settings.rest_api.host;
     let server_port = app_settings.rest_api.back_end_port;
