@@ -1,4 +1,4 @@
 mod rest_api;
 mod services;
 
-pub use self::{rest_api::*};
+pub use self::{rest_api::*, services::*};
