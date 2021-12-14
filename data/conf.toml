@@ -54,6 +54,7 @@
     reset_data_milliseconds = 30000
 
 [rest_api]
+    enable = true
     host = "0.0.0.0"
     back_end_port = 42001
     api_scope = "/api"

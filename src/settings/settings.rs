@@ -65,6 +65,7 @@ pub struct WorkerSettings {
 
 #[derive(Deserialize, Debug)]
 pub struct RestAPISettings {
+    pub enable: bool,
     pub host: String,
     pub back_end_port: i32,
     pub api_scope: String,

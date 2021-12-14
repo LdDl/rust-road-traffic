@@ -119,18 +119,19 @@ fn run(config_file: &str) -> opencv::Result<()> {
         });
     }
 
-    let server_host = app_settings.rest_api.host;
-    let server_port = app_settings.rest_api.back_end_port;
-    let convex_polygons_rest = convex_polygons_arc.clone();
-    thread::spawn(move || {
-        match rest_api::start_rest_api(server_host, server_port, convex_polygons_rest) {
-            Ok(_) => {},
-            Err(err) => {
-                panic!("Can't start API due the error: {:?}", err)
+    if app_settings.rest_api.enable {
+        let server_host = app_settings.rest_api.host;
+        let server_port = app_settings.rest_api.back_end_port;
+        let convex_polygons_rest = convex_polygons_arc.clone();
+        thread::spawn(move || {
+            match rest_api::start_rest_api(server_host, server_port, convex_polygons_rest) {
+                Ok(_) => {},
+                Err(err) => {
+                    panic!("Can't start API due the error: {:?}", err)
+                }
             }
-        }
-    });
-
+        });
+    }
     let convex_polygons_cv = convex_polygons_arc.clone();
     let convex_polygons_cv_read = convex_polygons_cv.read().unwrap();
     let convex_polygons_cloned = convex_polygons_cv_read.clone_arc();
