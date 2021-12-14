@@ -10,7 +10,7 @@
     enable = true
     width = 500
     height = 500
-    window_name = "Caffe MobilenetSSD"
+    window_name = "Toy GUI"
 
 [detection]
     # *.weight/*.cfg + "Darknet" for YOLO
