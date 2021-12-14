@@ -36,16 +36,16 @@ Vehicle detection/tracking and speed estimation via next instruments:
     ```toml
     [input]
         video_src = "./data/sample_960_540.mp4"
-        # Two options: rtsp / local
+        # Use string below for usage with CSI camera (where sensor-id is camera indentifier)
+        # video_src = "nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM), width=(int)1280, height=(int)720, format=(string)NV12, framerate=(fraction)30/1 ! nvvidconv flip-method=0 ! video/x-raw, width=(int)1280, height=(int)720, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink"
+        # Two options: rtsp / any number corresponding to local camera
         typ = "rtsp"
-        # use 'local' when video_src = "0"
-        # typ = "local" 
-
+        # typ = "local"
     [output]
         enable = true
         width = 500
         height = 500
-        window_name = "Tiny YOLO v4"
+        window_name = "Toy GUI"
 
     [detection]
         # *.weight/*.cfg + "Darknet" for YOLO
@@ -56,7 +56,7 @@ Vehicle detection/tracking and speed estimation via next instruments:
         # network_weights = "./data/MobileNetSSD_deploy.prototxt"
         # network_cfg = "./data/MobileNetSSD_deploy.caffemodel"
         # network_type = "Caffe-MobileNet-SSD"
-        conf_threshold = 0.15
+        conf_threshold = 0.25
         nms_threshold = 0.3
 
     [tracking]
@@ -69,23 +69,41 @@ Vehicle detection/tracking and speed estimation via next instruments:
     [[road_lanes]]
         lane_number = 0
         lane_direction = 0
-        geometry = [[51, 286], [281, 284], [334, 80], [179, 68]]
+        # left-bot, right-bot, right-top, left-top
+        geometry = [[51, 266], [281, 264], [334, 80], [179, 68]]
+        geometry_wgs84 = [[37.61891987174749, 54.20564462974709], [37.618926241993904, 54.20564482584264], [37.61894233524799, 54.205666592443166], [37.61893227696419, 54.205668161206724]]
         color_rgb = [255, 0, 0]
     [[road_lanes]]
         lane_number = 1
         lane_direction = 0
-        geometry = [[315, 287], [572, 285], [547, 66], [359, 69]]
+        # left-bot, right-bot, right-top, left-top
+        geometry = [[315, 267], [572, 265], [547, 66], [359, 69]]
+        geometry_wgs84 = [[37.618908137083054, 54.20564619851147], [37.61891517788172, 54.20564502193819], [37.618927247822285, 54.205668749493036], [37.61892020702362, 54.2056701221611]]
         color_rgb = [0, 255, 0]
     [[road_lanes]]
         lane_number = 2
         lane_direction = 0
-        geometry = [[604, 287], [885, 287], [746, 58], [575, 68]]
+        # left-bot, right-bot, right-top, left-top
+        geometry = [[604, 267], [885, 267], [746, 58], [575, 68]]
+        geometry_wgs84 = [[37.61890344321728, 54.205646982893654], [37.61891350150108, 54.20566796511128], [37.61890981346368, 54.20566972997024], [37.61890009045601, 54.20564835556243]]
         color_rgb = [0, 0, 255]
 
+    [worker]
+        reset_data_milliseconds = 30000
+
     [rest_api]
-    host = "0.0.0.0"
-    back_end_port = 42001
-    api_scope = "/api"
+        enable = true
+        host = "0.0.0.0"
+        back_end_port = 42001
+        api_scope = "/api"
+
+    [redis_publisher]
+        enable = true
+        host = "localhost"
+        port = 6379
+        password = ""
+        db_index = 0
+        channel_name = "DETECTORS_STATISTICS"
     ```
 5. Run
     ```shell
