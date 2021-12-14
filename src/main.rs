@@ -132,6 +132,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
             }
         });
     }
+    
     let convex_polygons_cv = convex_polygons_arc.clone();
     let convex_polygons_cv_read = convex_polygons_cv.read().unwrap();
     let convex_polygons_cloned = convex_polygons_cv_read.clone_arc();
