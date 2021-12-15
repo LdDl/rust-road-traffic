@@ -41,4 +41,5 @@
     * ~~Estimate speed and intensity for each vehicle type~~
     * RabbitMQ integration module? Do we need those?
     * Redis (pub to user defined channel + consider password usage)__W.I.P. - Testing__
+    * Verbose output as option (fps/workers output)
     
