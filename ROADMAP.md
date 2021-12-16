@@ -6,6 +6,7 @@
     * ~~Do non maximum suppression for additional filtering~~
     * ~~Put bounding boxes and classnames onto image after NMS~~
     * ~~Display an output~~
+    * ~~Redis (pub to user defined channel + consider password usage)~~
 
 * Additional functionality
     * ~~Usage of custom implementation (via [nalgebra](https://github.com/dimforge/nalgebra)) of Kalman filter~~
@@ -40,6 +41,5 @@
     * ~~Fill Jetson Nano instructions~~
     * ~~Estimate speed and intensity for each vehicle type~~
     * RabbitMQ integration module? Do we need those?
-    * Redis (pub to user defined channel + consider password usage)__W.I.P. - Testing__
     * Verbose output as option (fps/workers output)
-    
+    * Consider color as hex representation (additional field with priority lower than RGBA)
