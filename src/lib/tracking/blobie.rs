@@ -1,6 +1,4 @@
 use crate::lib::kalman::{
-    KalmanWrapper,
-    KalmanModelType,
     KalmanFilterLinear,
     Matrix2x1f32,
     Matrix4x1f32

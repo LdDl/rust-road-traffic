@@ -88,19 +88,6 @@ impl DataStorage {
             thread::sleep(STDDuration::from_millis(millis));
         }
     }
-    pub fn to_geojson(&self) -> PolygonsGeoJSON {
-        let mut ans = PolygonsGeoJSON::new();
-        let cloned = Arc::clone(&self.polygons);
-        let read_mutex = cloned.read().expect("RwLock poisoned");
-        for (_, v) in read_mutex.iter() {
-            let element = v.lock().expect("Mutex poisoned");
-            let geo_feature = element.to_geojson();
-            drop(element);
-            ans.features.push(geo_feature);
-        }
-        drop(read_mutex);
-        return ans;
-    }
 }
 
 use opencv::{

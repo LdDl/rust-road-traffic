@@ -1,6 +1,5 @@
 use opencv::{
-    core::Point2f,
-    core::Vector
+    core::Point2f
 };
 use std::f32::consts::PI;
 const EARTH_RADIUS_KM: f32 = 6371.0;
