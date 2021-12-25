@@ -44,3 +44,5 @@
     * Verbose output as option (fps/workers output)
     * Consider color as hex representation (additional field with priority lower than RGBA)
     * Consider training YOLO v4 tiny for vehicle classes only (we do need false positive detection for peoples/boats/chairs and etc.)
+    * Organize structure to reduce connectiviy of components of applications __W.I.P.__
+
