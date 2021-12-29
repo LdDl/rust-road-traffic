@@ -63,7 +63,7 @@
     api_scope = "/api"
 
 [redis_publisher]
-    enable = true
+    enable = false
     host = "localhost"
     port = 6379
     password = ""
