@@ -3,7 +3,7 @@ use actix_web::{web, http, App, HttpServer};
 use actix_cors::Cors;
 
 use crate::lib::rest_api::services;
-use crate::lib::polygons::DataStorage;
+use crate::lib::data_storage::DataStorage;
 
 #[actix_web::main]
 pub async fn start_rest_api(server_host: String, server_port: i32, data_storage: Arc<RwLock<DataStorage>>) -> std::io::Result<()> {

@@ -2,7 +2,7 @@ use actix_web::{HttpResponse, web, Responder};
 
 use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
-use crate::lib::polygons::DataStorage;
+use crate::lib::data_storage::DataStorage;
 use crate::lib::polygons::PolygonsGeoJSON;
 
 async fn say_ping() -> impl Responder {
