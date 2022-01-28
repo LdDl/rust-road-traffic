@@ -45,4 +45,4 @@
     * Consider color as hex representation (additional field with priority lower than RGBA)
     * Consider training YOLO v4 tiny for vehicle classes only (we do need false positive detection for peoples/boats/chairs and etc.)
     * Organize structure to reduce connectiviy of components of applications __W.I.P.__
-
+    * Figure it out, how to boost perfomance for YOLOv4-tiny (or mobilenet-ssd?). Best idea I have so far is: pick tensort-rt and onnx and do magick trick. But there are no good tensor-rt libs for Rust I guess...
