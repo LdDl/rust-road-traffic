@@ -37,7 +37,7 @@ use lib::tracking::{
     KalmanBlobie,
     KalmanBlobiesTracker,
 };
-use lib::polygons::{DataStorage};
+use lib::data_storage::{DataStorage};
 mod settings;
 use settings::{
     AppSettings,

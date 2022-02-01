@@ -1,94 +1,19 @@
-use std::thread;
-use std::time::Duration as STDDuration;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, RwLock};
-use chrono::{DateTime, Utc, Duration};
-use serde::{Deserialize, Serialize};
+use chrono::{DateTime, Utc};
 
-#[derive(Clone)]
-pub struct DataStorage {
-    pub polygons: Arc<RwLock<HashMap<String, Mutex<ConvexPolygon>>>>,
-    pub period_start: DateTime<Utc>,
-    pub period_end: Option<DateTime<Utc>>,
-    pub id: String,
-}
+mod geometry;
+use geometry::PointsOrientation;
+use geometry::{
+    is_intersects,
+    get_orientation,
+    is_on_segment
+};
 
-impl DataStorage {
-    pub fn new() -> Self {
-        let now = Utc::now();
-        return DataStorage {
-            polygons: Arc::new(RwLock::new(HashMap::<String, Mutex<ConvexPolygon>>::new())),
-            period_start: now,
-            period_end: None,
-            id: "Empty ID".to_string(),
-        };
-    }
-    pub fn new_with_id(_id: String) -> Self {
-        let now = Utc::now();
-        return DataStorage {
-            polygons: Arc::new(RwLock::new(HashMap::<String, Mutex<ConvexPolygon>>::new())),
-            period_start: now,
-            period_end: None,
-            id: _id,
-        };
-    }
-    pub fn clone_arc(&self) -> Arc<RwLock<HashMap<String, Mutex<ConvexPolygon>>>> {
-        return Arc::clone(&self.polygons);
-    }
-    pub fn insert_polygon(&self, polygon: ConvexPolygon) {
-        let cloned = Arc::clone(&self.polygons);
-        let mut write_mutex = cloned.write().expect("RwLock poisoned");
-        write_mutex.insert(polygon.get_id(), Mutex::new(polygon));
-        drop(write_mutex);
-    }
-    pub fn start_data_worker_thread(st: Arc<RwLock<DataStorage>>, millis: u64) {
-        println!("start with millis {}", millis);
-
-        let millis_asi64 = millis as i64;
-        let mut write_mutex = st.write().expect("RwLock poisoned");
-        write_mutex.period_start = Utc::now();
-        drop(write_mutex);
-        thread::sleep(STDDuration::from_millis(millis));
-
-        // Next runs
-        let read_mutex = st.read().expect("RwLock poisoned");
-        let mut previous_tm = read_mutex.period_start;
-        let cloned = Arc::clone(&read_mutex.polygons);
-        drop(read_mutex);
-
-        loop {
-            let mut write_mutex = st.write().expect("RwLock poisoned");
-            write_mutex.period_start = previous_tm;
-            write_mutex.period_end = Some(write_mutex.period_start + Duration::milliseconds(millis_asi64));
-            println!("\nPeriod start: {} | Period end: {}", write_mutex.period_start, write_mutex.period_end.unwrap());
-            previous_tm = write_mutex.period_end.unwrap();
-            let write_mutex_polygons = cloned.write().expect("RwLock poisoned");
-            for (_, v) in write_mutex_polygons.iter() {
-                let mut element = v.lock().expect("Mutex poisoned");
-                // Summary
-                element.period_start = write_mutex.period_start;
-                element.period_end = write_mutex.period_end;
-                element.estimated_avg_speed = element.avg_speed;
-                element.estimated_sum_intensity = element.sum_intensity;
-                element.avg_speed = -1.0;
-                element.sum_intensity = 0;
-                println!("\tPolygon: {} | Intensity: {} | Speed: {}", element.get_id(), element.estimated_sum_intensity, element.estimated_avg_speed);
-                // Certain vehicle type
-                for (vehicle_type, statistics) in element.statistics.iter_mut() {
-                    statistics.estimated_avg_speed = statistics.avg_speed;
-                    statistics.estimated_sum_intensity = statistics.sum_intensity;
-                    statistics.avg_speed = -1.0;
-                    statistics.sum_intensity = 0;
-                    println!("\t\tVehicle type: {} | Intensity: {} | Speed: {}", vehicle_type, statistics.estimated_sum_intensity, statistics.estimated_avg_speed);
-                }
-                drop(element);
-            }
-            drop(write_mutex_polygons);
-            drop(write_mutex);
-            thread::sleep(STDDuration::from_millis(millis));
-        }
-    }
-}
+use crate::lib::geojson::{
+    PolygonFeatureGeoJSON,
+    PolygonFeaturePropertiesGeoJSON,
+    GeoPolygon
+};
 
 use opencv::{
     core::Point,
@@ -351,118 +276,6 @@ impl ConvexPolygon {
             },
         };
     }
-}
-
-#[derive(Copy, Clone, PartialEq)]
-pub enum PointsOrientation {
-    Collinear,
-    Clockwise,
-    CounterClockwise
-}
-
-// get_orientation Gets orientations of points P -> Q -> R.
-// Possible output values: Collinear / Clockwise or CounterClockwise
-// Input: points P, Q and R in provided order
-fn get_orientation(px: f32, py: f32, qx: f32, qy: f32, rx: f32, ry: f32) -> PointsOrientation {
-    let val = (qy-py)*(rx-qx) - (qx-px)*(ry-qy);
-	if val == 0.0 {
-		return PointsOrientation::Collinear;
-	}
-	if val > 0.0 {
-		return PointsOrientation::Clockwise;
-	}
-    return PointsOrientation::CounterClockwise; // if it's neither collinear nor clockwise
-}
-
-// is_on_segment Checks if point Q lies on segment PR
-// Input: three colinear points Q, Q and R
-fn is_on_segment(px: f32, py: f32, qx: f32, qy: f32, rx: f32, ry: f32) -> bool {
-    if qx <= f32::max(px, rx) && qx >= f32::min(px, rx) && qy <= f32::max(py, ry) && qy >= f32::min(py, ry) {
-		return true
-	}
-    return false;
-}
-
-// is_intersects Checks if segments intersect each other
-// Input:
-// first_px, first_py, first_qx, first_qy === first segment
-// second_px, second_py, second_qx, second_qy === second segment
-/*
-Notation
-	P1 = (first_px, first_py)
-	Q1 = (first_qx, first_qy)
-	P2 = (second_px, second_py)
-	Q2 = (second_qx, second_qy)
-*/
-fn is_intersects(first_px: f32, first_py: f32, first_qx: f32, first_qy: f32, second_px: f32, second_py: f32, second_qx: f32, second_qy: f32) -> bool {
-    // Find the four orientations needed for general case and special ones
-    let o1 = get_orientation(first_px, first_py, first_qx, first_qy, second_px, second_py);
-    let o2 = get_orientation(first_px, first_py, first_qx, first_qy, second_qx, second_qy);
-    let o3 = get_orientation(second_px, second_py, second_qx, second_qy, first_px, first_py);
-    let o4 = get_orientation(second_px, second_py, second_qx, second_qy, first_qx, first_qy);
-
-    // General case
-    if o1 != o2 && o3 != o4 {
-        return true;
-    }
-
-    /* Special cases */
-    // P1, Q1, P2 are colinear and P2 lies on segment P1-Q1
-    if o1 == PointsOrientation::Collinear && is_on_segment(first_px, first_py, second_px, second_py, first_qx, first_qy) {
-        return true;
-    }
-    // P1, Q1 and Q2 are colinear and Q2 lies on segment P1-Q1
-    if o2 == PointsOrientation::Collinear && is_on_segment(first_px, first_py, second_qx, second_qy, first_qx, first_qy) {
-        return true;
-    }
-    // P2, Q2 and P1 are colinear and P1 lies on segment P2-Q2
-    if o3 == PointsOrientation::Collinear && is_on_segment(second_px, second_py, first_px, first_py, second_qx, second_qy) {
-        return true;
-    }
-    // P2, Q2 and Q1 are colinear and Q1 lies on segment P2-Q2
-    if o4 == PointsOrientation::Collinear && is_on_segment(second_px, second_py, first_qx, first_qy, second_qx, second_qy) {
-        return true;
-    }
-    // Segments do not intersect
-    return false;
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct PolygonsGeoJSON {
-    #[serde(rename(serialize = "type"))]
-    pub typ: String,
-    pub features: Vec<PolygonFeatureGeoJSON>
-}
-
-impl PolygonsGeoJSON {
-    pub fn new() -> Self {
-        return PolygonsGeoJSON {
-            typ: "FeatureCollection".to_string(),
-            features: vec![]
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct PolygonFeatureGeoJSON {
-    #[serde(rename(serialize = "type"))]
-    pub typ: String,
-    pub id: String,
-    pub properties: PolygonFeaturePropertiesGeoJSON,
-    pub geometry: GeoPolygon,
-}
-#[derive(Debug, Deserialize, Serialize)]
-pub struct PolygonFeaturePropertiesGeoJSON {
-    pub road_lane_num: u16,
-    pub road_lane_direction: u8,
-    pub coordinates: Vec<Vec<i32>>,
-}
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
-pub struct GeoPolygon {
-    #[serde(rename(serialize = "type", deserialize = "type"))]
-    pub geometry_type: String,
-    #[serde(rename(serialize = "coordinates", deserialize = "coordinates"))]
-    pub coordinates: Vec<Vec<Vec<f32>>>,
 }
 
 #[cfg(test)]

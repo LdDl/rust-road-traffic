@@ -6,7 +6,7 @@ use std::sync::{ Arc, RwLock };
 use std::error::Error;
 use std::collections::HashMap;
 use crate::publisher::RedisMessage;
-use crate::lib::polygons::DataStorage;
+use crate::lib::data_storage::DataStorage;
 use crate::lib::rest_api::{ AllPolygonsStats, PolygonStats, VehicleTypeParameters };
 use std::thread;
 use std::time::Duration as STDDuration;
