@@ -135,14 +135,6 @@ impl KalmanFilterLinear {
 
 #[cfg(test)]
 mod tests {
-    // use opencv::{
-    //     core::CV_8UC3,
-    //     imgproc::line,
-    //     imgproc::circle,
-    //     core::Scalar,
-    //     imgproc::LINE_8,
-    //     highgui
-    // };
     use super::*;
     #[test]
     fn test_custom_linear_kalman() {
@@ -186,33 +178,6 @@ mod tests {
             let correct_kalman_y = correct_ys[tm-1];
             assert_eq!(correct_kalman_x, kalman_x as i32);
             assert_eq!(correct_kalman_y, kalman_y as i32);
-            // match circle(&mut frame, Point::new(xs[tm], ys[tm]), 1, Scalar::from((0.0, 0.0, 255.0)), 1, LINE_8, 0) {
-            //     Ok(_) => {},
-            //     Err(err) => {
-            //         panic!("Can't draw circle at blob's predicted position due the error: {:?}", err)
-            //     }
-            // };
-            // match circle(&mut frame, Point::new(kalman_x as i32, kalman_y as i32), 1, Scalar::from((255.0, 0.0, 0.0)), 1, LINE_8, 0) {
-            //     Ok(_) => {},
-            //     Err(err) => {
-            //         panic!("Can't draw circle at blob's predicted position due the error: {:?}", err)
-            //     }
-            // };
         };
-        
-        // let window = "test_constant_velocity_model()";
-        // match highgui::named_window(window, 1) {
-        //     Ok(_) => {},
-        //     Err(err) =>{
-        //         panic!("Can't give a name to output window due the error: {:?}", err)
-        //     }
-        // };
-        // loop {
-        //     highgui::imshow(window, &mut frame).unwrap();
-        //     let key = highgui::wait_key(10).unwrap();
-        //     if key > 0 && key != 255 {
-        //         break;
-        //     }
-        // }
     }
 }
