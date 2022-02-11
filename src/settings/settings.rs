@@ -13,7 +13,8 @@ pub struct AppSettings {
     pub road_lanes: Vec<RoadLanesSettings>,
     pub worker: WorkerSettings,
     pub rest_api: RestAPISettings,
-    pub redis_publisher: RedisPublisherSettings
+    pub redis_publisher: RedisPublisherSettings,
+    pub mjpeg_streaming: MJPEGStreamingSettings,
 }
 
 #[derive(Deserialize, Debug)]
@@ -79,6 +80,13 @@ pub struct RedisPublisherSettings {
     pub password: String,
     pub db_index: i32,
     pub channel_name: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct MJPEGStreamingSettings {
+    pub enable: bool,
+    pub host: String,
+    pub port: i32,
 }
 
 use crate::lib::polygons::ConvexPolygon;
