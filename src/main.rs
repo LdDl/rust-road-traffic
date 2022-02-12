@@ -49,10 +49,16 @@ use std::time::Duration as STDDuration;
 use std::process;
 use ctrlc;
 
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, mpsc};
 
 mod publisher;
 use publisher::{ RedisConnection };
+
+pub struct ThreadedFrame {
+    frame: Mat,
+    last_time: DateTime<Utc>,
+    sec_diff: f64,
+}
 
 fn run(config_file: &str) -> opencv::Result<()> {
 
@@ -170,11 +176,11 @@ fn run(config_file: &str) -> opencv::Result<()> {
     // Prepare neural network
     let mut neural_net: Net; 
     let blob_scale;
-    let net_size;
+    let net_size = Size::new(app_settings.detection.net_width, app_settings.detection.net_height);
     let blob_mean;
     let blob_name;
 
-    let coco_classnames: &'static [&'static str];
+    let coco_classnames = app_settings.detection.net_classes;
 
     match network_type.as_ref() {
         "darknet" => {
@@ -185,10 +191,8 @@ fn run(config_file: &str) -> opencv::Result<()> {
                 }
             };
             blob_scale = 1.0/255.0;
-            net_size = Size::new(416, 416);
             blob_mean = default_scalar;
             blob_name = "";
-            coco_classnames = &["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"];
         },
         "caffe-mobilenet-ssd" => {
             neural_net = match read_net_from_caffe(weights_src, cfg_src){
@@ -198,10 +202,8 @@ fn run(config_file: &str) -> opencv::Result<()> {
                 }
             };
             blob_scale = 0.007843;
-            net_size = Size::new(300, 300);
             blob_mean = Scalar::from(127.5);
             blob_name = "data";
-            coco_classnames = &["background", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"];
         },
         _ => {
             panic!("Only this network types are supported: Darknet / Caffe-Mobilenet-SSD. You've provided: '{}'", app_settings.detection.network_type);
@@ -250,7 +252,6 @@ fn run(config_file: &str) -> opencv::Result<()> {
     let mut last_ms: f64 = 0.0;
 	let mut last_time = Utc::now();
 
-    
     println!("Waiting for Ctrl-C...");
     ctrlc::set_handler(move || {
         println!("\nCtrl+C has been pressed! Exit in 2 seconds");
@@ -258,26 +259,39 @@ fn run(config_file: &str) -> opencv::Result<()> {
         process::exit(1);
     }).expect("\nError setting Ctrl-C handler");
 
-    loop {
-        let all_now = Instant::now();
-        let capture_now = Instant::now();
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        loop {
+            let mut read_frame = Mat::default();
+            match video_capture.read(&mut read_frame) {
+                Ok(_) => {},
+                Err(_) => {
+                    println!("Can't read next frame");
+                    break;
+                }
+            };
+            /* Evaluate time difference */
+            let current_ms = video_capture.get(VIDEOCAPTURE_POS_MSEC).unwrap();
+            let ms_diff = current_ms - last_ms;
+            let sec_diff = ms_diff / 1000.0;
+            let prev_time = last_time;
+            last_time = prev_time + Duration::milliseconds(ms_diff as i64);
+            last_ms = current_ms;
+            /* Send frame and capture info */
+            tx.send(ThreadedFrame{
+                frame: read_frame,
+                sec_diff: sec_diff,
+                last_time: last_time,
+            }).unwrap();
+        }
+    });
+    
+    for received in rx {
+        let mut frame = received.frame.clone();
 
-        match video_capture.read(&mut frame) {
-            Ok(_) => {},
-            Err(_) => {
-                println!("Can't read next frame");
-                break;
-            }
-        };
-        /* Evaluate time difference */
-        let current_ms = video_capture.get(VIDEOCAPTURE_POS_MSEC).unwrap();
-        let ms_diff = current_ms - last_ms;
-        let sec_diff = ms_diff / 1000.0;
-        let prev_time = last_time;
-        last_time = prev_time + Duration::milliseconds(ms_diff as i64);
-        last_ms = current_ms;
-
-        let elapsed_capture = capture_now.elapsed().as_millis() as f32;
+        // let all_now = Instant::now();
+        // let capture_now = Instant::now();
+        // let elapsed_capture = capture_now.elapsed().as_millis() as f32;
 
         let blobimg = blob_from_image(&frame, blob_scale, net_size, blob_mean, true, false, CV_32F);
         match neural_net.set_input(&blobimg.unwrap(), blob_name, 1.0, default_scalar){
@@ -292,10 +306,32 @@ fn run(config_file: &str) -> opencv::Result<()> {
                 let mut tmp_blobs;
                 if network_type == "darknet" {
                     /* Tiny YOLO */
-                    tmp_blobs = process_yolo_detections(&detections, conf_threshold, nms_threshold, frame_cols, frame_rows, max_points_in_track, coco_classnames, COCO_FILTERED_CLASSNAMES, classes_num, last_time, sec_diff);
+                    tmp_blobs = process_yolo_detections(
+                        &detections,
+                        conf_threshold,
+                        nms_threshold,
+                        frame_cols,
+                        frame_rows,
+                        max_points_in_track,
+                        &coco_classnames,
+                        COCO_FILTERED_CLASSNAMES,
+                        classes_num,
+                        received.last_time,
+                        received.sec_diff,
+                    );
                 } else {
                     /* Caffe's Mobilenet */
-                    tmp_blobs = process_mobilenet_detections(&detections, conf_threshold, frame_cols, frame_rows, max_points_in_track, coco_classnames, COCO_FILTERED_CLASSNAMES, last_time, sec_diff);
+                    tmp_blobs = process_mobilenet_detections(
+                        &detections,
+                        conf_threshold,
+                        frame_cols,
+                        frame_rows,
+                        max_points_in_track, 
+                        &coco_classnames,
+                        COCO_FILTERED_CLASSNAMES,
+                        received.last_time,
+                        received.sec_diff,
+                    );
                 }
 
                 // Match blobs
@@ -371,19 +407,19 @@ fn run(config_file: &str) -> opencv::Result<()> {
             }
         }
 
-        let elapsed_all = 1000.0 / all_now.elapsed().as_millis() as f32;
-        print!("\rСapturing process millis: {} | Average FPS of detection process: {} | Average FPS of whole process: {}", elapsed_capture, elapsed_detection, elapsed_all);
-        match std::io::stdout().flush() {
-            Ok(_) => {},
-            Err(err) => {
-                panic!("There is a problem with stdout().flush(): {}", err);
-            }
-        };
+        // let elapsed_all = 1000.0 / all_now.elapsed().as_millis() as f32;
+        // print!("\rСapturing process millis: {} | Average FPS of detection process: {} | Average FPS of whole process: {}", elapsed_capture, elapsed_detection, elapsed_all);
+        // match std::io::stdout().flush() {
+        //     Ok(_) => {},
+        //     Err(err) => {
+        //         panic!("There is a problem with stdout().flush(): {}", err);
+        //     }
+        // };
     }
     Ok(())
 }
 
-fn process_mobilenet_detections(detections: &Vector::<Mat>, conf_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &'static [&'static str], filtered_classes: &'static [&'static str], last_time: DateTime<Utc>, sec_diff: f64) -> Vec<KalmanBlobie> {
+fn process_mobilenet_detections(detections: &Vector::<Mat>, conf_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &Vec<String>, filtered_classes: &'static [&'static str], last_time: DateTime<Utc>, sec_diff: f64) -> Vec<KalmanBlobie> {
     let mut tmp_blobs = vec![];
     let outs = detections.len();
     for o in 0..outs {
@@ -392,8 +428,8 @@ fn process_mobilenet_detections(detections: &Vector::<Mat>, conf_threshold: f32,
         for (i, _) in data_ptr.iter().enumerate().step_by(7) {
             let confidence = data_ptr[i+2];
             let class_id = data_ptr[i+1] as usize;
-            let class_name = classes[class_id];
-            if filtered_classes.contains(&class_name) {
+            let class_name = classes[class_id].clone();
+            if filtered_classes.contains(&&*class_name) {
                 if confidence > conf_threshold {
                     let left = (data_ptr[i+3] * frame_cols) as i32;
                     let top = (data_ptr[i+4] * frame_rows) as i32;
@@ -415,7 +451,7 @@ fn process_mobilenet_detections(detections: &Vector::<Mat>, conf_threshold: f32,
     return tmp_blobs;
 }
 
-fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, nms_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &'static [&'static str], filtered_classes: &'static [&'static str], classes_num: usize, last_time: DateTime<Utc>, sec_diff: f64) -> Vec<KalmanBlobie> {
+fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, nms_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &Vec<String>, filtered_classes: &'static [&'static str], classes_num: usize, last_time: DateTime<Utc>, sec_diff: f64) -> Vec<KalmanBlobie> {
     let mut tmp_blobs = vec![];
     let outs = detections.len();
     let mut class_names = vec![];
@@ -433,8 +469,8 @@ fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, nms_
                     class_id = (j-5) % classes_num;
                 }
             }
-            let class_name = classes[class_id];
-            if filtered_classes.contains(&class_name) {
+            let class_name = classes[class_id].clone();
+            if filtered_classes.contains(&&*class_name) {
                 let confidence = max_probability * data_ptr[i+4];
                 if confidence > conf_threshold {
                     let center_x = data_ptr[i] * frame_cols;
@@ -461,7 +497,7 @@ fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, nms_
     for (i, _) in indices.iter().enumerate() {
         match bboxes.get(i) {
             Ok(bbox) => {
-                let class_name = class_names[i];
+                let class_name = &class_names[i];
                 let mut kb = KalmanBlobie::new_with_time(&bbox, max_points_in_track, last_time, sec_diff);
                 kb.set_class_name(class_name.to_string());
                 tmp_blobs.push(kb);
@@ -499,6 +535,7 @@ fn get_capture(video_src: &str, typ: String) -> VideoCapture {
     return video_capture;
 }
 
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let path_to_config = match args.len() {
@@ -510,5 +547,5 @@ fn main() {
             "./data/conf.toml"
         }
     };
-    run(path_to_config).unwrap()
+    run(path_to_config).unwrap();
 }

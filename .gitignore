@@ -12,3 +12,5 @@
 /data/work
 /data/work/*.toml
 /data/work/*.mp4
+/data/yolov4-tiny-vehicles-rect.cfg
+/data/yolov4-tiny-vehicles-rect_best.weights

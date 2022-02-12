@@ -38,6 +38,9 @@ pub struct DetectionSettings {
     pub network_type: String,
     pub conf_threshold: f32,
     pub nms_threshold: f32,
+    pub net_width: i32,
+    pub net_height: i32,
+    pub net_classes: Vec<String>,
 }
 
 #[derive(Deserialize, Debug)]
