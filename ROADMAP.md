@@ -23,7 +23,7 @@
     * ~~Read frames in one thread and do neural network's job in another one~~
     * Proper logging?
     * Error handling __W.I.P.__
-    * MJPEG streamer (via [actix-web](https://github.com/actix/actix-web#actix-web) I guess?) __W.I.P.__
+    * MJPEG streamer (via [actix-web](https://github.com/actix/actix-web#actix-web) I guess?) __W.I.P.__ [it will be implemented via mspc, but I'm not sure if I do threads stuff correctly]
     * gRPC for clients (do we need this?) [I guess it should work as redis publisher, so only client will be implemented?]
     * REST JSON for clients __W.I.P. Still ugly. Need to figure out best way to pass Arc<...> or references to API part of application__ 
     * REST Websockets for clients (do we need this?)
