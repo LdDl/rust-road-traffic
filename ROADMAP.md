@@ -20,7 +20,8 @@
         * ~~Haversine function~~
         * ~~Spatial converter usage~~
         * ~~Apply math function to objects~~
-    * Read frames in one thread and do neural network's job in another one __W.I.P.__
+    * ~~Read frames in one thread and do neural network's job in another one~~
+    * Proper logging?
     * Error handling __W.I.P.__
     * MJPEG streamer (via [actix-web](https://github.com/actix/actix-web#actix-web) I guess?) __W.I.P.__
     * gRPC for clients (do we need this?)
