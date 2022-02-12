@@ -1,12 +1,10 @@
-use std::sync::{Arc, RwLock};
-use actix_web::{web, http, App, HttpServer};
+use actix_web::{web, http, App, HttpServer, HttpResponse, Responder};
 use actix_cors::Cors;
 
 #[actix_web::main]
 pub async fn start_mjpeg_streaming(server_host: String, server_port: i32) -> std::io::Result<()> {
     let bind_address = format!("{}:{}", server_host, server_port);
     println!("MJPEG Streamer is starting on host:port {}:{}", server_host, server_port);
-    let data = web::Data::new(data_storage);
     HttpServer::new(move || {
         let cors = Cors::default()
             .allow_any_origin()
@@ -32,5 +30,5 @@ async fn mjpeg_page() -> impl Responder {
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg
-        .route("/live", web::get().to(mjpeg_page))
+        .route("/live", web::get().to(mjpeg_page));
 }
