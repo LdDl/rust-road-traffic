@@ -2,9 +2,6 @@ use std::sync::{Arc, RwLock};
 use actix_web::{web, http, App, HttpServer};
 use actix_cors::Cors;
 
-use crate::lib::rest_api::services;
-use crate::lib::data_storage::DataStorage;
-
 #[actix_web::main]
 pub async fn start_mjpeg_streaming(server_host: String, server_port: i32) -> std::io::Result<()> {
     let bind_address = format!("{}:{}", server_host, server_port);
