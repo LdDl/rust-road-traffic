@@ -47,5 +47,5 @@
     * Consider training YOLO v4 tiny for vehicle classes only (we do need false positive detection for peoples/boats/chairs and etc.) __W.I.P__ [Currently I want to provide link for custom trained network: only vehicles + network size is 416x256 rather than 416x416 due the problem when resizing image provided too much squeezing]
     * Organize structure to reduce connectiviy of components of applications __W.I.P.__
     * ~~Consider YOLOX (nano/tiny)~~ [Well, I checked it and it not that good as I was thought]
-    * More neural network parameters in TOML
-    * Figure it out, how to boost perfomance for YOLOv4-tiny (or mobilenet-ssd?). Best idea I have so far is: pick tensort-rt and onnx and do magick trick. But there are no good tensor-rt libs for Rust I guess...
+    * More neural network parameters in TOML __W.I.P.__
+    * ~~Figure it out, how to boost perfomance for YOLOv4-tiny (or mobilenet-ssd?). Best idea I have so far is: pick tensort-rt and onnx and do magick trick.~~ [But there are no good and mature tensor-rt libs for Rust I guess...]
