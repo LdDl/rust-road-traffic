@@ -21,6 +21,8 @@ pub struct AppSettings {
 pub struct InputSettings {
     pub video_src: String,
     pub typ: String,
+// @todo add scale factor for further  RoadLanesSettings
+// @todo ^^^ this is need to be done due the reason that we can resize video on gstreamer before feeding it to application
 }
 
 #[derive(Deserialize, Debug)]
