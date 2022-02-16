@@ -55,6 +55,8 @@ use publisher::{
 };
 
 use lib::rest_api;
+use lib::mjpeg_streaming;
+
 use std::env;
 use std::time::Duration as STDDuration;
 use std::process;
@@ -163,6 +165,22 @@ fn run(config_file: &str) -> opencv::Result<()> {
         });
     }
     
+    match app_settings.mjpeg_streaming {
+        Some(v) => {
+            if v.enable {
+                println!("Enabling MJPEG streaming on {}:{}", v.host, v.port);
+                thread::spawn(move || {
+                    match mjpeg_streaming::start_mjpeg_streaming(v.host, v.port) {
+                        Ok(_) => {},
+                        Err(err) => {
+                            panic!("Can't start MJPEG streaming due the error: {:?}", err)
+                        }
+                    }
+                });
+            }
+        },
+        None => { }
+    }
     let convex_polygons_cv = convex_polygons_arc.clone();
     let convex_polygons_cv_read = convex_polygons_cv.read().unwrap();
     let convex_polygons_cloned = convex_polygons_cv_read.clone_polygons_arc();

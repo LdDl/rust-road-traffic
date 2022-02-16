@@ -15,7 +15,7 @@ pub struct AppSettings {
     pub worker: WorkerSettings,
     pub rest_api: RestAPISettings,
     pub redis_publisher: RedisPublisherSettings,
-    pub mjpeg_streaming: MJPEGStreamingSettings,
+    pub mjpeg_streaming: Option<MJPEGStreamingSettings>,
 }
 
 #[derive(Deserialize, Debug)]
