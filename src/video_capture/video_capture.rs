@@ -1,5 +1,4 @@
 use opencv::{
-    prelude::*,
     videoio::VideoCapture,
     videoio::CAP_ANY,
 };
