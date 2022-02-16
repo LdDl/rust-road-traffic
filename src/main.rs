@@ -168,7 +168,6 @@ fn run(config_file: &str) -> opencv::Result<()> {
     match app_settings.mjpeg_streaming {
         Some(v) => {
             if v.enable {
-                println!("Enabling MJPEG streaming on {}:{}", v.host, v.port);
                 thread::spawn(move || {
                     match mjpeg_streaming::start_mjpeg_streaming(v.host, v.port) {
                         Ok(_) => {},

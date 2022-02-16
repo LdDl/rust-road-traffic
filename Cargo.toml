@@ -22,3 +22,6 @@ actix-web = "3"
 actix-cors = "0.5.4"
 ctrlc = { version = "3.0", features = ["termination"] }
 redis = "*"
+image = "0.24"
+tokio = { version = "1.16.1", features = ["full"] }
+futures = "0.3.1"

@@ -1,10 +1,20 @@
 use actix_web::{web, http, App, HttpServer, HttpResponse, Responder};
 use actix_cors::Cors;
 
+use crate::lib::mjpeg_streaming::{
+    broadcaster::Broadcaster
+};
+
+use std::sync::Mutex;
+
 #[actix_web::main]
 pub async fn start_mjpeg_streaming(server_host: String, server_port: i32) -> std::io::Result<()> {
     let bind_address = format!("{}:{}", server_host, server_port);
     println!("MJPEG Streamer is starting on host:port {}:{}", server_host, server_port);
+
+    let broadcaster = web::Data::new(Mutex::new(Broadcaster::default()));
+    // @todo implement broadcaster communication with videocapture in main.rs
+
     HttpServer::new(move || {
         let cors = Cors::default()
             .allow_any_origin()
