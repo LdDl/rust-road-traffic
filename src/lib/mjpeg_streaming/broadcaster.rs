@@ -1,9 +1,14 @@
 // Inspired by https://github.com/dskkato/mjpeg-rs#live-streaming-server-with-rustactix-web
 
+use std::thread;
+use std::sync::Mutex;
 use std::pin::Pin;
 use std::task::{
     Context,
     Poll
+};
+use std::sync::mpsc::{
+    Receiver as STDReceiver
 };
 
 use actix_web::{
@@ -53,6 +58,14 @@ impl Broadcaster {
             }
         }
         self.clients = ok_clients;
+    }
+    pub fn spawn_reciever(_self: web::Data<Mutex<Self>>, rx_frames_data: STDReceiver<std::vec::Vec<u8>>, width: u32, height: u32) {
+        thread::spawn(move || {
+            for received in rx_frames_data {
+                let msg = Broadcaster::make_message_block(&received, width, height);
+                _self.lock().unwrap().send_image(&msg);
+            }
+        });
     }
 }
 

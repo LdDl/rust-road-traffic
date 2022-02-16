@@ -291,7 +291,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
             enable_mjpeg = v.enable;
             if v.enable {
                 thread::spawn(move || {
-                    match mjpeg_streaming::start_mjpeg_streaming(v.host, v.port, rx_mjpeg) {
+                    match mjpeg_streaming::start_mjpeg_streaming(v.host, v.port, rx_mjpeg, frame_cols as u32, frame_rows as u32) {
                         Ok(_) => {},
                         Err(err) => {
                             panic!("Can't start MJPEG streaming due the error: {:?}", err)
