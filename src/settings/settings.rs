@@ -21,8 +21,8 @@ pub struct AppSettings {
 pub struct InputSettings {
     pub video_src: String,
     pub typ: String,
-// @todo add scale factor for further  RoadLanesSettings
-// @todo ^^^ this is need to be done due the reason that we can resize video on gstreamer before feeding it to application
+    pub scale_x: Option<f32>,
+    pub scale_y: Option<f32>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -150,12 +150,24 @@ impl RoadLanesSettings {
 impl AppSettings {
     pub fn new_settings(filename: &str) -> Self {
         let toml_contents = fs::read_to_string(filename).expect("Something went wrong reading the file");
-        let app_settings = match toml::from_str::<AppSettings>(&toml_contents) {
+        let mut app_settings = match toml::from_str::<AppSettings>(&toml_contents) {
             Ok(result) => result,
             Err(err) => {
                 panic!("Can't parse TOML configuration file due the error: {:?}", err);
             }
         };
+        match app_settings.input.scale_x {
+            None => { 
+                app_settings.input.scale_x = Some(1.0);
+            }, 
+            _ => {  }
+        }
+        match app_settings.input.scale_y {
+            None => { 
+                app_settings.input.scale_y = Some(1.0);
+            }, 
+            _ => {  }
+        }
         return app_settings;
     }
 }

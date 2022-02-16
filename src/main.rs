@@ -89,8 +89,17 @@ fn run(config_file: &str) -> opencv::Result<()> {
     let convex_polygons_arc = Arc::new(RwLock::new(convex_polygons));
 
     let convex_polygons_populate = convex_polygons_arc.clone();
+    let scale_x = match app_settings.input.scale_x {
+        Some(x) => { x },
+        None => { 1.0 }
+    };
+    let scale_y = match app_settings.input.scale_y {
+        Some(y) => { y },
+        None => { 1.0 }
+    };
     for road_lane in app_settings.road_lanes.iter() {
         let mut polygon = road_lane.convert_to_convex_polygon();
+        polygon.scale_geom(scale_x, scale_y);    
         polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
         let guarded = convex_polygons_populate.write().unwrap();
         guarded.insert_polygon(polygon);

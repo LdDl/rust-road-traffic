@@ -222,6 +222,12 @@ impl ConvexPolygon {
         }
 
     }
+    pub fn scale_geom(&mut self, scale_factor_x: f32, scale_factor_y: f32) {
+        for pair in self.coordinates.iter_mut() {
+            pair.x = (pair.x as f32 * scale_factor_x).floor() as i32;
+            pair.y = (pair.y as f32 * scale_factor_y).floor() as i32;
+        }
+    }
     pub fn draw_geom(&self, img: &mut Mat) {
         // @todo: proper error handling
         for i in 1..self.coordinates.len() {
