@@ -299,6 +299,12 @@ fn run(config_file: &str) -> opencv::Result<()> {
         }
     });
     
+
+    let verbose_dbg = match app_settings.debug {
+        Some(x) => { x.enable },
+        None => { false }
+    };
+
     for received in rx {
         let mut frame = received.frame.clone();
 
@@ -419,13 +425,15 @@ fn run(config_file: &str) -> opencv::Result<()> {
             }
         }
 
-        print!("\rСapturing process millis: {} | Detection process millis: {} | Average FPS of detection process: {}", received.capture_millis, elapsed_detection, 1000.0 / elapsed_detection as f32);
-        match std::io::stdout().flush() {
-            Ok(_) => {},
-            Err(err) => {
-                panic!("There is a problem with stdout().flush(): {}", err);
-            }
-        };
+        if verbose_dbg {
+            print!("\rСapturing process millis: {} | Detection process millis: {} | Average FPS of detection process: {}", received.capture_millis, elapsed_detection, 1000.0 / elapsed_detection as f32);
+            match std::io::stdout().flush() {
+                Ok(_) => {},
+                Err(err) => {
+                    panic!("There is a problem with stdout().flush(): {}", err);
+                }
+            };
+        }  
     }
     Ok(())
 }

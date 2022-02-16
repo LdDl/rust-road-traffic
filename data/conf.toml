@@ -11,6 +11,9 @@
     scale_x = 1.0
     scale_y = 1.0
 
+[debug]
+    enable = true
+    
 [output]
     enable = true
     width = 500

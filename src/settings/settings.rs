@@ -6,6 +6,7 @@ use toml;
 #[derive(Deserialize, Debug)]
 pub struct AppSettings {
     pub input: InputSettings,
+    pub debug: Option<DebugSettings>,
     pub output: OutputSettings,
     pub detection: DetectionSettings,
     pub tracking: TrackingSettings,
@@ -23,6 +24,11 @@ pub struct InputSettings {
     pub typ: String,
     pub scale_x: Option<f32>,
     pub scale_y: Option<f32>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DebugSettings {
+    pub enable: bool
 }
 
 #[derive(Deserialize, Debug)]
@@ -156,6 +162,14 @@ impl AppSettings {
                 panic!("Can't parse TOML configuration file due the error: {:?}", err);
             }
         };
+        match app_settings.debug {
+            None => {
+                app_settings.debug = Some(DebugSettings{
+                    enable: false,
+                });
+            },
+            _ => {  }
+        }
         match app_settings.input.scale_x {
             None => { 
                 app_settings.input.scale_x = Some(1.0);
