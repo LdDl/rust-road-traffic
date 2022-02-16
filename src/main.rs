@@ -83,6 +83,10 @@ fn run(config_file: &str) -> opencv::Result<()> {
     let cfg_src = &app_settings.detection.network_cfg;
     let network_type = app_settings.detection.network_type.to_lowercase();
     let window = &app_settings.output.window_name;
+    let verbose_dbg = match app_settings.debug {
+        Some(x) => { x.enable },
+        None => { false }
+    };
 
     const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
 
@@ -109,7 +113,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
     let worker_reset_millis = app_settings.worker.reset_data_milliseconds;
     let convex_polygons_analytics = convex_polygons_arc.clone();
     thread::spawn(move || {
-        DataStorage::start_data_worker_thread(convex_polygons_analytics, worker_reset_millis);
+        DataStorage::start_data_worker_thread(convex_polygons_analytics, worker_reset_millis, verbose_dbg);
     });
 
     if app_settings.redis_publisher.enable {
@@ -298,12 +302,6 @@ fn run(config_file: &str) -> opencv::Result<()> {
             }).unwrap();
         }
     });
-    
-
-    let verbose_dbg = match app_settings.debug {
-        Some(x) => { x.enable },
-        None => { false }
-    };
 
     for received in rx {
         let mut frame = received.frame.clone();

@@ -62,9 +62,10 @@ impl DataStorage {
         write_mutex.insert(polygon.get_id(), Mutex::new(polygon));
         drop(write_mutex);
     }
-    pub fn start_data_worker_thread(st: Arc<RwLock<DataStorage>>, millis: u64) {
-        println!("start with millis {}", millis);
-
+    pub fn start_data_worker_thread(st: Arc<RwLock<DataStorage>>, millis: u64, verbose: bool) {
+        if verbose {
+            println!("Polygons data would be refreshed every {} ms", millis);
+        }
         let millis_asi64 = millis as i64;
         let mut write_mutex = st.write().expect("RwLock poisoned");
         write_mutex.period_start = Utc::now();
@@ -81,7 +82,9 @@ impl DataStorage {
             let mut write_mutex = st.write().expect("RwLock poisoned");
             write_mutex.period_start = previous_tm;
             write_mutex.period_end = Some(write_mutex.period_start + Duration::milliseconds(millis_asi64));
-            println!("\nPeriod start: {} | Period end: {}", write_mutex.period_start, write_mutex.period_end.unwrap());
+            if verbose {
+                println!("\nPeriod start: {} | Period end: {}", write_mutex.period_start, write_mutex.period_end.unwrap());
+            }
             previous_tm = write_mutex.period_end.unwrap();
             let write_mutex_polygons = cloned.write().expect("RwLock poisoned");
             for (_, v) in write_mutex_polygons.iter() {
@@ -93,14 +96,18 @@ impl DataStorage {
                 element.estimated_sum_intensity = element.sum_intensity;
                 element.avg_speed = -1.0;
                 element.sum_intensity = 0;
-                println!("\tPolygon: {} | Intensity: {} | Speed: {}", element.get_id(), element.estimated_sum_intensity, element.estimated_avg_speed);
+                if verbose {
+                    println!("\tPolygon: {} | Intensity: {} | Speed: {}", element.get_id(), element.estimated_sum_intensity, element.estimated_avg_speed);
+                }
                 // Certain vehicle type
                 for (vehicle_type, statistics) in element.statistics.iter_mut() {
                     statistics.estimated_avg_speed = statistics.avg_speed;
                     statistics.estimated_sum_intensity = statistics.sum_intensity;
                     statistics.avg_speed = -1.0;
                     statistics.sum_intensity = 0;
-                    println!("\t\tVehicle type: {} | Intensity: {} | Speed: {}", vehicle_type, statistics.estimated_sum_intensity, statistics.estimated_avg_speed);
+                    if verbose {
+                        println!("\t\tVehicle type: {} | Intensity: {} | Speed: {}", vehicle_type, statistics.estimated_sum_intensity, statistics.estimated_avg_speed);
+                    }
                 }
                 drop(element);
             }

@@ -42,7 +42,7 @@ impl RedisConnection {
         self.channel_name = _channel_name.clone();
     }
     pub fn publish(&self, msg: &dyn RedisMessage) -> Result<(), Box<dyn Error>> {
-        println!("trying to send data");
+        println!("Trying to send data...");
         let mut redis_conn = match self.client.get_connection() {
             Ok(_conn) => {
                 _conn
@@ -53,6 +53,7 @@ impl RedisConnection {
         };
         let msg_string = msg.prepare_string()?;
         redis_conn.publish::<String, String, String>(self.channel_name.to_owned(), msg_string)?;
+        println!("\t...Success");
         Ok(())
     }
     pub fn start_worker(&self, data: Arc<RwLock<DataStorage>>, millis: u64) {
