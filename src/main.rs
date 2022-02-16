@@ -165,21 +165,6 @@ fn run(config_file: &str) -> opencv::Result<()> {
         });
     }
     
-    match app_settings.mjpeg_streaming {
-        Some(v) => {
-            if v.enable {
-                thread::spawn(move || {
-                    match mjpeg_streaming::start_mjpeg_streaming(v.host, v.port) {
-                        Ok(_) => {},
-                        Err(err) => {
-                            panic!("Can't start MJPEG streaming due the error: {:?}", err)
-                        }
-                    }
-                });
-            }
-        },
-        None => { }
-    }
     let convex_polygons_cv = convex_polygons_arc.clone();
     let convex_polygons_cv_read = convex_polygons_cv.read().unwrap();
     let convex_polygons_cloned = convex_polygons_cv_read.clone_polygons_arc();
@@ -289,10 +274,26 @@ fn run(config_file: &str) -> opencv::Result<()> {
     };
     let frame_cols = frame.cols() as f32;
     let frame_rows = frame.rows() as f32;
-
     let mut last_ms: f64 = 0.0;
 	let mut last_time = Utc::now();
 
+    /* Enable MJPEG streaming server */
+    match app_settings.mjpeg_streaming {
+        Some(v) => {
+            if v.enable {
+                thread::spawn(move || {
+                    match mjpeg_streaming::start_mjpeg_streaming(v.host, v.port) {
+                        Ok(_) => {},
+                        Err(err) => {
+                            panic!("Can't start MJPEG streaming due the error: {:?}", err)
+                        }
+                    }
+                });
+            }
+        },
+        None => { }
+    }
+    
     println!("Waiting for Ctrl-C...");
     ctrlc::set_handler(move || {
         println!("\nCtrl+C has been pressed! Exit in 2 seconds");
