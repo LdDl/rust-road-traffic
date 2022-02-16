@@ -12,7 +12,6 @@ use opencv::{
     highgui::imshow,
     highgui::wait_key,
     videoio::VideoCapture,
-    videoio::CAP_ANY,
     videoio::get_backends,
     imgproc::resize,
     dnn::DNN_BACKEND_CUDA,
@@ -24,35 +23,46 @@ use opencv::{
     dnn::nms_boxes
 };
 
-use std::time::Instant;
-use std::io::Write;
-use std::thread;
 use chrono::{
     DateTime,
     Utc,
     Duration
 };
+
 mod lib;
 use lib::tracking::{
     KalmanBlobie,
     KalmanBlobiesTracker,
 };
-use lib::data_storage::{DataStorage};
+use lib::data_storage::{
+    DataStorage
+};
+
 mod settings;
 use settings::{
     AppSettings,
+};
+
+mod video_capture;
+use video_capture::{
+    get_video_capture
+};
+
+mod publisher;
+use publisher::{
+    RedisConnection
 };
 
 use lib::rest_api;
 use std::env;
 use std::time::Duration as STDDuration;
 use std::process;
-use ctrlc;
-
+use std::time::Instant;
+use std::io::Write;
+use std::thread;
 use std::sync::{Arc, RwLock, mpsc};
 
-mod publisher;
-use publisher::{ RedisConnection };
+use ctrlc;
 
 pub struct ThreadedFrame {
     frame: Mat,
@@ -181,7 +191,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
     println!("CUDA is {}", if cuda_available { "available" } else { "not available" });
     
     // Prepare video
-    let mut video_capture = get_capture(video_src, app_settings.input.typ);
+    let mut video_capture = get_video_capture(video_src, app_settings.input.typ);
     let opened = VideoCapture::is_opened(&video_capture)?;
     if !opened {
         panic!("Unable to open video '{}'", video_src);
@@ -526,32 +536,6 @@ fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, nms_
     }
     return tmp_blobs;
 }
-
-fn get_capture(video_src: &str, typ: String) -> VideoCapture {
-    if typ == "rtsp" {
-        let video_capture = match VideoCapture::from_file(video_src, CAP_ANY) {
-            Ok(result) => {result},
-            Err(err) => {
-                panic!("Can't init '{}' due the error: {:?}", video_src, err);
-            }
-        };
-        return video_capture;
-    }
-    let device_id = match video_src.parse::<i32>() {
-        Ok(result) => {result},
-        Err(err) => {
-            panic!("Can't parse '{}' as device_id (i32) due the error: {:?}", video_src, err);
-        }
-    };
-    let video_capture = match VideoCapture::new(device_id, CAP_ANY) {
-        Ok(result) => {result},
-        Err(err) => {
-            panic!("Can't init '{}' due the error: {:?}", video_src, err);
-        }
-    };
-    return video_capture;
-}
-
 
 fn main() {
     let args: Vec<String> = env::args().collect();

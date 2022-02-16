@@ -2,11 +2,14 @@
 # Rust toy utility for monitoring road traffic
 
 ## Table of Contents
-- [About](#about)
-- [Installation and usage](#installation-and-usage)
-- [Screenshots](#screenshots)
-- [Roadmap](#roadmap)
-- [Support](#support)
+- [W.I.P](#wip)
+- [Rust toy utility for monitoring road traffic](#rust-toy-utility-for-monitoring-road-traffic)
+  - [Table of Contents](#table-of-contents)
+  - [About](#about)
+  - [Installation and usage](#installation-and-usage)
+  - [Screenshots](#screenshots)
+- [ROADMAP](#roadmap)
+  - [Support](#support)
 
 ## About
 
@@ -32,79 +35,8 @@ Vehicle detection/tracking and speed estimation via next instruments:
     Well, actually I provide yolov4-tiny configuration and weights file from [official repository](https://github.com/AlexeyAB/darknet) (authors of YOLOv4), but you are free to use yours.
     I provide video file as sample also.
     
-    If you want to change parameters of this utility then navigate to [configuration file](data/conf.toml):
-    ```toml
-    [input]
-        video_src = "./data/sample_960_540.mp4"
-        # Use string below for usage with CSI camera (where sensor-id is camera indentifier)
-        # video_src = "nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM), width=(int)1280, height=(int)720, format=(string)NV12, framerate=(fraction)30/1 ! nvvidconv flip-method=0 ! video/x-raw, width=(int)1280, height=(int)720, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink"
-        # Two options: rtsp / any number corresponding to local camera
-        typ = "rtsp"
-        # typ = "local"
-    [output]
-        enable = true
-        width = 500
-        height = 500
-        window_name = "Toy GUI"
-
-    [detection]
-        # *.weight/*.cfg + "Darknet" for YOLO
-        network_weights = "./data/yolov4-tiny.weights"
-        network_cfg = "./data/yolov4-tiny.cfg"
-        network_type = "Darknet"
-        # *.prototxt/*.caffemodel + "Caffe-MobileNet-SSD" for Caffe
-        # network_weights = "./data/MobileNetSSD_deploy.prototxt"
-        # network_cfg = "./data/MobileNetSSD_deploy.caffemodel"
-        # network_type = "Caffe-MobileNet-SSD"
-        conf_threshold = 0.25
-        nms_threshold = 0.3
-
-    [tracking]
-        max_points_in_track = 100
-
-    [equipment_info]
-        # Just field for future identification of application. Could be any string. I've used https://www.uuidgenerator.net/version4 for ID generation
-        id = "1e23985f-1fa3-45d0-a365-2d8525a23ddd"
-
-    [[road_lanes]]
-        lane_number = 0
-        lane_direction = 0
-        # left-bot, right-bot, right-top, left-top
-        geometry = [[51, 266], [281, 264], [334, 80], [179, 68]]
-        geometry_wgs84 = [[37.61891987174749, 54.20564462974709], [37.618926241993904, 54.20564482584264], [37.61894233524799, 54.205666592443166], [37.61893227696419, 54.205668161206724]]
-        color_rgb = [255, 0, 0]
-    [[road_lanes]]
-        lane_number = 1
-        lane_direction = 0
-        # left-bot, right-bot, right-top, left-top
-        geometry = [[315, 267], [572, 265], [547, 66], [359, 69]]
-        geometry_wgs84 = [[37.618908137083054, 54.20564619851147], [37.61891517788172, 54.20564502193819], [37.618927247822285, 54.205668749493036], [37.61892020702362, 54.2056701221611]]
-        color_rgb = [0, 255, 0]
-    [[road_lanes]]
-        lane_number = 2
-        lane_direction = 0
-        # left-bot, right-bot, right-top, left-top
-        geometry = [[604, 267], [885, 267], [746, 58], [575, 68]]
-        geometry_wgs84 = [[37.61890344321728, 54.205646982893654], [37.61891350150108, 54.20566796511128], [37.61890981346368, 54.20566972997024], [37.61890009045601, 54.20564835556243]]
-        color_rgb = [0, 0, 255]
-
-    [worker]
-        reset_data_milliseconds = 30000
-
-    [rest_api]
-        enable = true
-        host = "0.0.0.0"
-        back_end_port = 42001
-        api_scope = "/api"
-
-    [redis_publisher]
-        enable = true
-        host = "localhost"
-        port = 6379
-        password = ""
-        db_index = 0
-        channel_name = "DETECTORS_STATISTICS"
-    ```
+    If you want to change parameters of this utility then navigate to [configuration file](data/conf.toml)
+    
 5. Run
     ```shell
     cargo run path-to-toml-file
