@@ -23,7 +23,7 @@
     * ~~Read frames in one thread and do neural network's job in another one~~
     * Proper logging?
     * Error handling __W.I.P.__
-    * MJPEG streamer (via [actix-web](https://github.com/actix/actix-web#actix-web) I guess?) __W.I.P.__ [it will be implemented via mspc, but I'm not sure if I do threads stuff correctly]
+    * ~~MJPEG streamer (via [actix-web](https://github.com/actix/actix-web#actix-web) I guess?)~~ [it's implemented via mspc and tokio, but I'm not sure if I do threads stuff correctly. MJPEG streaming are laggy currently, need to investigate]
     * gRPC for clients (do we need this?) [I guess it should work as redis publisher, so only client will be implemented?]
     * REST JSON for clients __W.I.P. Still ugly. Need to figure out best way to pass Arc<...> or references to API part of application__ 
     * REST Websockets for clients (do we need this?)
@@ -50,3 +50,6 @@
     * More neural network parameters in TOML __W.I.P.__
     * ~~Figure it out, how to boost perfomance for YOLOv4-tiny (or mobilenet-ssd?). Best idea I have so far is: pick tensort-rt and onnx and do magick trick.~~ [But there are no good and mature tensor-rt libs for Rust I guess...]
     * ~~Scaling by x/y~~
+
+* Some bugs
+    * RAM consumption grows up too much.

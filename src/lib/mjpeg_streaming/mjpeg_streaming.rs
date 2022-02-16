@@ -28,6 +28,7 @@ pub async fn start_mjpeg_streaming(server_host: String, server_port: i32, rx_fra
             .max_age(5600);
         App::new()
             .wrap(cors)
+            .app_data(broadcaster.clone())
             .configure(init_routes)
     })
     .bind(&bind_address)
@@ -41,7 +42,23 @@ async fn mjpeg_page() -> impl Responder {
     return HttpResponse::Ok().header("Content-Type", "text/html").body(content);
 }
 
+async fn add_new_client(broadcaster: web::Data<Mutex<Broadcaster>>) -> impl Responder {
+    let rx = broadcaster.lock().unwrap().add_client();
+    HttpResponse::Ok()
+        .header("Cache-Control", "no-store, must-revalidate")
+        .header("Pragma", "no-cache")
+        .header("Expires", "0")
+        .header("Connection", "close")
+        .header(
+            "Content-Type",
+            "multipart/x-mixed-replace;boundary=boundarydonotcross",
+        )
+        // .no_chunking()
+        .streaming(rx)
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg
-        .route("/live", web::get().to(mjpeg_page));
+        .route("/live", web::get().to(mjpeg_page))
+        .route("/live_streaming", web::get().to(add_new_client));
 }

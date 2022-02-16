@@ -36,7 +36,7 @@ impl Broadcaster {
         }
     }
     pub fn add_client(&mut self) -> Client {
-        let (tx, rx) = channel(25);
+        let (tx, rx) = channel(1);
         self.clients.push(tx);
         return Client(rx);
     }
