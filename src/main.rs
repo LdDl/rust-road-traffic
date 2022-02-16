@@ -280,9 +280,8 @@ fn run(config_file: &str) -> opencv::Result<()> {
         process::exit(1);
     }).expect("\nError setting Ctrl-C handler");
 
-    
 
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = mpsc::sync_channel(25);
     let (tx_mjpeg, rx_mjpeg) = mpsc::channel();
     /* Enable MJPEG streaming server if needed */
     let mut enable_mjpeg = false;
@@ -302,6 +301,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
         },
         None => { }
     }
+    
     thread::spawn(move || {
         loop {
             let capture_now = Instant::now();
@@ -346,6 +346,10 @@ fn run(config_file: &str) -> opencv::Result<()> {
             }).unwrap();
         }
     });
+
+    // loop {
+        
+    // }
 
     for received in rx {
         let mut frame = received.frame.clone();
