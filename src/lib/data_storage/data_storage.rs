@@ -53,7 +53,7 @@ impl DataStorage {
             id: _id,
         };
     }
-    pub fn clone_arc(&self) -> Arc<RwLock<HashMap<String, Mutex<ConvexPolygon>>>> {
+    pub fn clone_polygons_arc(&self) -> Arc<RwLock<HashMap<String, Mutex<ConvexPolygon>>>> {
         return Arc::clone(&self.polygons);
     }
     pub fn insert_polygon(&self, polygon: ConvexPolygon) {

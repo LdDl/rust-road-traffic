@@ -6,8 +6,6 @@ use opencv::{
     video::KalmanFilter as KF,
 };
 
-// use crate::tracking::KalmanFilterLinear;
-
 pub struct KalmanWrapper {
     pub model_type: KalmanModelType,
     opencv_kf: KF,

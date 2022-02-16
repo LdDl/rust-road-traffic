@@ -58,6 +58,7 @@ pub struct ThreadedFrame {
     frame: Mat,
     last_time: DateTime<Utc>,
     sec_diff: f64,
+    capture_millis: f32,
 }
 
 fn run(config_file: &str) -> opencv::Result<()> {
@@ -150,7 +151,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
     
     let convex_polygons_cv = convex_polygons_arc.clone();
     let convex_polygons_cv_read = convex_polygons_cv.read().unwrap();
-    let convex_polygons_cloned = convex_polygons_cv_read.clone_arc();
+    let convex_polygons_cloned = convex_polygons_cv_read.clone_polygons_arc();
     drop(convex_polygons_cv_read);
 
     // Prepare output window
@@ -271,6 +272,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         loop {
+            let capture_now = Instant::now();
             let mut read_frame = Mat::default();
             match video_capture.read(&mut read_frame) {
                 Ok(_) => {},
@@ -286,11 +288,13 @@ fn run(config_file: &str) -> opencv::Result<()> {
             let prev_time = last_time;
             last_time = prev_time + Duration::milliseconds(ms_diff as i64);
             last_ms = current_ms;
+            let elapsed_capture = capture_now.elapsed().as_millis() as f32;
             /* Send frame and capture info */
             tx.send(ThreadedFrame{
                 frame: read_frame,
                 sec_diff: sec_diff,
                 last_time: last_time,
+                capture_millis: elapsed_capture,
             }).unwrap();
         }
     });
@@ -298,10 +302,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
     for received in rx {
         let mut frame = received.frame.clone();
 
-        // let all_now = Instant::now();
-        // let capture_now = Instant::now();
-        // let elapsed_capture = capture_now.elapsed().as_millis() as f32;
-
+        let blob_prepare_now = Instant::now();
         let blobimg = blob_from_image(&frame, blob_scale, net_size, blob_mean, true, false, CV_32F);
         match neural_net.set_input(&blobimg.unwrap(), blob_name, 1.0, default_scalar){
             Ok(_) => {},
@@ -309,6 +310,8 @@ fn run(config_file: &str) -> opencv::Result<()> {
                 println!("Can't set input of neural network due the error {:?}", err);
             }
         };
+        let elapsed_blob_prepare = 1000.0 / blob_prepare_now.elapsed().as_millis() as f32;
+
         let detection_now = Instant::now();
         match neural_net.forward(&mut detections, &out_layers_names) {
             Ok(_) => {
@@ -390,7 +393,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
                 println!("Can't process input of neural network due the error {:?}", err);
             }
         }
-        let elapsed_detection = 1000.0 / detection_now.elapsed().as_millis() as f32;
+        let elapsed_detection = detection_now.elapsed().as_millis();
 
         if app_settings.output.enable {
             let convex_polygons_read = convex_polygons_cloned.read().expect("RwLock poisoned");
@@ -416,14 +419,13 @@ fn run(config_file: &str) -> opencv::Result<()> {
             }
         }
 
-        // let elapsed_all = 1000.0 / all_now.elapsed().as_millis() as f32;
-        // print!("\rСapturing process millis: {} | Average FPS of detection process: {} | Average FPS of whole process: {}", elapsed_capture, elapsed_detection, elapsed_all);
-        // match std::io::stdout().flush() {
-        //     Ok(_) => {},
-        //     Err(err) => {
-        //         panic!("There is a problem with stdout().flush(): {}", err);
-        //     }
-        // };
+        print!("\rСapturing process millis: {} | Detection process millis: {} | Average FPS of detection process: {}", received.capture_millis, elapsed_detection, 1000.0 / elapsed_detection as f32);
+        match std::io::stdout().flush() {
+            Ok(_) => {},
+            Err(err) => {
+                panic!("There is a problem with stdout().flush(): {}", err);
+            }
+        };
     }
     Ok(())
 }
