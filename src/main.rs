@@ -282,7 +282,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
 
 
     let (tx, rx) = mpsc::sync_channel(25);
-    let (tx_mjpeg, rx_mjpeg) = mpsc::channel();
+    let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(25);
     /* Enable MJPEG streaming server if needed */
     let mut enable_mjpeg = false;
     match app_settings.mjpeg_streaming {
