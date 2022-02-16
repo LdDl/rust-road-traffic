@@ -46,7 +46,8 @@ use settings::{
 
 mod video_capture;
 use video_capture::{
-    get_video_capture
+    get_video_capture,
+    ThreadedFrame
 };
 
 mod publisher;
@@ -69,13 +70,6 @@ use ctrlc;
 
 const VIDEOCAPTURE_POS_MSEC: i32 = 0;
 const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
-
-pub struct ThreadedFrame {
-    frame: Mat,
-    last_time: DateTime<Utc>,
-    sec_diff: f64,
-    capture_millis: f32,
-}
 
 fn run(config_file: &str) -> opencv::Result<()> {
 
@@ -277,12 +271,27 @@ fn run(config_file: &str) -> opencv::Result<()> {
     let mut last_ms: f64 = 0.0;
 	let mut last_time = Utc::now();
 
-    /* Enable MJPEG streaming server */
+   
+    
+    println!("Waiting for Ctrl-C...");
+    ctrlc::set_handler(move || {
+        println!("\nCtrl+C has been pressed! Exit in 2 seconds");
+        thread::sleep(STDDuration::from_secs(2));
+        process::exit(1);
+    }).expect("\nError setting Ctrl-C handler");
+
+    
+
+    let (tx, rx) = mpsc::channel();
+    let (tx_mjpeg, rx_mjpeg) = mpsc::channel();
+    /* Enable MJPEG streaming server if needed */
+    let mut enable_mjpeg = false;
     match app_settings.mjpeg_streaming {
         Some(v) => {
+            enable_mjpeg = v.enable;
             if v.enable {
                 thread::spawn(move || {
-                    match mjpeg_streaming::start_mjpeg_streaming(v.host, v.port) {
+                    match mjpeg_streaming::start_mjpeg_streaming(v.host, v.port, rx_mjpeg) {
                         Ok(_) => {},
                         Err(err) => {
                             panic!("Can't start MJPEG streaming due the error: {:?}", err)
@@ -293,15 +302,6 @@ fn run(config_file: &str) -> opencv::Result<()> {
         },
         None => { }
     }
-    
-    println!("Waiting for Ctrl-C...");
-    ctrlc::set_handler(move || {
-        println!("\nCtrl+C has been pressed! Exit in 2 seconds");
-        thread::sleep(STDDuration::from_secs(2));
-        process::exit(1);
-    }).expect("\nError setting Ctrl-C handler");
-
-    let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         loop {
             let capture_now = Instant::now();
@@ -321,7 +321,23 @@ fn run(config_file: &str) -> opencv::Result<()> {
             last_time = prev_time + Duration::milliseconds(ms_diff as i64);
             last_ms = current_ms;
             let elapsed_capture = capture_now.elapsed().as_millis() as f32;
+
             /* Send frame and capture info */
+            if enable_mjpeg {
+                let width = frame_cols as i32;
+                let height = frame_rows as i32;
+                // let read_frame_mjpeg_copy = read_frame.clone();
+                let mut mjpeg_frame = unsafe {
+                    Vec::from(std::slice::from_raw_parts(
+                        read_frame.data().unwrap() as *const u8,
+                        (width * height * 3) as usize,
+                    ))
+                };
+                for i in 0..(width * height) {
+                    mjpeg_frame.swap((i * 3) as usize, (i * 3 + 2) as usize);
+                }
+                tx_mjpeg.send(mjpeg_frame).unwrap();
+            }
             tx.send(ThreadedFrame{
                 frame: read_frame,
                 sec_diff: sec_diff,

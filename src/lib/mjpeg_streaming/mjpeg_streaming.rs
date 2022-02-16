@@ -6,11 +6,21 @@ use crate::lib::mjpeg_streaming::{
 };
 
 use std::sync::Mutex;
+use std::thread;
+use std::sync::mpsc::{
+    Receiver
+};
 
 #[actix_web::main]
-pub async fn start_mjpeg_streaming(server_host: String, server_port: i32) -> std::io::Result<()> {
+pub async fn start_mjpeg_streaming(server_host: String, server_port: i32, rx_frames_data: Receiver<std::vec::Vec<u8>>) -> std::io::Result<()> {
     let bind_address = format!("{}:{}", server_host, server_port);
     println!("MJPEG Streamer is starting on host:port {}:{}", server_host, server_port);
+
+    thread::spawn(move || {
+        for received in rx_frames_data {
+            // println!("rec frame");
+        }
+    });
 
     let broadcaster = web::Data::new(Mutex::new(Broadcaster::default()));
     // @todo implement broadcaster communication with videocapture in main.rs
