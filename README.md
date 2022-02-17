@@ -36,7 +36,7 @@ Vehicle detection/tracking and speed estimation via next instruments:
     I provide video file as sample also.
     
     If you want to change parameters of this utility then navigate to [configuration file](data/conf.toml)
-    
+
 5. Run
     ```shell
     cargo run path-to-toml-file
