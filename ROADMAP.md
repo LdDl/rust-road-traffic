@@ -7,7 +7,8 @@
     * ~~Put bounding boxes and classnames onto image after NMS~~
     * ~~Display an output~~
     * ~~Redis (pub to user defined channel + consider password usage)~~
-
+    * Implement SORT + Deep SORT [I guess we need [ndarray](https://github.com/rust-ndarray/ndarray), not [nalgebra](https://github.com/dimforge/nalgebra)] __W.I.P.__
+  
 * Additional functionality
     * ~~Usage of custom implementation (via [nalgebra](https://github.com/dimforge/nalgebra)) of Kalman filter~~
     * ~~Tracking via custom implementation of Kalman filter~~
@@ -50,6 +51,7 @@
     * More neural network parameters in TOML __W.I.P.__
     * ~~Figure it out, how to boost perfomance for YOLOv4-tiny (or mobilenet-ssd?). Best idea I have so far is: pick tensort-rt and onnx and do magick trick.~~ [But there are no good and mature tensor-rt libs for Rust I guess...]
     * ~~Scaling by x/y~~
+    
 
 * Some bugs
     * RAM consumption grows up too much.
