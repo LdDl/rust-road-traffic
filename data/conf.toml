@@ -21,10 +21,14 @@
     window_name = "Toy GUI"
 
 [detection]
-    # *.weight/*.cfg + "Darknet" for YOLO
-    network_weights = "./data/yolov4-tiny.weights"
-    network_cfg = "./data/yolov4-tiny.cfg"
+    # Vehicles-only YOLOv4-tiny:
+    network_weights = "./data/yolov4-tiny-vehicles-rect_best.weights"
+    network_cfg = "./data/yolov4-tiny-vehicles-rect.cfg"
     network_type = "Darknet"
+    # *.weight/*.cfg + "Darknet" for YOLO
+    # network_weights = "./data/yolov4-tiny.weights"
+    # network_cfg = "./data/yolov4-tiny.cfg"
+    # network_type = "Darknet"
     # *.prototxt/*.caffemodel + "Caffe-MobileNet-SSD" for Caffe
     # network_weights = "./data/MobileNetSSD_deploy.prototxt"
     # network_cfg = "./data/MobileNetSSD_deploy.caffemodel"
@@ -32,22 +36,25 @@
     conf_threshold = 0.1
     nms_threshold = 0.2
     net_width = 416
-    net_height = 416
+    net_height = 256
+    # net_width = 416 # (If default YOLOv4-tiny)
+    # net_height = 416 # (If default YOLOv4-tiny)
     # net_width = 300 # (If MobileNet-SSD)
     # net_height = 300 # (If MobileNet-SSD)
     
-    # coco classes
-    net_classes = ["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]
-    # coco classes for ssd
+    # Vehicles-only COCO classes
+    net_classes = ["car", "motorbike", "bus", "train", "truck"]
+    # Default COCO classes
+    # net_classes = ["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]
+    # Default COCO classes for ssd
     # net_classes = ["background", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
-    # custom coco classes
-    # net_classes = ["car", "motorbike", "bus", "train", "truck"]
-
+    
 [tracking]
     max_points_in_track = 100
 
 [equipment_info]
-    # Just field for future identification of application. Could be any string. I've used https://www.uuidgenerator.net/version4 for ID generation
+    # Just field for future identification of application. Could be any string.
+    # I've used https://www.uuidgenerator.net/version4 for ID generation
     id = "1e23985f-1fa3-45d0-a365-2d8525a23ddd"
 
 [[road_lanes]]

@@ -37,6 +37,16 @@ Vehicle detection/tracking and speed estimation via next instruments:
     
     If you want to change parameters of this utility then navigate to [configuration file](data/conf.toml)
 
+4. Download weights (optional)
+   In this section I'd like to provide YOLOv4-tiny trained on classic COCO dataset for 'vehicle'-based classes only, such as: car, motorbike, bus, train and truck (COCO dataset provides only them). There is also a little modification if configuration: I've changed size of an input. So it's not a classic 416x416, but 416x256: so 'vehicles' objects wouldn't be squeezed too much.
+   Navigate to [data](/data) folder and run script
+   ```shell
+   cd ./data
+   ./download_yolo_v4_only_vehicles.sh
+   ```
+  
+    __You can skip this step if you want to use default YOLOv4-tiny weights and configuration. Just make sure to prepare [configuration file](/data/conf.toml) correctly__
+
 5. Run
     ```shell
     cargo run path-to-toml-file
