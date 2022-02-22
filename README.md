@@ -44,7 +44,10 @@ Vehicle detection/tracking and speed estimation via next instruments:
    cd ./data
    ./download_yolo_v4_only_vehicles.sh
    ```
-  
+    If case downloading from Google drive not working (it could be since Google can change anything anytime):
+    Weights - [link](https://drive.google.com/file/d/1_NNRyXO1r-FjDmJ_q9bqo_2TpVsK0n13/view?usp=sharing)
+    Configuration - [link](https://drive.google.com/file/d/10L8mfn8oGLZJmqSxNtGg42bYD0QCkQAv/view?usp=sharing)
+
     __You can skip this step if you want to use default YOLOv4-tiny weights and configuration. Just make sure to prepare [configuration file](/data/conf.toml) correctly__
 
 5. Run
