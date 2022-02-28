@@ -22,3 +22,14 @@ My software setup is:
 3. Programming language - [Rust](https://www.rust-lang.org/)
 
     Follow official [instruction](https://www.rust-lang.org/tools/install)
+
+
+Tips:
+You can get error sometimes:
+```
+Error generated. /dvs/git/dirty/git-master_linux/multimedia/nvgstreamer/gst-nvarguscamera/gstnvarguscamerasrc.cpp, execute:543 Failed to create CaptureSession
+```
+You can make temporary fix by:
+```shell
+sudo service nvargus-daemon restart
+```

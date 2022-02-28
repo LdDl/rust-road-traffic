@@ -86,7 +86,12 @@ impl RedisConnection {
             drop(data_expected_polygons);
             drop(data_expected);
 
-            self.publish(&prepared_message);
+            match self.publish(&prepared_message) {
+                Err(_err) => {
+                    println!("Errors while sending data to Redis: {}",_err);
+                }
+                Ok(_) => {}
+            };
             thread::sleep(STDDuration::from_millis(millis));
         }
     }
