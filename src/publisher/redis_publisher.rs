@@ -52,7 +52,7 @@ impl RedisConnection {
             }
         };
         let msg_string = msg.prepare_string()?;
-        redis_conn.publish::<String, String, String>(self.channel_name.to_owned(), msg_string)?;
+        redis_conn.publish(self.channel_name.to_owned(), msg_string)?;
         println!("\t...Success");
         Ok(())
     }
