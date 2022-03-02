@@ -1,7 +1,7 @@
 use crate::lib::kalman::{
     KalmanFilterLinear,
     Matrix2x1f32,
-    Matrix4x1f32
+    Matrix6x1f32
 };
 use crate::lib::spatial::SpatialConverter;
 
@@ -15,7 +15,8 @@ use opencv::{
     imgproc::FONT_HERSHEY_SIMPLEX,
     imgproc::circle,
     imgproc::rectangle,
-    imgproc::put_text
+    imgproc::put_text,
+    imgproc::line
 };
 
 use uuid::Uuid;
@@ -29,6 +30,7 @@ use chrono::{
 pub struct KalmanBlobie {
     id: BlobID,
     class_name: String,
+    confidence: f32,
     center: Point,
     predicted_next_position: Point,
     current_rect: Rect,
@@ -53,11 +55,13 @@ impl KalmanBlobie {
         let center = Point::new(center_x as i32, center_y as i32);
         let diagonal = f32::sqrt((i32::pow(rect.width, 2) + i32::pow(rect.height, 2)) as f32);
         let mut custom_kf = KalmanFilterLinear::new();
-        custom_kf.set_time(1.0);
+        // custom_kf.set_time(1.0);
+        custom_kf.set_state_value(center_x, center_y);
         let current_time = Utc::now();
         let kb = KalmanBlobie {
             id : Uuid::new_v4(),
             class_name: "Undefined".to_string(),
+            confidence: 0.0,
             center: center,
             predicted_next_position: Point::default(),
             current_rect: *rect,
@@ -82,10 +86,12 @@ impl KalmanBlobie {
         let center = Point::new(center_x as i32, center_y as i32);
         let diagonal = f32::sqrt((i32::pow(rect.width, 2) + i32::pow(rect.height, 2)) as f32);
         let mut custom_kf = KalmanFilterLinear::new();
-        custom_kf.set_time(1.0);
+        // custom_kf.set_time(1.0);
+        custom_kf.set_state_value(center_x, center_y);
         let kb = KalmanBlobie {
             id : Uuid::new_v4(),
             class_name: "Undefined".to_string(),
+            confidence: 0.0,
             center: center,
             predicted_next_position: Point::default(),
             current_rect: *rect,
@@ -117,8 +123,14 @@ impl KalmanBlobie {
     pub fn set_class_name(&mut self, class_name: String) {
         self.class_name = class_name;
     }
+    pub fn set_confidence(&mut self, confidence: f32) {
+        self.confidence = confidence;
+    }
     pub fn get_class_name(&self) -> String {
         return self.class_name.clone();
+    }
+    pub fn get_confidence(&self) -> f32 {
+        return self.confidence;
     }
     pub fn get_exists(&self) -> bool {
         return self.exists;
@@ -195,6 +207,17 @@ impl KalmanBlobie {
         self.predicted_next_position.x = self.track[track_len - 1].x + delta_x;
         self.predicted_next_position.y = self.track[track_len - 1].y + delta_y;
     }
+    pub fn kf_predict(&mut self) {
+        let u = Matrix6x1f32::new(
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+        );
+        self.custom_kf.predict(u);
+    }
     pub fn update(&mut self, newb: &KalmanBlobie) {
         // @todo: handle possible error instead of unwrap() call
         let new_center = newb.get_center();
@@ -203,15 +226,17 @@ impl KalmanBlobie {
             new_center.y as f32
         );
         // tracker.set_time(dt);
-        let u = Matrix4x1f32::new(
+        let u = Matrix6x1f32::new(
             0.0,
             0.0,
             0.0,
             0.0,
+            0.0,
+            0.0
         );
         let predicted_custom = self.custom_kf.step(u, y).unwrap();
-        // let predicted = Point::new(predicted_custom[(0, 0)].round() as i32, predicted_custom[(1, 0)].round() as i32);
-        let predicted = Point::new(predicted_custom[(0, 0)] as i32, predicted_custom[(1, 0)] as i32);
+
+        let predicted = Point::new(predicted_custom[(0, 0)] as i32, predicted_custom[(3, 0)] as i32);
         self.center = predicted;
         let diff_x = predicted.x-newb.center.x;
         let diff_y = predicted.y-newb.center.y;
@@ -303,6 +328,14 @@ impl KalmanBlobie {
             }
         };
     }
+    pub fn draw_line_to_blob(&self, img: &mut Mat, nextb: &KalmanBlobie) {
+        match line(img, self.center, nextb.center, Scalar::from((0.0, 0.0, 0.0)), 2, LINE_8, 0) {
+            Ok(_) => {},
+            Err(err) => {
+                panic!("Can't draw circle at blob's center due the error: {:?}", err)
+            }
+        };
+    }
     pub fn draw_class_name(&self, img: &mut Mat) {
         let anchor = Point::new(self.current_rect.x + 2, self.current_rect.y + 3);
         match put_text(img, &self.class_name, anchor, FONT_HERSHEY_SIMPLEX, 1.5, Scalar::from((0.0, 255.0, 255.0)), 2, LINE_8, false) {
@@ -314,7 +347,7 @@ impl KalmanBlobie {
     }
     pub fn draw_id(&self, img: &mut Mat) {
         let anchor = Point::new(self.current_rect.x + 2, self.current_rect.y + 10);
-        match put_text(img, &self.id.to_string(), anchor, FONT_HERSHEY_SIMPLEX, 0.5, Scalar::from((0.0, 255.0, 255.0)), 2, LINE_8, false) {
+        match put_text(img, &self.id.to_string(), anchor, FONT_HERSHEY_SIMPLEX, 1.0, Scalar::from((0.0, 255.0, 255.0)), 4, LINE_8, false) {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't display classname of object due the error {:?}", err);
@@ -344,11 +377,11 @@ mod tests {
 			vec![0, 0],
 			vec![1, 1],
 			vec![3, 3],
-			vec![5, 5],
-			vec![7, 7],
-			vec![10, 10],
-			vec![13, 13],
-			vec![17, 17],
+			vec![6, 6],
+			vec![8, 8],
+			vec![11, 11],
+			vec![15, 15],
+			vec![20, 20],
         ];
         let correct_predictions = vec![
             vec![0, 0],
@@ -356,10 +389,10 @@ mod tests {
 			vec![0, 0],
 			vec![1, 1],
 			vec![4, 4],
-			vec![6, 6],
 			vec![8, 8],
-			vec![12, 12],
-			vec![15, 15],
+			vec![10, 10],
+			vec![13, 13],
+			vec![18, 18],
         ];
 
         assert_eq!(points.len(), kalman_points.len());

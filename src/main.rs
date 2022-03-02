@@ -81,7 +81,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
     let conf_threshold: f32 = app_settings.detection.conf_threshold;
     let nms_threshold: f32 = app_settings.detection.nms_threshold;
     let max_points_in_track: usize = app_settings.tracking.max_points_in_track;
-    let default_scalar: Scalar = Scalar::default();
+    let default_scalar: Scalar = Scalar::new(0.0, 0.0, 0.0, 0.0);
 
     // Define default tracker for detected objects (blobs storage)
     let mut tracker = KalmanBlobiesTracker::default();
@@ -355,7 +355,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
         let mut frame = received.frame.clone();
 
         let blobimg = blob_from_image(&frame, blob_scale, net_size, blob_mean, true, false, CV_32F);
-        match neural_net.set_input(&blobimg.unwrap(), blob_name, 1.0, default_scalar){
+        match neural_net.set_input(&blobimg.unwrap(), blob_name, 1.0, default_scalar) {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't set input of neural network due the error {:?}", err);

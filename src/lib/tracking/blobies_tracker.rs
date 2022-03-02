@@ -59,7 +59,9 @@ impl KalmanBlobiesTracker {
             }
             if min_distance < b.get_diagonal() * 0.5 || min_distance < self.min_threshold_distance {
                 match self.objects.get_mut(&min_id) {
-                    Some(v) => v.update(b),
+                    Some(v) => {
+                        v.update(b);
+                    },
                     None => {
                         // continue
                         panic!("immposible self.objects.get_mut(&min_id)")
