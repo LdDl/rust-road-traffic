@@ -283,7 +283,7 @@ impl KalmanBlobie {
         let second_last_pt_f32 = Point2f::new(second_last_pt.x as f32, second_last_pt.y as f32);
         let second_last_tm = self.track_time[n-2];
         
-        let mut speed = sc.estimate_speed(&second_last_pt_f32, second_last_tm, &last_pt_f32, last_tm);
+        let speed = sc.estimate_speed(&second_last_pt_f32, second_last_tm, &last_pt_f32, last_tm);
         if self.avg_speed < 0.0 {
             self.avg_speed = speed;
         } else {
@@ -294,8 +294,8 @@ impl KalmanBlobie {
     pub fn get_avg_speed(&self) -> f32 {
         return self.avg_speed;
     }
-    pub fn draw_center(&self, img: &mut Mat) {
-        match circle(img, self.center, 5, Scalar::from((255.0, 0.0, 0.0)), 2, LINE_8, 0) {
+    pub fn draw_center(&self, img: &mut Mat, color: Scalar) {
+        match circle(img, self.center, 5, color, 2, LINE_8, 0) {
             Ok(_) => {},
             Err(err) => {
                 panic!("Can't draw circle at blob's center due the error: {:?}", err)
@@ -310,9 +310,9 @@ impl KalmanBlobie {
             }
         };
     }
-    pub fn draw_track(&self, img: &mut Mat) {
+    pub fn draw_track(&self, img: &mut Mat, color: Scalar) {
         for pt in self.track.iter() {
-            match circle(img, *pt, 5, Scalar::from((0.0, 255.0, 0.0)), 2, LINE_8, 0) {
+            match circle(img, *pt, 5, color, 2, LINE_8, 0) {
                 Ok(_) => {},
                 Err(err) => {
                     panic!("Can't draw circle at blob's center due the error: {:?}", err)
@@ -320,34 +320,34 @@ impl KalmanBlobie {
             };
         }
     }
-    pub fn draw_rectangle(&self, img: &mut Mat) {
-        match rectangle(img, self.current_rect, Scalar::from((0.0, 255.0, 0.0)), 2, 1, 0) {
+    pub fn draw_rectangle(&self, img: &mut Mat, color: Scalar) {
+        match rectangle(img, self.current_rect, color, 2, 1, 0) {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't draw bounding box of object due the error {:?}", err);
             }
         };
     }
-    pub fn draw_line_to_blob(&self, img: &mut Mat, nextb: &KalmanBlobie) {
-        match line(img, self.center, nextb.center, Scalar::from((0.0, 0.0, 0.0)), 2, LINE_8, 0) {
+    pub fn draw_line_to_blob(&self, img: &mut Mat, nextb: &KalmanBlobie, color: Scalar) {
+        match line(img, self.center, nextb.center, color, 2, LINE_8, 0) {
             Ok(_) => {},
             Err(err) => {
                 panic!("Can't draw circle at blob's center due the error: {:?}", err)
             }
         };
     }
-    pub fn draw_class_name(&self, img: &mut Mat) {
+    pub fn draw_class_name(&self, img: &mut Mat, color: Scalar) {
         let anchor = Point::new(self.current_rect.x + 2, self.current_rect.y + 3);
-        match put_text(img, &self.class_name, anchor, FONT_HERSHEY_SIMPLEX, 1.5, Scalar::from((0.0, 255.0, 255.0)), 2, LINE_8, false) {
+        match put_text(img, &self.class_name, anchor, FONT_HERSHEY_SIMPLEX, 1.5, color, 2, LINE_8, false) {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't display classname of object due the error {:?}", err);
             }
         };
     }
-    pub fn draw_id(&self, img: &mut Mat) {
+    pub fn draw_id(&self, img: &mut Mat, color: Scalar) {
         let anchor = Point::new(self.current_rect.x + 2, self.current_rect.y + 10);
-        match put_text(img, &self.id.to_string(), anchor, FONT_HERSHEY_SIMPLEX, 1.0, Scalar::from((0.0, 255.0, 255.0)), 4, LINE_8, false) {
+        match put_text(img, &self.id.to_string(), anchor, FONT_HERSHEY_SIMPLEX, 0.5, color, 2, LINE_8, false) {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't display classname of object due the error {:?}", err);

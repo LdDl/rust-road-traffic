@@ -430,12 +430,12 @@ fn run(config_file: &str) -> opencv::Result<()> {
                         drop(convex_polygons_write);
                     }
                     if app_settings.output.enable {
-                        b.draw_track(&mut frame);
-                        b.draw_center(&mut frame);
+                        b.draw_track(&mut frame, Scalar::from((0.0, 255.0, 0.0)));
+                        b.draw_center(&mut frame, Scalar::from((255.0, 0.0, 0.0)));
                         // b.draw_predicted(&mut frame);
-                        b.draw_rectangle(&mut frame);
-                        b.draw_class_name(&mut frame);
-                        b.draw_id(&mut frame);
+                        b.draw_rectangle(&mut frame, Scalar::from((0.0, 255.0, 0.0)));
+                        b.draw_class_name(&mut frame, Scalar::from((0.0, 255.0, 255.0)));
+                        b.draw_id(&mut frame, Scalar::from((255.0, 255.0, 0.0)));
                     }
                 }
             }
