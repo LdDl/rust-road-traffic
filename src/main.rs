@@ -435,6 +435,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
                         // b.draw_predicted(&mut frame);
                         b.draw_rectangle(&mut frame, Scalar::from((0.0, 255.0, 0.0)));
                         b.draw_class_name(&mut frame, Scalar::from((0.0, 255.0, 255.0)));
+                        b.draw_speed(&mut frame, Scalar::from((255.0, 0.0, 255.0)));
                         b.draw_id(&mut frame, Scalar::from((255.0, 255.0, 0.0)));
                     }
                 }

@@ -354,6 +354,15 @@ impl KalmanBlobie {
             }
         };
     }
+    pub fn draw_speed(&self, img: &mut Mat, color: Scalar) {
+        let anchor = Point::new(self.current_rect.x + 2, self.current_rect.y + 30);
+        match put_text(img, &format!("{:.1}", self.avg_speed), anchor, FONT_HERSHEY_SIMPLEX, 0.5, color, 2, LINE_8, false) {
+            Ok(_) => {},
+            Err(err) => {
+                println!("Can't display classname of object due the error {:?}", err);
+            }
+        };
+    }
 }
 
 #[cfg(test)]
