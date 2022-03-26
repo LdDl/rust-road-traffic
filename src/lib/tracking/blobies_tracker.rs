@@ -16,7 +16,7 @@ impl KalmanBlobiesTracker {
         return KalmanBlobiesTracker{
             objects: HashMap::new(),
             max_no_match: 5,
-            min_threshold_distance: 15.0
+            min_threshold_distance: 30.0
         }
     }
     pub fn get_objects_num(&self) -> usize {
@@ -86,5 +86,35 @@ impl KalmanBlobiesTracker {
         for delete_id in delete_blobs {
             self.objects.remove(&delete_id);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use opencv::{
+        prelude::*,
+        core::Rect,
+    };
+    use chrono::{
+        Utc
+    };
+    use super::*;
+    #[test]
+    fn test_match_to_existing() {
+        let mut tracker = KalmanBlobiesTracker::default();
+        let mut blobies = vec![];
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(318, 242,  46,  44), 0, Utc::now(), 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(375, 376,  92, 102), 0, Utc::now(), 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(375, 238,  45,  42), 0, Utc::now(), 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(313, 312,  78,  82), 0, Utc::now(), 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(233, 425, 146,  75), 0, Utc::now(), 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(561, 283,  77,  71), 0, Utc::now(), 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(181, 173, 112, 241), 0, Utc::now(), 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(287, 196,  42,  34), 0, Utc::now(), 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(418, 432, 166,  6), 0, Utc::now(), 0.0));
+
+        tracker.match_to_existing(&mut blobies);
+
+        // @todo: complete test
     }
 }
