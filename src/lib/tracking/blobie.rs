@@ -27,6 +27,7 @@ use chrono::{
     Utc
 };
 
+#[derive(Debug)]
 pub struct KalmanBlobie {
     id: BlobID,
     class_name: String,

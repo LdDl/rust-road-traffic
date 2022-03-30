@@ -113,8 +113,11 @@ mod tests {
         blobies.push(KalmanBlobie::new_with_time(&Rect::new(287, 196,  42,  34), 0, Utc::now(), 0.0));
         blobies.push(KalmanBlobie::new_with_time(&Rect::new(418, 432, 166,  6), 0, Utc::now(), 0.0));
 
+        for b in blobies.iter() {
+            println!("{:?}", b.get_center());
+        }
         tracker.match_to_existing(&mut blobies);
-
+        
         // @todo: complete test
     }
 }

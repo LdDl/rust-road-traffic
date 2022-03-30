@@ -47,6 +47,7 @@ pub fn new_process_covariance(dt: f32) -> Matrix3x3f32 {
     )
 }
 
+#[derive(Debug)]
 pub struct KalmanFilterLinear {
     // Transition matrix
     a: Matrix6x6f32,
