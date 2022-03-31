@@ -117,7 +117,7 @@ mod tests {
             println!("{:?}", b.get_center());
         }
         tracker.match_to_existing(&mut blobies);
-        
+        tracker.match_to_existing(&mut blobies);
         // @todo: complete test
     }
 }

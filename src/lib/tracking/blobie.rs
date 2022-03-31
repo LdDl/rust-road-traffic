@@ -443,4 +443,11 @@ mod tests {
             assert_eq!(predicted_y, correct_y);
         }
     }
+    #[test]
+    fn test_blob_euclidean_distance() {
+        let b1 = KalmanBlobie::new_with_time(&Rect::new(318, 242,  46,  44), 0, Utc::now(), 0.0);
+        let b2 = KalmanBlobie::new_with_time(&Rect::new(375, 376,  92, 102), 0, Utc::now(), 0.0);
+        let ans = b1.distance_to(&b2);
+        assert_eq!(181.57367651, ans);
+    }
 }
