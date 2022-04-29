@@ -288,7 +288,9 @@ impl KalmanBlobie {
         if self.avg_speed < 0.0 {
             self.avg_speed = speed;
         } else {
-            self.avg_speed = (self.avg_speed + speed) / 2.0;
+            let x = 1.0 / (n as f32);
+            let y = 1.0 - x;
+            self.avg_speed = x * speed + y * self.avg_speed;
         }
         return speed;
     }

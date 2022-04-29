@@ -208,7 +208,9 @@ impl ConvexPolygon {
         } else if vehicle_type_statistics.avg_speed == f32::INFINITY {
             vehicle_type_statistics.avg_speed = speed_value;
         } else {
-            vehicle_type_statistics.avg_speed = (vehicle_type_statistics.avg_speed + speed_value) / 2.0;
+            let x = 1.0 / (vehicle_type_statistics.sum_intensity as f32);
+            let y = 1.0 - x;
+            vehicle_type_statistics.avg_speed = x * speed_value + y * vehicle_type_statistics.avg_speed;
         }
         // Summary
         if self.avg_speed < 0.0 {
@@ -218,7 +220,9 @@ impl ConvexPolygon {
         } else if self.avg_speed == f32::INFINITY {
             self.avg_speed = speed_value;
         } else {
-            self.avg_speed = (self.avg_speed + speed_value) / 2.0;
+            let x = 1.0 / (self.sum_intensity as f32);
+            let y = 1.0 - x;
+            self.avg_speed = x * speed_value + y * self.avg_speed;
         }
 
     }
