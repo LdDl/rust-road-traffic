@@ -73,12 +73,9 @@ impl KalmanBlobiesTracker {
                 blobies_to_register.push(i)
             }
         }
-        for (i, _) in blobies_to_register.iter().enumerate() {
-            // @todo: arghhhh. Can't understand pointer's rust-ish stuff
-            // let b = blobies[i];
-            // self.objects.entry(b.get_id()).or_insert_with(|| b); // <----- here is an compile-time error
-            // @todo: so create new blob.
-            let b = &blobies[i];
+        for (_, i) in blobies_to_register.iter().enumerate() {
+            // @todo: make it more Rust-ish
+            let b = &blobies[*i];
             let copy_b = KalmanBlobie::partial_copy(b);
             self.objects.entry(b.get_id()).or_insert_with(|| copy_b);
         }
