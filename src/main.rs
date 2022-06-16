@@ -416,6 +416,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
                                     // Register it
                                     polygon.register_blob(blob_id);
                                 }
+                                b.estimate_speed_mut(&polygon.spatial_converter);
                             } else {
                                 // Otherwise
                                 // If blob is registered in polygon and left it (since contains_blob == false)

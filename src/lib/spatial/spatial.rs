@@ -6,7 +6,7 @@ use opencv::{
     core::DECOMP_LU,
     core::mul_mat_mat,
     core::CV_32F,
-    imgproc::get_perspective_transform,
+    imgproc::get_perspective_transform
 };
 
 use chrono::{
@@ -85,17 +85,20 @@ impl SpatialConverter {
         let scale = answ_ptr[2];
         let xattr = answ_ptr[0];
         let yattr = answ_ptr[1];
+        // println!("xattr / scale, yattr / scale: {:?}/{:?}, {:?}/{:?}", xattr, scale, yattr, scale);
         return Point2f::new(xattr / scale, yattr / scale);
     }
-    pub fn estimate_speed(&self, from_point: &Point2f, from_time: DateTime<Utc>, to_point: &Point2f, to_time: DateTime<Utc>) -> f32 {
+    pub fn estimate_speed(&self, id: String, from_point: &Point2f, from_time: DateTime<Utc>, to_point: &Point2f, to_time: DateTime<Utc>) -> f32 {
         let from_point_wgs84 = self.transform_to_wgs84(from_point);
         let to_point_wgs84 = self.transform_to_wgs84(to_point);
         let time_difference = (to_time - from_time).num_milliseconds() as f32 / 3600000.0;
         if time_difference == 0.0 {
+            // println!("No time diff for vehicle {}", id);
             return 0.0
         }
         let distance = haversine(from_point_wgs84, to_point_wgs84);
         if distance == 0.0 {
+            // println!("No distance diff {:?} (px: {:?}) and {:?} (px: {:?}) for vehicle {} and diff {}", from_point_wgs84, from_point, to_point_wgs84, to_point, id, time_difference);
             return 0.0
         }
         return distance / time_difference;
@@ -176,7 +179,7 @@ mod tests {
         let target_point = Point2f::new(1205.0, 698.0);
         let target_time = source_time + Duration::milliseconds(6000);
         
-        let estimated_speed = converter.estimate_speed(&source_point, source_time, &target_point, target_time);
+        let estimated_speed = converter.estimate_speed("zero".to_string(), &source_point, source_time, &target_point, target_time);
         let correct_speed: f32 = 63.27124;
         assert_eq!(estimated_speed, correct_speed);
     }

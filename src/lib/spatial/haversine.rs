@@ -20,11 +20,9 @@ fn deg2rad(d: f32) -> f32 {
 // 
 pub fn haversine(src: Point2f, dst: Point2f) -> f32 {
     let lat1 = deg2rad(src.y);
-	let lon1 = deg2rad(src.x);
 	let lat2 = deg2rad(dst.y);
-	let lon2 = deg2rad(dst.x);
-    let diff_lat = lat2 - lat1;
-	let diff_lon = lon2 - lon1;
+    let diff_lat = deg2rad(dst.y - src.y);
+	let diff_lon = deg2rad(dst.x - src.x);
     let a = f32::powi(f32::sin(diff_lat / 2.0), 2) + f32::cos(lat1)*f32::cos(lat2)*f32::powi(f32::sin(diff_lon/2.0), 2);
     let c = 2.0 * f32::atan2(f32::sqrt(a), f32::sqrt(1.0 - a));
 	let km = c * EARTH_RADIUS_KM;

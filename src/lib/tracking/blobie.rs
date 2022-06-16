@@ -45,7 +45,8 @@ pub struct KalmanBlobie {
     time: DateTime<Utc>,
     delta_time: f64,
     track_time: Vec<DateTime<Utc>>,
-    avg_speed: f32
+    avg_speed: f32,
+    speed: f32,
 }
 
 impl KalmanBlobie {
@@ -77,6 +78,7 @@ impl KalmanBlobie {
             delta_time: 0.0,
             track_time: vec![current_time],
             avg_speed: -1.0,
+            speed: -1.0,
         };
         return kb 
     }
@@ -107,6 +109,7 @@ impl KalmanBlobie {
             delta_time: sec_diff,
             track_time: vec![tm],
             avg_speed: -1.0,
+            speed: -1.0,
         };
         return kb 
     }
@@ -120,6 +123,9 @@ impl KalmanBlobie {
     }
     pub fn get_id(&self) -> Uuid {
         return self.id;
+    }
+    pub fn get_last_ts(&self) -> DateTime<Utc> {
+        return self.track_time[(self.track_time).len() - 1];
     }
     pub fn set_class_name(&mut self, class_name: String) {
         self.class_name = class_name;
@@ -236,9 +242,9 @@ impl KalmanBlobie {
             0.0
         );
         let predicted_custom = self.custom_kf.step(u, y).unwrap();
-
         let predicted = Point::new(predicted_custom[(0, 0)] as i32, predicted_custom[(3, 0)] as i32);
         self.center = predicted;
+        // self.center = newb.center;
         let diff_x = predicted.x-newb.center.x;
         let diff_y = predicted.y-newb.center.y;
         self.current_rect = Rect::new(
@@ -247,6 +253,12 @@ impl KalmanBlobie {
             newb.current_rect.width-diff_x,
             newb.current_rect.height-diff_y
         );
+        // self.current_rect = Rect::new(
+        //     newb.current_rect.x,
+        //     newb.current_rect.y,
+        //     newb.current_rect.width,
+        //     newb.current_rect.height
+        // );
         self.diagonal = newb.diagonal;
         self.is_still_tracked = true;
         self.exists = true;
@@ -255,22 +267,24 @@ impl KalmanBlobie {
         // Restrict number of points in track (shift to the left)
         if self.track.len() > self.max_points_in_track {
             self.track = self.track[1..].to_vec();
+            self.track_time = self.track_time[1..].to_vec();
         }
     }
-    pub fn estimate_speed(&self, sc: &SpatialConverter) -> f32 {
-        let n = self.track.len();
-        if n < 2 {
-            return -1.0;
-        }
-        let last_pt = self.track[n-1];
-        let last_pt_f32 = Point2f::new(last_pt.x as f32, last_pt.y as f32);
-        let last_tm = self.track_time[n-1];
+    // pub fn estimate_speed(&self, sc: &SpatialConverter) -> f32 {
+    //     let n = self.track.len();
+    //     if n < 2 {
+    //         return -1.0;
+    //     }
+    //     let last_pt = self.track[n-1];
+    //     let last_pt_f32 = Point2f::new(last_pt.x as f32, last_pt.y as f32);
+    //     let last_tm = self.track_time[n-1];
 
-        let second_last_pt = self.track[n-2];
-        let second_last_pt_f32 = Point2f::new(second_last_pt.x as f32, second_last_pt.y as f32);
-        let second_last_tm = self.track_time[n-2];
-        return sc.estimate_speed(&second_last_pt_f32, second_last_tm, &last_pt_f32, last_tm)
-    }
+    //     let second_last_pt = self.track[n-2];
+    //     let second_last_pt_f32 = Point2f::new(second_last_pt.x as f32, second_last_pt.y as f32);
+    //     let second_last_tm = self.track_time[n-2];
+
+    //     return sc.estimate_speed(self.id.to_string(), &second_last_pt_f32, second_last_tm, &last_pt_f32, last_tm)
+    // }
     pub fn estimate_speed_mut(&mut self, sc: &SpatialConverter) -> f32 {
         let n = self.track.len();
         if n < 2 {
@@ -284,7 +298,8 @@ impl KalmanBlobie {
         let second_last_pt_f32 = Point2f::new(second_last_pt.x as f32, second_last_pt.y as f32);
         let second_last_tm = self.track_time[n-2];
         
-        let speed = sc.estimate_speed(&second_last_pt_f32, second_last_tm, &last_pt_f32, last_tm);
+        let speed = sc.estimate_speed(self.id.to_string(), &second_last_pt_f32, second_last_tm, &last_pt_f32, last_tm);
+        self.speed = speed;
         if self.avg_speed < 0.0 {
             self.avg_speed = speed;
         } else {
@@ -296,6 +311,9 @@ impl KalmanBlobie {
     }
     pub fn get_avg_speed(&self) -> f32 {
         return self.avg_speed;
+    }
+    pub fn get_speed(&self) -> f32 {
+        return self.speed;
     }
     pub fn draw_center(&self, img: &mut Mat, color: Scalar) {
         match circle(img, self.center, 5, color, 2, LINE_8, 0) {
@@ -359,7 +377,14 @@ impl KalmanBlobie {
     }
     pub fn draw_speed(&self, img: &mut Mat, color: Scalar) {
         let anchor = Point::new(self.current_rect.x + 2, self.current_rect.y + 30);
-        match put_text(img, &format!("{:.1}", self.avg_speed), anchor, FONT_HERSHEY_SIMPLEX, 0.5, color, 2, LINE_8, false) {
+        match put_text(img, &format!("Speed: {:.1}", self.speed), anchor, FONT_HERSHEY_SIMPLEX, 0.5, color, 2, LINE_8, false) {
+            Ok(_) => {},
+            Err(err) => {
+                println!("Can't display classname of object due the error {:?}", err);
+            }
+        };
+        let anchor_avg = Point::new(self.current_rect.x + 2, self.current_rect.y + 60);
+        match put_text(img, &format!("Avg speed: {:.1}", self.avg_speed), anchor_avg, FONT_HERSHEY_SIMPLEX, 0.5, color, 2, LINE_8, false) {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't display classname of object due the error {:?}", err);
