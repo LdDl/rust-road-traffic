@@ -10,7 +10,7 @@ name = "rust-road-traffic"
 path = "src/main.rs"
 
 [dependencies]
-opencv = {version = "0.54"}
+opencv = {version = "0.66"}
 uuid = { version = "0.8", features = ["serde", "v4"] }
 nalgebra = "0.29.0" 
 toml = "0.5"

@@ -329,7 +329,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
                 // let read_frame_mjpeg_copy = read_frame.clone();
                 let mut mjpeg_frame = unsafe {
                     Vec::from(std::slice::from_raw_parts(
-                        read_frame.data().unwrap() as *const u8,
+                        read_frame.data() as *const u8,
                         (width * height * 3) as usize,
                     ))
                 };
