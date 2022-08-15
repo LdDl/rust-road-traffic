@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, web, Responder};
+use actix_web::{HttpResponse, web, Responder, Error};
 
 use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
@@ -9,7 +9,7 @@ async fn say_ping() -> impl Responder {
     HttpResponse::Ok().body("pong")
 }
 
-pub fn polygons_list(data: web::Data<Arc<RwLock<DataStorage>>>) -> HttpResponse {
+pub async fn polygons_list(data: web::Data<Arc<RwLock<DataStorage>>>) -> Result<HttpResponse, Error> {
     let data_storage = data.get_ref().clone();
     let data_expected = data_storage.read().expect("expect: polygons_list");
     let data_expected_polygons = data_expected.polygons.read().expect("expect: polygons_list");
@@ -20,7 +20,7 @@ pub fn polygons_list(data: web::Data<Arc<RwLock<DataStorage>>>) -> HttpResponse 
         drop(element);
         ans.features.push(geo_feature);
     }
-    return HttpResponse::Ok().json(ans);
+    return Ok(HttpResponse::Ok().json(ans));
 }
 
 use serde::{Deserialize, Serialize};
@@ -47,7 +47,7 @@ pub struct VehicleTypeParameters {
     pub estimated_sum_intensity: u32
 }
 
-pub fn all_polygons_stats(data: web::Data<Arc<RwLock<DataStorage>>>) -> HttpResponse {
+pub async fn all_polygons_stats(data: web::Data<Arc<RwLock<DataStorage>>>) -> Result<HttpResponse, Error> {
     let data_storage = data.get_ref().clone();
     let data_expected = data_storage.read().expect("expect: all_polygons_stats");
     let data_expected_polygons = data_expected.polygons.read().expect("expect: all_polygons_stats");
@@ -75,7 +75,7 @@ pub fn all_polygons_stats(data: web::Data<Arc<RwLock<DataStorage>>>) -> HttpResp
     }
     drop(data_expected_polygons);
     drop(data_expected);
-    return HttpResponse::Ok().json(ans);
+    return Ok(HttpResponse::Ok().json(ans));
 }
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
