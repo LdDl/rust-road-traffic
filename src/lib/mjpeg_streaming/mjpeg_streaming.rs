@@ -39,21 +39,17 @@ pub async fn start_mjpeg_streaming(server_host: String, server_port: i32, rx_fra
 
 async fn mjpeg_page() -> impl Responder {
     let content = include_str!("index.html");
-    return HttpResponse::Ok().header("Content-Type", "text/html").body(content);
+    return HttpResponse::Ok().append_header(("Content-Type", "text/html")).body(content);
 }
 
 async fn add_new_client(broadcaster: web::Data<Mutex<Broadcaster>>) -> impl Responder {
     let rx = broadcaster.lock().unwrap().add_client();
     HttpResponse::Ok()
-        .header("Cache-Control", "no-store, must-revalidate")
-        .header("Pragma", "no-cache")
-        .header("Expires", "0")
-        .header("Connection", "close")
-        .header(
-            "Content-Type",
-            "multipart/x-mixed-replace;boundary=boundarydonotcross",
-        )
-        // .no_chunking()
+        .append_header(("Cache-Control", "no-store, must-revalidate"))
+        .append_header(("Pragma", "no-cache"))
+        .append_header(("Expires", "0"))
+        .append_header(("Connection", "close"))
+        .append_header(("Content-Type", "multipart/x-mixed-replace;boundary=boundarydonotcross"))
         .streaming(rx)
 }
 
