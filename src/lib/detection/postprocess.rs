@@ -126,6 +126,7 @@ pub fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, 
     return aggregated_data;
 }
 
+// process_mobilenet_detections will be removed
 pub fn process_mobilenet_detections(detections: &Vector::<Mat>, conf_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &Vec<String>, filtered_classes: &'static [&'static str], last_time: DateTime<Utc>, sec_diff: f64) -> Vec<KalmanBlobie> {
     let mut nms_bboxes = vec![];
     let outs = detections.len();

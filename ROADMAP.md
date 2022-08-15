@@ -39,7 +39,7 @@
         * ~~ Reset values ~~
         * ~~ Time intervals (threads) ~~
         * Refactor
-    * ~~Optional choice between Tiny YOLO and MobilenetSSD(Caffe)~~
+    * ~~Optional choice between Tiny YOLO and MobilenetSSD(Caffe)~~[removed]
     * ~~Fill Jetson Nano instructions~~
     * ~~Estimate speed and intensity for each vehicle type~~
     * RabbitMQ integration module? Do we need those?

@@ -89,7 +89,6 @@ fn run(config_file: &str) -> opencv::Result<()> {
     let video_src = &app_settings.input.video_src;
     let weights_src = &app_settings.detection.network_weights;
     let cfg_src = &app_settings.detection.network_cfg;
-    let network_type = app_settings.detection.network_type.to_lowercase();
     let window = &app_settings.output.window_name;
     let verbose_dbg = match app_settings.debug {
         Some(x) => { x.enable },
@@ -194,42 +193,17 @@ fn run(config_file: &str) -> opencv::Result<()> {
     }
 
     // Prepare neural network
-    let mut neural_net: Net; 
-    let blob_scale;
-    let net_size = Size::new(app_settings.detection.net_width, app_settings.detection.net_height);
-    let blob_mean;
-    let blob_name;
-
-    let coco_classnames = app_settings.detection.net_classes;
-
-    match network_type.as_ref() {
-        "darknet" => {
-            neural_net = match read_net(weights_src, cfg_src, "Darknet"){
-                Ok(result) => result,
-                Err(err) => {
-                    panic!("Can't read network '{}' (with cfg '{}') due the error: {:?}", weights_src, cfg_src, err);
-                }
-            };
-            blob_scale = 1.0/255.0;
-            blob_mean = default_scalar;
-            blob_name = "";
-        },
-        "caffe-mobilenet-ssd" => {
-            neural_net = match read_net_from_caffe(weights_src, cfg_src){
-                Ok(result) => result,
-                Err(err) => {
-                    panic!("Can't read network '{}' (with cfg '{}') due the error: {:?}", weights_src, cfg_src, err);
-                }
-            };
-            blob_scale = 0.007843;
-            blob_mean = Scalar::from(127.5);
-            blob_name = "data";
-        },
-        _ => {
-            panic!("Only this network types are supported: Darknet / Caffe-Mobilenet-SSD. You've provided: '{}'", app_settings.detection.network_type);
+    let mut neural_net = match read_net(weights_src, cfg_src, "Darknet"){
+        Ok(result) => result,
+        Err(err) => {
+            panic!("Can't read network '{}' (with cfg '{}') due the error: {:?}", weights_src, cfg_src, err);
         }
     };
-
+    let blob_scale = 1.0/255.0;
+    let net_size = Size::new(app_settings.detection.net_width, app_settings.detection.net_height);
+    let blob_mean = default_scalar;
+    let blob_name = "";
+    let coco_classnames = app_settings.detection.net_classes;
     let classes_num: usize = coco_classnames.len();
 
     let out_layers_names = match neural_net.get_unconnected_out_layers_names() {
@@ -365,36 +339,19 @@ fn run(config_file: &str) -> opencv::Result<()> {
         let detection_now = Instant::now();
         match neural_net.forward(&mut detections, &out_layers_names) {
             Ok(_) => {
-                let mut tmp_blobs;
-                if network_type == "darknet" {
-                    /* Tiny YOLO */
-                    tmp_blobs = process_yolo_detections(
-                        &detections,
-                        conf_threshold,
-                        nms_threshold,
-                        frame_cols,
-                        frame_rows,
-                        max_points_in_track,
-                        &coco_classnames,
-                        COCO_FILTERED_CLASSNAMES,
-                        classes_num,
-                        received.last_time,
-                        received.sec_diff,
-                    );
-                } else {
-                    /* Caffe's Mobilenet */
-                    tmp_blobs = process_mobilenet_detections(
-                        &detections,
-                        conf_threshold,
-                        frame_cols,
-                        frame_rows,
-                        max_points_in_track, 
-                        &coco_classnames,
-                        COCO_FILTERED_CLASSNAMES,
-                        received.last_time,
-                        received.sec_diff,
-                    );
-                }
+                let mut tmp_blobs = process_yolo_detections(
+                    &detections,
+                    conf_threshold,
+                    nms_threshold,
+                    frame_cols,
+                    frame_rows,
+                    max_points_in_track,
+                    &coco_classnames,
+                    COCO_FILTERED_CLASSNAMES,
+                    classes_num,
+                    received.last_time,
+                    received.sec_diff,
+                );
 
                 // Match blobs
                 tracker.match_to_existing(&mut tmp_blobs);
