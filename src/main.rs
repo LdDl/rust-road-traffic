@@ -321,10 +321,6 @@ fn run(config_file: &str) -> opencv::Result<()> {
         }
     });
 
-    // loop {
-        
-    // }
-
     for received in rx {
         let mut frame = received.frame.clone();
 
