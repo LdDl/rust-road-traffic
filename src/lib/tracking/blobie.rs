@@ -49,6 +49,15 @@ pub struct KalmanBlobie {
     speed: f32,
 }
 
+const EMPTY_U: Matrix6x1f32 = Matrix6x1f32::new(
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+);
+
 impl KalmanBlobie {
     pub fn new(rect: &Rect, max_points_in_track: usize) -> Self {
         let center_x = rect.x as f32 + 0.5 * rect.width as f32;
@@ -215,15 +224,7 @@ impl KalmanBlobie {
         self.predicted_next_position.y = self.track[track_len - 1].y + delta_y;
     }
     pub fn kf_predict(&mut self) {
-        let u = Matrix6x1f32::new(
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0
-        );
-        self.custom_kf.predict(u);
+        self.custom_kf.predict(EMPTY_U);
     }
     pub fn update(&mut self, newb: &KalmanBlobie) {
         // @todo: handle possible error instead of unwrap() call
@@ -233,15 +234,7 @@ impl KalmanBlobie {
             new_center.y as f32
         );
         // tracker.set_time(dt);
-        let u = Matrix6x1f32::new(
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0
-        );
-        let predicted_custom = self.custom_kf.step(u, y).unwrap();
+        let predicted_custom = self.custom_kf.step(EMPTY_U, y).unwrap();
         let predicted = Point::new(predicted_custom[(0, 0)] as i32, predicted_custom[(3, 0)] as i32);
         self.center = predicted;
         // self.center = newb.center;
@@ -270,21 +263,6 @@ impl KalmanBlobie {
             self.track_time = self.track_time[1..].to_vec();
         }
     }
-    // pub fn estimate_speed(&self, sc: &SpatialConverter) -> f32 {
-    //     let n = self.track.len();
-    //     if n < 2 {
-    //         return -1.0;
-    //     }
-    //     let last_pt = self.track[n-1];
-    //     let last_pt_f32 = Point2f::new(last_pt.x as f32, last_pt.y as f32);
-    //     let last_tm = self.track_time[n-1];
-
-    //     let second_last_pt = self.track[n-2];
-    //     let second_last_pt_f32 = Point2f::new(second_last_pt.x as f32, second_last_pt.y as f32);
-    //     let second_last_tm = self.track_time[n-2];
-
-    //     return sc.estimate_speed(self.id.to_string(), &second_last_pt_f32, second_last_tm, &last_pt_f32, last_tm)
-    // }
     pub fn estimate_speed_mut(&mut self, sc: &SpatialConverter) -> f32 {
         let n = self.track.len();
         if n < 2 {
