@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use crate::lib::kalman::{
     KalmanFilterLinear,
     Matrix2x1f32,
@@ -226,15 +228,14 @@ impl KalmanBlobie {
     pub fn kf_predict(&mut self) {
         self.custom_kf.predict(EMPTY_U);
     }
-    pub fn update(&mut self, newb: &KalmanBlobie) {
-        // @todo: handle possible error instead of unwrap() call
+    pub fn update(&mut self, newb: &KalmanBlobie) -> Result<(), Box<dyn Error>> {
         let new_center = newb.get_center();
         let y = Matrix2x1f32::new(
             new_center.x as f32,
             new_center.y as f32
         );
         // tracker.set_time(dt);
-        let predicted_custom = self.custom_kf.step(EMPTY_U, y).unwrap();
+        let predicted_custom = self.custom_kf.step(EMPTY_U, y)?;
         let predicted = Point::new(predicted_custom[(0, 0)] as i32, predicted_custom[(3, 0)] as i32);
         self.center = predicted;
         // self.center = newb.center;
@@ -262,6 +263,7 @@ impl KalmanBlobie {
             self.track = self.track[1..].to_vec();
             self.track_time = self.track_time[1..].to_vec();
         }
+        Ok(())
     }
     pub fn estimate_speed_mut(&mut self, sc: &SpatialConverter) -> f32 {
         let n = self.track.len();
