@@ -16,3 +16,5 @@
 /vscode
 /.vs_code
 /.vscode
+data/MobileNetSSD_deploy.caffemodel
+data/MobileNetSSD_deploy.prototxt
