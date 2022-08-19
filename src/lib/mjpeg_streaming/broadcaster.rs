@@ -1,20 +1,29 @@
-// Inspired by https://github.com/dskkato/mjpeg-rs#live-streaming-server-with-rustactix-web
+// Strictly taken from https://github.com/LdDl/mjpeg-rs/blob/master/src/mjpeg_streaming/broadcaster.rs
 
-use std::thread;
-use std::sync::Mutex;
-use std::pin::Pin;
-use std::task::{
-    Context,
-    Poll
+use opencv::{
+    prelude::*,
+    core::Vector,
 };
-use std::sync::mpsc::{
-    Receiver as STDReceiver
+
+use std::{
+    thread,
+    sync::{
+        Mutex,
+        mpsc::{
+            Receiver as STDReceiver
+        }
+    },
+    task::{
+        Context,
+        Poll
+    },
+    pin::Pin
 };
 
 use actix_web::{
-    web
+    web,
+    Error
 };
-use actix_web::Error;
 
 use futures::Stream;
 use tokio::sync::mpsc::{
@@ -22,8 +31,6 @@ use tokio::sync::mpsc::{
     Receiver,
     Sender
 };
-
-use image;
 
 pub struct Broadcaster {
     clients: Vec<Sender<web::Bytes>>,
@@ -40,12 +47,10 @@ impl Broadcaster {
         self.clients.push(tx);
         return Client(rx);
     }
-    pub fn make_message_block(frame: &[u8], width: u32, height: u32) -> Vec<u8> {
-        let mut buffer = Vec::new();
-        let mut encoder = image::codecs::jpeg::JpegEncoder::new(&mut buffer);
-        encoder.encode(&frame, width, height, image::ColorType::Rgb8).unwrap();
-        let mut msg = format!("--boundarydonotcross\r\nContent-Length:{}\r\nContent-Type:image/jpeg\r\n\r\n", buffer.len()).into_bytes();
-        msg.extend(buffer);
+    pub fn make_message_block(buffer: &Vector<u8>, width: u32, height: u32) -> Vec<u8> {
+        let bfu8 = buffer.as_ref();
+        let mut msg = format!("--boundarydonotcross\r\nContent-Length:{}\r\nContent-Type:image/jpeg\r\n\r\n", bfu8.len()).into_bytes();
+        msg.extend(bfu8);
         msg
     }
     fn send_image(&mut self, msg: &[u8]) {
@@ -59,7 +64,7 @@ impl Broadcaster {
         }
         self.clients = ok_clients;
     }
-    pub fn spawn_reciever(_self: web::Data<Mutex<Self>>, rx_frames_data: STDReceiver<std::vec::Vec<u8>>, width: u32, height: u32) {
+    pub fn spawn_reciever(_self: web::Data<Mutex<Self>>, rx_frames_data: STDReceiver<Vector<u8>>, width: u32, height: u32) {
         thread::spawn(move || {
             for received in rx_frames_data {
                 let msg = Broadcaster::make_message_block(&received, width, height);
