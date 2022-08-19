@@ -13,6 +13,7 @@ use opencv::{
     videoio::VideoCapture,
     videoio::get_backends,
     imgproc::resize,
+    imgcodecs::imencode,
     dnn::DNN_BACKEND_CUDA,
     dnn::DNN_TARGET_CUDA,
     dnn::Net,
@@ -298,19 +299,13 @@ fn run(config_file: &str) -> opencv::Result<()> {
 
             /* Send frame and capture info */
             if enable_mjpeg {
-                let width = frame_cols as i32;
-                let height = frame_rows as i32;
-                // let read_frame_mjpeg_copy = read_frame.clone();
-                let mut mjpeg_frame = unsafe {
-                    Vec::from(std::slice::from_raw_parts(
-                        read_frame.data() as *const u8,
-                        (width * height * 3) as usize,
-                    ))
-                };
-                for i in 0..(width * height) {
-                    mjpeg_frame.swap((i * 3) as usize, (i * 3 + 2) as usize);
+                let mut buffer = Vector::<u8>::new();
+                let params = Vector::<i32>::new();
+                let encoded = imencode(".jpg", &read_frame, &mut buffer, &params).unwrap();
+                if !encoded {
+                    println!("image has not been encoded");
                 }
-                tx_mjpeg.send(mjpeg_frame).unwrap();
+                tx_mjpeg.send(buffer).unwrap();
             }
             tx.send(ThreadedFrame{
                 frame: read_frame,

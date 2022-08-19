@@ -1,23 +1,39 @@
-use actix_web::{web, http, App, HttpServer, HttpResponse, Responder};
+// Strictly taken from https://github.com/LdDl/mjpeg-rs/blob/master/src/mjpeg_streaming/mjpeg_streaming.rs
+
+use opencv::{
+    prelude::*,
+    core::Vector,
+};
+
+use actix_web::{
+    web,
+    http,
+    App,
+    HttpServer,
+    HttpResponse,
+    Responder
+};
 use actix_cors::Cors;
 
-use crate::lib::mjpeg_streaming::{
+use crate::mjpeg_streaming::{
     broadcaster::Broadcaster
 };
 
-use std::sync::Mutex;
-use std::sync::mpsc::{
-    Receiver
+use std::sync::{
+    Mutex,
+    mpsc::{
+        Receiver
+    }
 };
 
 #[actix_web::main]
-pub async fn start_mjpeg_streaming(server_host: String, server_port: i32, rx_frames_data: Receiver<std::vec::Vec<u8>>, input_width: u32, input_height: u32) -> std::io::Result<()> {
+pub async fn start_mjpeg_streaming(server_host: String, server_port: i32, rx_frames_data: Receiver<Vector<u8>>, input_width: u32, input_height: u32) -> std::io::Result<()> {
     let bind_address = format!("{}:{}", server_host, server_port);
     println!("MJPEG Streamer is starting on host:port {}:{}", server_host, server_port);
 
     let broadcaster = web::Data::new(Mutex::new(Broadcaster::default()));
     Broadcaster::spawn_reciever(broadcaster.clone(), rx_frames_data, input_width, input_height);
-
+    
     HttpServer::new(move || {
         let cors = Cors::default()
             .allow_any_origin()
