@@ -34,7 +34,7 @@ use crate::lib::spatial::SpatialConverter;
 pub struct ConvexPolygon {
     pub id: String,
     pub coordinates: Vec<Point>,
-    pub coordinates_wgs84:  Vec<Vec<Vec<f32>>>,
+    pub coordinates_wgs84:  Vec<Point2f>,
     pub color: Scalar,
     pub avg_speed: f32,
     pub sum_intensity: u32,
@@ -91,7 +91,7 @@ impl ConvexPolygon {
             source_spatial_map: Vector::<Point2f>::new()
         }
     }
-    pub fn new(id: String, coordinates: Vec<Point>, coordinates_wgs84: Vec<Vec<Vec<f32>>>, color: Scalar, road_lane_num: u16, road_lane_direction: u8, pixel_src_points: Vector<Point2f>, spatial_dest_points: Vector<Point2f>) -> Self {
+    pub fn new(id: String, coordinates: Vec<Point>, coordinates_wgs84: Vec<Point2f>, color: Scalar, road_lane_num: u16, road_lane_direction: u8, pixel_src_points: Vector<Point2f>, spatial_dest_points: Vector<Point2f>) -> Self {
         ConvexPolygon{
             id: id,
             coordinates: coordinates,
@@ -126,17 +126,46 @@ impl ConvexPolygon {
     }
     pub fn update_pixel_map(&mut self, pixel_src_points: Vector<Point2f>) {
         self.source_pixel_map = pixel_src_points;
+        self.coordinates = self.source_pixel_map.iter().map(|pt| Point::new(pt.x as i32, pt.y as i32)).collect();
         if self.source_spatial_map.len() == 0 {
             self.source_spatial_map = self.source_pixel_map.iter().collect();
+            self.coordinates_wgs84 = self.source_spatial_map.iter().collect();
         }
         self.spatial_converter = SpatialConverter::new(&self.source_pixel_map, &self.source_spatial_map);
+        
     }
     pub fn update_spatial_map(&mut self, spatial_dest_points: Vector<Point2f>) {
         self.source_spatial_map = spatial_dest_points;
+        self.coordinates_wgs84 = self.source_spatial_map.iter().collect();
         if self.source_pixel_map.len() == 0 {
             self.source_pixel_map = self.source_spatial_map.iter().collect();
+            self.coordinates = self.source_pixel_map.iter().map(|pt| Point::new(pt.x as i32, pt.y as i32)).collect();
         }
         self.spatial_converter = SpatialConverter::new(&self.source_pixel_map, &self.source_spatial_map);
+    }
+    pub fn update_pixel_map_arr(&mut self, pixel_src_points: [[u16; 2]; 4]) {
+        let val = pixel_src_points.iter()
+            .map(|pt| Point2f::new(pt[0] as f32, pt[1] as f32))
+            .collect();
+        self.update_pixel_map(val);
+    }
+    pub fn update_spatial_map_arr(&mut self, spatial_dest_points: [[f32; 2]; 4]) {
+        let val = spatial_dest_points.iter()
+            .map(|pt| Point2f::new(pt[0], pt[1]))
+            .collect();
+        self.update_spatial_map(val);
+    }
+    pub fn update_pixel_map_vec(&mut self, pixel_src_points: &Vec<Vec<u16>>) {
+        let val = pixel_src_points.iter()
+            .map(|pt| Point2f::new(pt[0] as f32, pt[1] as f32))
+            .collect();
+        self.update_pixel_map(val);
+    }
+    pub fn update_spatial_map_vec(&mut self, spatial_dest_points: &Vec<Vec<f32>>) {
+        let val = spatial_dest_points.iter()
+            .map(|pt| Point2f::new(pt[0], pt[1]))
+            .collect();
+        self.update_spatial_map(val);
     }
     pub fn set_target_classes(&mut self, vehicle_types: &'static [&'static str]) {
         for class in vehicle_types.iter() {
@@ -319,9 +348,16 @@ impl ConvexPolygon {
         for pt in self.coordinates.iter() {
             euclidean.push(vec![pt.x, pt.y]);
         }
+        let mut geojson_poly = vec![];
+        let mut poly_element = vec![];
+        for v in self.coordinates_wgs84.iter() {
+            poly_element.push(vec![v.x, v.y]);
+        }
+        poly_element.push(vec![self.coordinates_wgs84[0].x, self.coordinates_wgs84[0].y]);
+        geojson_poly.push(poly_element);
         return PolygonFeatureGeoJSON{
             typ: "Feature".to_string(),
-            id: format!("dir_{}_lane_{}", self.road_lane_direction, self.road_lane_num),
+            id: self.id.clone(),
             properties: PolygonFeaturePropertiesGeoJSON{
                 road_lane_num: self.road_lane_num,
                 road_lane_direction: self.road_lane_direction,
@@ -329,7 +365,7 @@ impl ConvexPolygon {
             },
             geometry: GeoPolygon{
                 geometry_type: "Polygon".to_string(),
-                coordinates: self.coordinates_wgs84.clone()
+                coordinates: geojson_poly
             },
         };
     }

@@ -304,23 +304,36 @@ fn run(config_file: &str) -> opencv::Result<()> {
                 let encoded = imencode(".jpg", &read_frame, &mut buffer, &params).unwrap();
                 if !encoded {
                     println!("image has not been encoded");
+                    continue;
                 }
-                tx_mjpeg.send(buffer).unwrap();
+                match tx_mjpeg.send(buffer) {
+                    Ok(_)=>{},
+                    Err(_err) => {
+                        // Closed channel?
+                        // println!("Error on send frame to MJPEG thread: {}", _err)
+                    }
+                };
             }
-            tx.send(ThreadedFrame{
+            match tx.send(ThreadedFrame{
                 frame: read_frame,
                 sec_diff: sec_diff,
                 last_time: last_time,
                 capture_millis: elapsed_capture,
-            }).unwrap();
+            }) {
+                Ok(_)=>{},
+                Err(_err) => {
+                    // Closed channel?
+                    // println!("Error on send frame to detection thread: {}", _err)
+                }
+            };
         }
     });
 
     for received in rx {
         let mut frame = received.frame.clone();
 
-        let blobimg = blob_from_image(&frame, blob_scale, net_size, blob_mean, true, false, CV_32F);
-        match neural_net.set_input(&blobimg.unwrap(), blob_name, 1.0, default_scalar) {
+        let blobimg = blob_from_image(&frame, blob_scale, net_size, blob_mean, true, false, CV_32F)?;
+        match neural_net.set_input(&blobimg, blob_name, 1.0, default_scalar) {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't set input of neural network due the error {:?}", err);
@@ -443,5 +456,10 @@ fn main() {
             "./data/conf.toml"
         }
     };
-    run(path_to_config).unwrap();
+    match run(path_to_config) {
+        Ok(_) => {},
+        Err(_err) => {
+            println!("Error: {}", _err);
+        }
+    };
 }

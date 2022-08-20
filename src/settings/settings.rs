@@ -122,19 +122,15 @@ impl RoadLanesSettings {
             .iter()
             .map(|pt| Point2f::new(pt[0], pt[1]))
             .collect();
-
-        let mut geojson_poly = vec![];
-        let mut poly_element = vec![];
-        for v in self.geometry_wgs84.iter() {
-            poly_element.push(vec![v[0], v[1]]);
-        }
-        poly_element.push(vec![self.geometry_wgs84[0][0], self.geometry_wgs84[0][1]]);
-        geojson_poly.push(poly_element);
+        let geom_wgs84_std = self.geometry_wgs84
+            .iter()
+            .map(|pt| Point2f::new(pt[0], pt[1]))
+            .collect();
     
         ConvexPolygon::new(
             format!("dir_{}_lane_{}", self.lane_direction, self.lane_number),
             geom,
-            geojson_poly,
+            geom_wgs84_std,
             Scalar::from((self.color_rgb[2] as f64, self.color_rgb[1] as f64, self.color_rgb[0] as f64)),
             self.lane_number,
             self.lane_direction,

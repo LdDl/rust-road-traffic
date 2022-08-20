@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use crate::lib::data_storage::DataStorage;
 use crate::lib::geojson::PolygonsGeoJSON;
 
+use crate::lib::rest_api::polygons_mutations;
+
 async fn say_ping() -> impl Responder {
     HttpResponse::Ok().body("pong")
 }
@@ -20,6 +22,8 @@ pub async fn polygons_list(data: web::Data<Arc<RwLock<DataStorage>>>) -> Result<
         drop(element);
         ans.features.push(geo_feature);
     }
+    drop(data_expected_polygons);
+    drop(data_expected);
     return Ok(HttpResponse::Ok().json(ans));
 }
 
@@ -91,6 +95,10 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
                 web::scope("/stats")
                 .route("/all", web::get().to(all_polygons_stats))
                 // .route("/by_polygon_id/{polygon_id}", web::get().to(/*todo*/))
+            )
+            .service(
+                web::scope("/mutations")
+                .route("change_polygon", web::post().to(polygons_mutations::change_polygon))
             )
         );
 }
