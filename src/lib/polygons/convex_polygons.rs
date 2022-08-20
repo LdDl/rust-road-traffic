@@ -124,6 +124,20 @@ impl ConvexPolygon {
     pub fn set_road_lane_direction(&mut self, new_value: u8) {
         self.road_lane_direction = new_value;
     }
+    pub fn update_pixel_map(&mut self, pixel_src_points: Vector<Point2f>) {
+        self.source_pixel_map = pixel_src_points;
+        if self.source_spatial_map.len() == 0 {
+            self.source_spatial_map = self.source_pixel_map.iter().collect();
+        }
+        self.spatial_converter = SpatialConverter::new(&self.source_pixel_map, &self.source_spatial_map);
+    }
+    pub fn update_spatial_map(&mut self, spatial_dest_points: Vector<Point2f>) {
+        self.source_spatial_map = spatial_dest_points;
+        if self.source_pixel_map.len() == 0 {
+            self.source_pixel_map = self.source_spatial_map.iter().collect();
+        }
+        self.spatial_converter = SpatialConverter::new(&self.source_pixel_map, &self.source_spatial_map);
+    }
     pub fn set_target_classes(&mut self, vehicle_types: &'static [&'static str]) {
         for class in vehicle_types.iter() {
             self.statistics.insert(class.to_string(), VehicleTypeParameters::default());

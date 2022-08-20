@@ -107,7 +107,6 @@ use opencv::core::Point;
 use opencv::core::Point2f;
 use opencv::core::Scalar;
 use opencv::core::Vector;
-use chrono::Utc;
 
 impl RoadLanesSettings {
     pub fn convert_to_convex_polygon(&self) -> ConvexPolygon{
