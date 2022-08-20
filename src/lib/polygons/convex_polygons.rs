@@ -17,8 +17,10 @@ use crate::lib::geojson::{
 
 use opencv::{
     core::Point,
+    core::Point2f,
     core::Scalar,
     core::Mat,
+    core::Vector,
     imgproc::put_text,
     imgproc::FONT_HERSHEY_SIMPLEX,
     imgproc::LINE_8,
@@ -79,6 +81,25 @@ impl ConvexPolygon {
             road_lane_num: 0,
             road_lane_direction: 0,
             spatial_converter: SpatialConverter::empty(),
+            blobs: HashSet::new(),
+            statistics: HashMap::new(),
+            period_start: Utc::now(),
+            period_end: None,
+        }
+    }
+    pub fn new(id: String, coordinates: Vec<Point>, coordinates_wgs84: Vec<Vec<Vec<f32>>>, color: Scalar, road_lane_num: u16, road_lane_direction: u8, pixel_src_points: &Vector<Point2f>, spatial_dest_points: &Vector<Point2f>) -> Self {
+        ConvexPolygon{
+            id: id,
+            coordinates: coordinates,
+            coordinates_wgs84: coordinates_wgs84,
+            color: color,
+            avg_speed: -1.0,
+            sum_intensity: 0,
+            estimated_avg_speed: 0.0,
+            estimated_sum_intensity: 0,
+            road_lane_num: road_lane_num,
+            road_lane_direction: road_lane_direction,
+            spatial_converter: SpatialConverter::new(&pixel_src_points, &spatial_dest_points),
             blobs: HashSet::new(),
             statistics: HashMap::new(),
             period_start: Utc::now(),

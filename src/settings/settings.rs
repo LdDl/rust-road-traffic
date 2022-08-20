@@ -106,6 +106,7 @@ use std::collections::HashMap;
 use opencv::core::Point;
 use opencv::core::Point2f;
 use opencv::core::Scalar;
+use opencv::core::Vector;
 use chrono::Utc;
 
 impl RoadLanesSettings {
@@ -114,11 +115,11 @@ impl RoadLanesSettings {
             .iter()
             .map(|pt| Point::new(pt[0], pt[1]))
             .collect();
-        let geom_f32 = self.geometry
+        let geom_f32: Vector<Point2f> = self.geometry
             .iter()
             .map(|pt| Point2f::new(pt[0] as f32, pt[1] as f32))
             .collect();
-        let geom_wgs84 = self.geometry_wgs84
+        let geom_wgs84: Vector<Point2f> = self.geometry_wgs84
             .iter()
             .map(|pt| Point2f::new(pt[0], pt[1]))
             .collect();
@@ -130,25 +131,17 @@ impl RoadLanesSettings {
         }
         poly_element.push(vec![self.geometry_wgs84[0][0], self.geometry_wgs84[0][1]]);
         geojson_poly.push(poly_element);
-
-        return ConvexPolygon{
-            id: format!("dir_{}_lane_{}", self.lane_direction, self.lane_number),
-            coordinates: geom,
-            coordinates_wgs84: geojson_poly,
-            // RGB to OpenCV = [B, G, R]. So use reverse order
-            color: Scalar::from((self.color_rgb[2] as f64, self.color_rgb[1] as f64, self.color_rgb[0] as f64)),
-            avg_speed: -1.0,
-            sum_intensity: 0,
-            estimated_avg_speed: 0.0,
-            estimated_sum_intensity: 0,
-            road_lane_num: self.lane_number,
-            road_lane_direction: self.lane_direction,
-            spatial_converter: SpatialConverter::new(&geom_f32, &geom_wgs84),
-            blobs: HashSet::new(),
-            statistics: HashMap::new(),
-            period_start: Utc::now(),
-            period_end: None,
-        }
+    
+        ConvexPolygon::new(
+            format!("dir_{}_lane_{}", self.lane_direction, self.lane_number),
+            geom,
+            geojson_poly,
+            Scalar::from((self.color_rgb[2] as f64, self.color_rgb[1] as f64, self.color_rgb[0] as f64)),
+            self.lane_number,
+            self.lane_direction,
+            &geom_f32,
+            &geom_wgs84
+        )
     }
 }
 
