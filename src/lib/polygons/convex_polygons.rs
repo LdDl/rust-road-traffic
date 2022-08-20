@@ -47,6 +47,8 @@ pub struct ConvexPolygon {
     pub statistics: HashMap<String, VehicleTypeParameters>,
     pub period_start: DateTime<Utc>,
     pub period_end: Option<DateTime<Utc>>,
+    source_pixel_map: Vector<Point2f>,
+    source_spatial_map: Vector<Point2f>
 }
 
 #[derive(Debug)]
@@ -85,9 +87,11 @@ impl ConvexPolygon {
             statistics: HashMap::new(),
             period_start: Utc::now(),
             period_end: None,
+            source_pixel_map: Vector::<Point2f>::new(),
+            source_spatial_map: Vector::<Point2f>::new()
         }
     }
-    pub fn new(id: String, coordinates: Vec<Point>, coordinates_wgs84: Vec<Vec<Vec<f32>>>, color: Scalar, road_lane_num: u16, road_lane_direction: u8, pixel_src_points: &Vector<Point2f>, spatial_dest_points: &Vector<Point2f>) -> Self {
+    pub fn new(id: String, coordinates: Vec<Point>, coordinates_wgs84: Vec<Vec<Vec<f32>>>, color: Scalar, road_lane_num: u16, road_lane_direction: u8, pixel_src_points: Vector<Point2f>, spatial_dest_points: Vector<Point2f>) -> Self {
         ConvexPolygon{
             id: id,
             coordinates: coordinates,
@@ -104,6 +108,8 @@ impl ConvexPolygon {
             statistics: HashMap::new(),
             period_start: Utc::now(),
             period_end: None,
+            source_pixel_map: pixel_src_points,
+            source_spatial_map: spatial_dest_points
         }
     }
     pub fn get_id(&self) -> String {
@@ -115,7 +121,7 @@ impl ConvexPolygon {
     pub fn set_road_lane_num(&mut self, new_value: u16) {
         self.road_lane_num = new_value;
     }
-    pub fn set_road_lane_direction(&mut self, new_value: u16) {
+    pub fn set_road_lane_direction(&mut self, new_value: u8) {
         self.road_lane_direction = new_value;
     }
     pub fn set_target_classes(&mut self, vehicle_types: &'static [&'static str]) {

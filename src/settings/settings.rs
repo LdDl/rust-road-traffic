@@ -139,8 +139,8 @@ impl RoadLanesSettings {
             Scalar::from((self.color_rgb[2] as f64, self.color_rgb[1] as f64, self.color_rgb[0] as f64)),
             self.lane_number,
             self.lane_direction,
-            &geom_f32,
-            &geom_wgs84
+            geom_f32,
+            geom_wgs84
         )
     }
 }
