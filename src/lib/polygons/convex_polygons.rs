@@ -112,6 +112,12 @@ impl ConvexPolygon {
     pub fn set_id(&mut self, id: String) {
         self.id = id;
     }
+    pub fn set_road_lane_num(&mut self, new_value: u16) {
+        self.road_lane_num = new_value;
+    }
+    pub fn set_road_lane_direction(&mut self, new_value: u16) {
+        self.road_lane_direction = new_value;
+    }
     pub fn set_target_classes(&mut self, vehicle_types: &'static [&'static str]) {
         for class in vehicle_types.iter() {
             self.statistics.insert(class.to_string(), VehicleTypeParameters::default());
