@@ -7,6 +7,11 @@ use std::sync::{Arc, RwLock};
 use crate::lib::data_storage::DataStorage;
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct ErrorResponse {
+    pub error_text: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PolygonUpdateRequest {
     pub polygon_id: String,
     pub pixel_points: Option<[[u16; 2]; 4]>,
@@ -19,11 +24,6 @@ pub struct PolygonUpdateRequest {
 #[derive(Debug, Serialize)]
 pub struct PolygonUpdateResponse <'a>{
     pub message: &'a str,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct ErrorResponse {
-    pub error_text: String,
 }
 
 //
