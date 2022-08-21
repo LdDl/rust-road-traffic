@@ -5,6 +5,7 @@ use serde::{
 };
 use std::sync::{Arc, RwLock};
 use crate::lib::data_storage::DataStorage;
+use crate::lib::polygons::ConvexPolygon;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ErrorResponse {
@@ -44,6 +45,11 @@ pub async fn change_polygon(data: web::Data<Arc<RwLock<DataStorage>>>, update_po
             }));
         }
     };
+
+    // @todo need to deal with those (see main function):
+    // polygon.scale_geom(scale_x, scale_y);    
+    // polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
+
     match update_polygon.pixel_points {
         Some(data) => {
             let mut polygon = polygon_mutex.lock().expect("Mutex poisoned");
@@ -126,5 +132,75 @@ pub async fn delete_polygon(data: web::Data<Arc<RwLock<DataStorage>>>, delete_po
 
     return Ok(HttpResponse::Ok().json(PolygonDeleteResponse{
         message: "ok"
+    }));
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PolygonCreateRequest {
+    pub pixel_points: Option<[[u16; 2]; 4]>,
+    pub spatial_points: Option<[[f32; 2]; 4]>,
+    pub lane_number: Option<u16>,
+    pub lane_direction: Option<u8>,
+    pub color_rgb: Option<[i16; 3]>
+}
+
+#[derive(Debug, Serialize)]
+pub struct PolygonCreateResponse {
+    pub polygon_id: String
+}
+
+//
+// curl -XPOST 'http://localhost:42001/api/mutations/create_polygon' -d '{"lane_number": 939, "lane_direction": 33, "pixel_points": [[230, 200], [550, 235], [512, 40], [359, 69]], "spatial_points": [[37.618908137083054, 54.20564619851147], [37.61891517788172, 54.20564502193819], [37.618927247822285, 54.205668749493036], [37.61892020702362, 54.2056701221611]], "color_rgb": [130, 130, 0]}' -H 'Content-Type: application/json'
+//
+pub async fn create_polygon(data: web::Data<Arc<RwLock<DataStorage>>>, new_polygon: web::Json<PolygonCreateRequest>) -> Result<HttpResponse, Error> {
+
+    // @todo need to deal with those (see main function):
+    // polygon.scale_geom(scale_x, scale_y);    
+    // polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
+
+    let mut polygon = ConvexPolygon::empty();
+    match new_polygon.pixel_points {
+        Some(data) => {
+            polygon.update_pixel_map_arr(data);
+        },
+        _ => {}
+    }
+
+    match new_polygon.spatial_points {
+        Some(data) => {
+            polygon.update_spatial_map_arr(data);
+        },
+        _ => {}
+    }
+
+    match new_polygon.lane_direction {
+        Some(val) => {
+            polygon.set_road_lane_direction(val);
+        },
+        _ => {}
+    }
+
+    match new_polygon.lane_number {
+        Some(val) => {
+            polygon.set_road_lane_num(val);
+        },
+        _ => {}
+    }
+
+    match new_polygon.color_rgb {
+        Some(val) => {
+            polygon.set_color(val);
+        },
+        _ => {}
+    }
+
+    let new_id = polygon.get_id().clone();
+
+    let data_storage = data.get_ref().clone();
+    let data_expected = data_storage.read().expect("expect: polygons_list");
+    data_expected.insert_polygon(polygon);
+
+    return Ok(HttpResponse::Ok().json(PolygonCreateResponse{
+        polygon_id: new_id
     }));
 }

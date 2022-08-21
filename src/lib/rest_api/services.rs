@@ -98,6 +98,7 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
             )
             .service(
                 web::scope("/mutations")
+                .route("create_polygon", web::post().to(polygons_mutations::create_polygon))
                 .route("change_polygon", web::post().to(polygons_mutations::change_polygon))
                 .route("delete_polygon", web::post().to(polygons_mutations::delete_polygon))
             )

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
+use uuid::Uuid;
 
 mod geometry;
 use geometry::PointsOrientation;
@@ -74,6 +75,27 @@ impl ConvexPolygon {
         return ConvexPolygon{
             id: "dir_0_lane_0".to_string(),
             coordinates: points,
+            coordinates_wgs84: vec![],
+            color: Scalar::from((255.0, 255.0, 255.0)),
+            avg_speed: -1.0,
+            sum_intensity: 0,
+            estimated_avg_speed: 0.0,
+            estimated_sum_intensity: 0,
+            road_lane_num: 0,
+            road_lane_direction: 0,
+            spatial_converter: SpatialConverter::empty(),
+            blobs: HashSet::new(),
+            statistics: HashMap::new(),
+            period_start: Utc::now(),
+            period_end: None,
+            source_pixel_map: Vector::<Point2f>::new(),
+            source_spatial_map: Vector::<Point2f>::new()
+        }
+    }
+    pub fn empty() -> Self{
+        return ConvexPolygon{
+            id: Uuid::new_v4().to_string(),
+            coordinates: vec![],
             coordinates_wgs84: vec![],
             color: Scalar::from((255.0, 255.0, 255.0)),
             avg_speed: -1.0,

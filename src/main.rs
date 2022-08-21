@@ -16,14 +16,11 @@ use opencv::{
     imgcodecs::imencode,
     dnn::DNN_BACKEND_CUDA,
     dnn::DNN_TARGET_CUDA,
-    dnn::Net,
     dnn::read_net,
-    dnn::read_net_from_caffe,
-    dnn::blob_from_image,
+    dnn::blob_from_image
 };
 
 use chrono::{
-    DateTime,
     Utc,
     Duration
 };
@@ -36,8 +33,7 @@ use lib::data_storage::{
     DataStorage
 };
 use lib::detection::{
-    process_yolo_detections,
-    process_mobilenet_detections
+    process_yolo_detections
 };
 
 mod settings;
