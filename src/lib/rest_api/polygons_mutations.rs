@@ -26,6 +26,9 @@ pub struct ErrorResponse {
     pub error_text: String,
 }
 
+//
+// curl -XPOST 'http://localhost:42001/api/mutations/change_polygon' -d '{"polygon_id":"dir_0_lane_1", "lane_number": 939, "pixel_points": [[299, 222], [572, 265], [547, 66], [359, 69]], "color_rgb": [130, 0, 100]}' -H 'Content-Type: application/json'
+//
 pub async fn change_polygon(data: web::Data<Arc<RwLock<DataStorage>>>, update_polygon: web::Json<PolygonUpdateRequest>) -> Result<HttpResponse, Error> {
 
     let data_storage = data.get_ref().clone();
@@ -87,6 +90,41 @@ pub async fn change_polygon(data: web::Data<Arc<RwLock<DataStorage>>>, update_po
     }
 
     return Ok(HttpResponse::Ok().json(PolygonUpdateResponse{
+        message: "ok"
+    }));
+}
+
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PolygonDeleteRequest {
+    pub polygon_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PolygonDeleteResponse <'a>{
+    pub message: &'a str,
+}
+
+//
+// curl -XPOST 'http://localhost:42001/api/mutations/delete_polygon' -d '{"polygon_id":"dir_0_lane_1"}' -H 'Content-Type: application/json'
+//
+pub async fn delete_polygon(data: web::Data<Arc<RwLock<DataStorage>>>, delete_polygon: web::Json<PolygonDeleteRequest>) -> Result<HttpResponse, Error> {
+
+    let data_storage = data.get_ref().clone();
+    let data_expected = data_storage.read().expect("expect: polygons_list");
+    let mut data_expected_polygons = data_expected.polygons.write().expect("expect: polygons_list");
+
+    match data_expected_polygons.remove(&delete_polygon.polygon_id) {
+        /* Check if polygon with such identifier exists */
+        Some(_) => {},
+        None => {
+            return Ok(HttpResponse::build(StatusCode::FAILED_DEPENDENCY).json(ErrorResponse {
+                error_text: format!("No such polygon. Requested ID: {}", delete_polygon.polygon_id)
+            }));
+        }
+    };
+
+    return Ok(HttpResponse::Ok().json(PolygonDeleteResponse{
         message: "ok"
     }));
 }
