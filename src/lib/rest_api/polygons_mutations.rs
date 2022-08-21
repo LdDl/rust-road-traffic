@@ -13,6 +13,7 @@ pub struct PolygonUpdateRequest {
     pub spatial_points: Option<[[f32; 2]; 4]>,
     pub lane_number: Option<u16>,
     pub lane_direction: Option<u8>,
+    pub color_rgb: Option<[i16; 3]>
 }
 
 #[derive(Debug, Serialize)]
@@ -71,6 +72,15 @@ pub async fn change_polygon(data: web::Data<Arc<RwLock<DataStorage>>>, update_po
         Some(val) => {
             let mut polygon = polygon_mutex.lock().expect("Mutex poisoned");
             polygon.set_road_lane_num(val);
+            drop(polygon);
+        },
+        _ => {}
+    }
+
+    match update_polygon.color_rgb {
+        Some(val) => {
+            let mut polygon = polygon_mutex.lock().expect("Mutex poisoned");
+            polygon.set_color(val);
             drop(polygon);
         },
         _ => {}
