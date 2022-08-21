@@ -167,6 +167,9 @@ impl ConvexPolygon {
             .collect();
         self.update_spatial_map(val);
     }
+    pub fn set_color(&mut self, color_rgb: [i16; 3]) {
+        self.color = Scalar::from((color_rgb[2] as f64, color_rgb[1] as f64, color_rgb[0] as f64))
+    }
     pub fn set_target_classes(&mut self, vehicle_types: &'static [&'static str]) {
         for class in vehicle_types.iter() {
             self.statistics.insert(class.to_string(), VehicleTypeParameters::default());
