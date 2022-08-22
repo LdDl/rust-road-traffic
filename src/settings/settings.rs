@@ -163,6 +163,21 @@ impl AppSettings {
         fs::write(filename, docs.to_string())?;
         Ok(())
     }
+    pub fn get_copy_no_roads(&self) -> AppSettings {
+        AppSettings{
+            input: self.input.clone(),
+            debug: self.debug.clone(),
+            output: self.output.clone(),
+            detection: self.detection.clone(),
+            tracking: self.tracking.clone(),
+            equipment_info: self.equipment_info.clone(),
+            road_lanes: Vec::new(),
+            worker: self.worker.clone(),
+            rest_api: self.rest_api.clone(),
+            redis_publisher: self.redis_publisher.clone(),
+            mjpeg_streaming: self.mjpeg_streaming.clone(),
+        }
+    }
 }
 
 use std::fmt;
