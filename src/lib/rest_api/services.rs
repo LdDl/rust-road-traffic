@@ -1,18 +1,20 @@
 use actix_web::{HttpResponse, web, Responder, Error};
 
-use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
-use crate::lib::data_storage::DataStorage;
 use crate::lib::geojson::PolygonsGeoJSON;
+use crate::lib::rest_api::Storage;
 
-use crate::lib::rest_api::polygons_mutations;
+use crate::lib::rest_api::{
+    polygons_mutations,
+    toml_mutations
+};
 
 async fn say_ping() -> impl Responder {
     HttpResponse::Ok().body("pong")
 }
 
-pub async fn polygons_list(data: web::Data<Arc<RwLock<DataStorage>>>) -> Result<HttpResponse, Error> {
-    let data_storage = data.get_ref().clone();
+pub async fn polygons_list(data: web::Data<Storage>) -> Result<HttpResponse, Error> {
+    let data_storage = data.data_storage.as_ref().clone();
     let data_expected = data_storage.read().expect("expect: polygons_list");
     let data_expected_polygons = data_expected.polygons.read().expect("expect: polygons_list");
     let mut ans = PolygonsGeoJSON::new();
@@ -51,8 +53,8 @@ pub struct VehicleTypeParameters {
     pub estimated_sum_intensity: u32
 }
 
-pub async fn all_polygons_stats(data: web::Data<Arc<RwLock<DataStorage>>>) -> Result<HttpResponse, Error> {
-    let data_storage = data.get_ref().clone();
+pub async fn all_polygons_stats(data: web::Data<Storage>) -> Result<HttpResponse, Error> {
+    let data_storage = data.data_storage.as_ref().clone();
     let data_expected = data_storage.read().expect("expect: all_polygons_stats");
     let data_expected_polygons = data_expected.polygons.read().expect("expect: all_polygons_stats");
     let mut ans = AllPolygonsStats{
@@ -98,9 +100,10 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
             )
             .service(
                 web::scope("/mutations")
-                .route("create_polygon", web::post().to(polygons_mutations::create_polygon))
-                .route("change_polygon", web::post().to(polygons_mutations::change_polygon))
-                .route("delete_polygon", web::post().to(polygons_mutations::delete_polygon))
+                .route("/create_polygon", web::post().to(polygons_mutations::create_polygon))
+                .route("/change_polygon", web::post().to(polygons_mutations::change_polygon))
+                .route("/delete_polygon", web::post().to(polygons_mutations::delete_polygon))
+                .route("/save_toml", web::get().to(toml_mutations::save_toml))
             )
         );
 }

@@ -11,6 +11,7 @@
 /data/10.57.21.28-morning.mp4
 /data/work
 /data/work/*.toml
+/data/conf.toml.bak
 /data/work/*.mp4
 /vs_code
 /vscode

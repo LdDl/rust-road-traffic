@@ -71,6 +71,9 @@ const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", 
 fn run(config_file: &str) -> opencv::Result<()> {
 
     let app_settings = AppSettings::new_settings(config_file);
+    let settings_cloned = app_settings.clone();
+    let path_clone = config_file.to_owned();
+
     println!("Settings are:\n\t{}", app_settings);
 
     let output_width: i32 = app_settings.output.width;
@@ -146,7 +149,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
         let server_port = app_settings.rest_api.back_end_port;
         let convex_polygons_rest = convex_polygons_arc.clone();
         thread::spawn(move || {
-            match rest_api::start_rest_api(server_host, server_port, convex_polygons_rest) {
+            match rest_api::start_rest_api(server_host, server_port, convex_polygons_rest, settings_cloned, &path_clone) {
                 Ok(_) => {},
                 Err(err) => {
                     panic!("Can't start API due the error: {:?}", err)

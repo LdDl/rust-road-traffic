@@ -3,9 +3,8 @@ use serde::{
     Deserialize,
     Serialize
 };
-use std::sync::{Arc, RwLock};
-use crate::lib::data_storage::DataStorage;
 use crate::lib::polygons::ConvexPolygon;
+use crate::lib::rest_api::Storage;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ErrorResponse {
@@ -30,9 +29,9 @@ pub struct PolygonUpdateResponse <'a>{
 //
 // curl -XPOST 'http://localhost:42001/api/mutations/change_polygon' -d '{"polygon_id":"dir_0_lane_1", "lane_number": 939, "pixel_points": [[299, 222], [572, 265], [547, 66], [359, 69]], "color_rgb": [130, 0, 100]}' -H 'Content-Type: application/json'
 //
-pub async fn change_polygon(data: web::Data<Arc<RwLock<DataStorage>>>, update_polygon: web::Json<PolygonUpdateRequest>) -> Result<HttpResponse, Error> {
+pub async fn change_polygon(data: web::Data<Storage>, update_polygon: web::Json<PolygonUpdateRequest>) -> Result<HttpResponse, Error> {
 
-    let data_storage = data.get_ref().clone();
+    let data_storage = data.data_storage.as_ref().clone();
     let data_expected = data_storage.read().expect("expect: polygons_list");
     let mut data_expected_polygons = data_expected.polygons.write().expect("expect: polygons_list");
 
@@ -114,9 +113,9 @@ pub struct PolygonDeleteResponse <'a>{
 //
 // curl -XPOST 'http://localhost:42001/api/mutations/delete_polygon' -d '{"polygon_id":"dir_0_lane_1"}' -H 'Content-Type: application/json'
 //
-pub async fn delete_polygon(data: web::Data<Arc<RwLock<DataStorage>>>, delete_polygon: web::Json<PolygonDeleteRequest>) -> Result<HttpResponse, Error> {
+pub async fn delete_polygon(data: web::Data<Storage>, delete_polygon: web::Json<PolygonDeleteRequest>) -> Result<HttpResponse, Error> {
 
-    let data_storage = data.get_ref().clone();
+    let data_storage = data.data_storage.as_ref().clone();
     let data_expected = data_storage.read().expect("expect: polygons_list");
     let mut data_expected_polygons = data_expected.polygons.write().expect("expect: polygons_list");
 
@@ -152,7 +151,7 @@ pub struct PolygonCreateResponse {
 //
 // curl -XPOST 'http://localhost:42001/api/mutations/create_polygon' -d '{"lane_number": 939, "lane_direction": 33, "pixel_points": [[230, 200], [550, 235], [512, 40], [359, 69]], "spatial_points": [[37.618908137083054, 54.20564619851147], [37.61891517788172, 54.20564502193819], [37.618927247822285, 54.205668749493036], [37.61892020702362, 54.2056701221611]], "color_rgb": [130, 130, 0]}' -H 'Content-Type: application/json'
 //
-pub async fn create_polygon(data: web::Data<Arc<RwLock<DataStorage>>>, new_polygon: web::Json<PolygonCreateRequest>) -> Result<HttpResponse, Error> {
+pub async fn create_polygon(data: web::Data<Storage>, new_polygon: web::Json<PolygonCreateRequest>) -> Result<HttpResponse, Error> {
 
     // @todo need to deal with those (see main function):
     // polygon.scale_geom(scale_x, scale_y);    
@@ -196,7 +195,7 @@ pub async fn create_polygon(data: web::Data<Arc<RwLock<DataStorage>>>, new_polyg
 
     let new_id = polygon.get_id().clone();
 
-    let data_storage = data.get_ref().clone();
+    let data_storage = data.data_storage.as_ref().clone();
     let data_expected = data_storage.read().expect("expect: polygons_list");
     data_expected.insert_polygon(polygon);
 

@@ -1,9 +1,10 @@
 use std::fs;
 
-use serde::Deserialize;
+use serde::{ Deserialize, Serialize };
 use toml;
+use std::error::Error;
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppSettings {
     pub input: InputSettings,
     pub debug: Option<DebugSettings>,
@@ -18,7 +19,7 @@ pub struct AppSettings {
     pub mjpeg_streaming: Option<MJPEGStreamingSettings>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InputSettings {
     pub video_src: String,
     pub typ: String,
@@ -26,12 +27,12 @@ pub struct InputSettings {
     pub scale_y: Option<f32>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DebugSettings {
     pub enable: bool
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OutputSettings {
     pub enable: bool,
     pub width: i32,
@@ -39,7 +40,7 @@ pub struct OutputSettings {
     pub window_name: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DetectionSettings {
     pub network_weights: String,
     pub network_cfg: String,
@@ -50,17 +51,17 @@ pub struct DetectionSettings {
     pub net_classes: Vec<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TrackingSettings {
     pub max_points_in_track: usize,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EquipmentInfo {
     pub id: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RoadLanesSettings {
     pub lane_number: u16,
     pub lane_direction: u8,
@@ -69,12 +70,12 @@ pub struct RoadLanesSettings {
     pub color_rgb: [i16; 3],
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WorkerSettings {
     pub reset_data_milliseconds: u64,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RestAPISettings {
     pub enable: bool,
     pub host: String,
@@ -82,7 +83,7 @@ pub struct RestAPISettings {
     pub api_scope: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RedisPublisherSettings {
     pub enable: bool,
     pub host: String,
@@ -92,7 +93,7 @@ pub struct RedisPublisherSettings {
     pub channel_name: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MJPEGStreamingSettings {
     pub enable: bool,
     pub host: String,
@@ -102,7 +103,6 @@ pub struct MJPEGStreamingSettings {
 use crate::lib::polygons::ConvexPolygon;
 use opencv::core::Point2f;
 use opencv::core::Scalar;
-use opencv::core::Vector;
 
 impl RoadLanesSettings {
     pub fn convert_to_convex_polygon(&self) -> ConvexPolygon{
@@ -156,6 +156,12 @@ impl AppSettings {
             _ => {  }
         }
         return app_settings;
+    }
+    pub fn save(&self, filename: &str) -> Result<(), Box<dyn Error>>{
+        fs::copy(filename, filename.to_owned() + ".bak")?;
+        let docs = toml::to_string(self)?;
+        fs::write(filename, docs.to_string())?;
+        Ok(())
     }
 }
 
