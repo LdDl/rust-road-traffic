@@ -100,10 +100,6 @@ pub struct MJPEGStreamingSettings {
 }
 
 use crate::lib::polygons::ConvexPolygon;
-use crate::lib::spatial::SpatialConverter;
-use std::collections::HashSet;
-use std::collections::HashMap;
-use opencv::core::Point;
 use opencv::core::Point2f;
 use opencv::core::Scalar;
 use opencv::core::Vector;
@@ -112,15 +108,7 @@ impl RoadLanesSettings {
     pub fn convert_to_convex_polygon(&self) -> ConvexPolygon{
         let geom = self.geometry
             .iter()
-            .map(|pt| Point::new(pt[0], pt[1]))
-            .collect();
-        let geom_f32: Vector<Point2f> = self.geometry
-            .iter()
             .map(|pt| Point2f::new(pt[0] as f32, pt[1] as f32))
-            .collect();
-        let geom_wgs84: Vector<Point2f> = self.geometry_wgs84
-            .iter()
-            .map(|pt| Point2f::new(pt[0], pt[1]))
             .collect();
         let geom_wgs84_std = self.geometry_wgs84
             .iter()
@@ -133,9 +121,7 @@ impl RoadLanesSettings {
             geom_wgs84_std,
             Scalar::from((self.color_rgb[2] as f64, self.color_rgb[1] as f64, self.color_rgb[0] as f64)),
             self.lane_number,
-            self.lane_direction,
-            geom_f32,
-            geom_wgs84
+            self.lane_direction
         )
     }
 }

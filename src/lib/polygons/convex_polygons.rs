@@ -34,8 +34,8 @@ use crate::lib::spatial::SpatialConverter;
 #[derive(Debug)]
 pub struct ConvexPolygon {
     pub id: String,
-    pub coordinates: Vec<Point>,
-    pub coordinates_wgs84:  Vec<Point2f>,
+    pub pixel_coordinates: Vec<Point2f>,
+    pub spatial_cooridnates:  Vec<Point2f>,
     pub color: Scalar,
     pub avg_speed: f32,
     pub sum_intensity: u32,
@@ -47,9 +47,7 @@ pub struct ConvexPolygon {
     pub estimated_sum_intensity: u32,
     pub statistics: HashMap<String, VehicleTypeParameters>,
     pub period_start: DateTime<Utc>,
-    pub period_end: Option<DateTime<Utc>>,
-    source_pixel_map: Vector<Point2f>,
-    source_spatial_map: Vector<Point2f>
+    pub period_end: Option<DateTime<Utc>>
 }
 
 #[derive(Debug)]
@@ -71,11 +69,11 @@ impl VehicleTypeParameters {
     }
 }
 impl ConvexPolygon {
-    pub fn default_from(points: Vec<Point>) -> Self{
+    pub fn default_from(points: Vec<Point2f>) -> Self{
         return ConvexPolygon{
             id: "dir_0_lane_0".to_string(),
-            coordinates: points,
-            coordinates_wgs84: vec![],
+            pixel_coordinates: points,
+            spatial_cooridnates: vec![],
             color: Scalar::from((255.0, 255.0, 255.0)),
             avg_speed: -1.0,
             sum_intensity: 0,
@@ -88,15 +86,13 @@ impl ConvexPolygon {
             statistics: HashMap::new(),
             period_start: Utc::now(),
             period_end: None,
-            source_pixel_map: Vector::<Point2f>::new(),
-            source_spatial_map: Vector::<Point2f>::new()
         }
     }
     pub fn empty() -> Self{
         return ConvexPolygon{
             id: Uuid::new_v4().to_string(),
-            coordinates: vec![],
-            coordinates_wgs84: vec![],
+            pixel_coordinates: vec![],
+            spatial_cooridnates: vec![],
             color: Scalar::from((255.0, 255.0, 255.0)),
             avg_speed: -1.0,
             sum_intensity: 0,
@@ -109,15 +105,14 @@ impl ConvexPolygon {
             statistics: HashMap::new(),
             period_start: Utc::now(),
             period_end: None,
-            source_pixel_map: Vector::<Point2f>::new(),
-            source_spatial_map: Vector::<Point2f>::new()
         }
     }
-    pub fn new(id: String, coordinates: Vec<Point>, coordinates_wgs84: Vec<Point2f>, color: Scalar, road_lane_num: u16, road_lane_direction: u8, pixel_src_points: Vector<Point2f>, spatial_dest_points: Vector<Point2f>) -> Self {
+    pub fn new(id: String, coordinates: Vec<Point2f>, spatial_cooridnates: Vec<Point2f>, color: Scalar, road_lane_num: u16, road_lane_direction: u8) -> Self {
+        let converter = SpatialConverter::new_from(coordinates.clone(), spatial_cooridnates.clone());
         ConvexPolygon{
             id: id,
-            coordinates: coordinates,
-            coordinates_wgs84: coordinates_wgs84,
+            pixel_coordinates: coordinates,
+            spatial_cooridnates: spatial_cooridnates,
             color: color,
             avg_speed: -1.0,
             sum_intensity: 0,
@@ -125,13 +120,11 @@ impl ConvexPolygon {
             estimated_sum_intensity: 0,
             road_lane_num: road_lane_num,
             road_lane_direction: road_lane_direction,
-            spatial_converter: SpatialConverter::new(&pixel_src_points, &spatial_dest_points),
+            spatial_converter: converter,
             blobs: HashSet::new(),
             statistics: HashMap::new(),
             period_start: Utc::now(),
             period_end: None,
-            source_pixel_map: pixel_src_points,
-            source_spatial_map: spatial_dest_points
         }
     }
     pub fn get_id(&self) -> String {
@@ -146,24 +139,20 @@ impl ConvexPolygon {
     pub fn set_road_lane_direction(&mut self, new_value: u8) {
         self.road_lane_direction = new_value;
     }
-    pub fn update_pixel_map(&mut self, pixel_src_points: Vector<Point2f>) {
-        self.source_pixel_map = pixel_src_points;
-        self.coordinates = self.source_pixel_map.iter().map(|pt| Point::new(pt.x as i32, pt.y as i32)).collect();
-        if self.source_spatial_map.len() == 0 {
-            self.source_spatial_map = self.source_pixel_map.iter().collect();
-            self.coordinates_wgs84 = self.source_spatial_map.iter().collect();
+    pub fn update_pixel_map(&mut self, pixel_src_points: Vec<Point2f>) {
+        self.pixel_coordinates = pixel_src_points;
+        if self.spatial_cooridnates.len() == 0 {
+            self.spatial_cooridnates = self.pixel_coordinates.iter().map(|pt| Point2f::new(pt.x as f32, pt.y as f32)).collect();
         }
-        self.spatial_converter = SpatialConverter::new(&self.source_pixel_map, &self.source_spatial_map);
+        self.spatial_converter = SpatialConverter::new_from(self.pixel_coordinates.clone(), self.spatial_cooridnates.clone());
         
     }
-    pub fn update_spatial_map(&mut self, spatial_dest_points: Vector<Point2f>) {
-        self.source_spatial_map = spatial_dest_points;
-        self.coordinates_wgs84 = self.source_spatial_map.iter().collect();
-        if self.source_pixel_map.len() == 0 {
-            self.source_pixel_map = self.source_spatial_map.iter().collect();
-            self.coordinates = self.source_pixel_map.iter().map(|pt| Point::new(pt.x as i32, pt.y as i32)).collect();
+    pub fn update_spatial_map(&mut self, spatial_dest_points: Vec<Point2f>) {
+        self.spatial_cooridnates = spatial_dest_points;
+        if self.pixel_coordinates.len() == 0 {
+            self.pixel_coordinates = self.pixel_coordinates.iter().map(|pt| Point2f::new(pt.x as f32, pt.y as f32)).collect();
         }
-        self.spatial_converter = SpatialConverter::new(&self.source_pixel_map, &self.source_spatial_map);
+        self.spatial_converter = SpatialConverter::new_from(self.pixel_coordinates.clone(), self.spatial_cooridnates.clone());
     }
     pub fn update_pixel_map_arr(&mut self, pixel_src_points: [[u16; 2]; 4]) {
         let val = pixel_src_points.iter()
@@ -200,7 +189,7 @@ impl ConvexPolygon {
     // Checks if given polygon contains a point
     // Code has been taken from: https://github.com/LdDl/odam/blob/master/virtual_polygons.go#L180
     pub fn contains_point(&self, x: i32, y: i32) -> bool {
-        let n = self.coordinates.len();
+        let n = self.pixel_coordinates.len();
         // @todo: math.maxInt could lead to overflow obviously. Need good workaround. PRs are welcome
         let extreme_point = vec![99999.0, y as f32];
         let mut intersections_cnt = 0;
@@ -211,25 +200,25 @@ impl ConvexPolygon {
             let current = (previous + 1) % n;
             // Check if the segment from given point P to extreme point intersects with the segment from polygon point on previous interation to  polygon point on current interation
             if is_intersects(
-                self.coordinates[previous].x as f32, self.coordinates[previous].y as f32,
-                self.coordinates[current].x as f32, self.coordinates[current].y as f32,
+                self.pixel_coordinates[previous].x as f32, self.pixel_coordinates[previous].y as f32,
+                self.pixel_coordinates[current].x as f32, self.pixel_coordinates[current].y as f32,
                 x_f32, y_f32,
                 extreme_point[0], extreme_point[1]
             ) 
             {
                 let orientation = get_orientation(
-                    self.coordinates[previous].x as f32, self.coordinates[previous].y as f32,
+                    self.pixel_coordinates[previous].x as f32, self.pixel_coordinates[previous].y as f32,
                     x_f32, y_f32,
-                    self.coordinates[current].x as f32, self.coordinates[current].y as f32
+                    self.pixel_coordinates[current].x as f32, self.pixel_coordinates[current].y as f32
                 );
                 // If given point P is collinear with segment from polygon point on previous interation to  polygon point on current interation
                 if orientation == PointsOrientation::Collinear {
                     // then check if it is on segment
 				    // 'True' will be returns if it lies on segment. Otherwise 'False' will be returned
                     return is_on_segment(
-                        self.coordinates[previous].x as f32, self.coordinates[previous].y as f32,
+                        self.pixel_coordinates[previous].x as f32, self.pixel_coordinates[previous].y as f32,
                         x_f32, y_f32,
-                        self.coordinates[current].x as f32, self.coordinates[current].y as f32
+                        self.pixel_coordinates[current].x as f32, self.pixel_coordinates[current].y as f32
                     );
                 }
                 intersections_cnt += 1;
@@ -328,16 +317,16 @@ impl ConvexPolygon {
 
     }
     pub fn scale_geom(&mut self, scale_factor_x: f32, scale_factor_y: f32) {
-        for pair in self.coordinates.iter_mut() {
-            pair.x = (pair.x as f32 * scale_factor_x).floor() as i32;
-            pair.y = (pair.y as f32 * scale_factor_y).floor() as i32;
+        for pair in self.pixel_coordinates.iter_mut() {
+            pair.x = (pair.x * scale_factor_x).floor();
+            pair.y = (pair.y * scale_factor_y).floor();
         }
     }
     pub fn draw_geom(&self, img: &mut Mat) {
         // @todo: proper error handling
-        for i in 1..self.coordinates.len() {
-            let prev_pt = self.coordinates[i - 1];
-            let current_pt = self.coordinates[i];
+        for i in 1..self.pixel_coordinates.len() {
+            let prev_pt = Point::new(self.pixel_coordinates[i - 1].x as i32, self.pixel_coordinates[i - 1].y as i32);
+            let current_pt = Point::new(self.pixel_coordinates[i].x as i32, self.pixel_coordinates[i].y as i32);
             match line(img, prev_pt, current_pt, self.color, 2, LINE_8, 0) {
                 Ok(_) => {},
                 Err(err) => {
@@ -345,7 +334,9 @@ impl ConvexPolygon {
                 }
             };
         }
-        match line(img, self.coordinates[self.coordinates.len() - 1], self.coordinates[0], self.color, 2, LINE_8, 0) {
+        let last_pt = Point::new(self.pixel_coordinates[self.pixel_coordinates.len() - 1].x as i32, self.pixel_coordinates[self.pixel_coordinates.len() - 1].y as i32);
+        let first_pt = Point::new(self.pixel_coordinates[0].x as i32, self.pixel_coordinates[0].y as i32);
+        match line(img, last_pt, first_pt, self.color, 2, LINE_8, 0) {
             Ok(_) => {},
             Err(err) => {
                 panic!("Can't draw line for polygon due the error: {:?}", err)
@@ -353,14 +344,15 @@ impl ConvexPolygon {
         };
     }
     pub fn draw_params(&self, img: &mut Mat) {
-        let anchor_speed = Point::new(self.coordinates[0].x, self.coordinates[0].y + 15);
+        let first_pt = Point::new(self.pixel_coordinates[0].x as i32, self.pixel_coordinates[0].y as i32);
+        let anchor_speed = Point::new(first_pt.x, first_pt.y + 15);
         match put_text(img, &format!("speed: {:.2} km/h", self.avg_speed), anchor_speed, FONT_HERSHEY_SIMPLEX, 0.7, Scalar::from((0.0, 255.0, 255.0)), 2, LINE_8, false) {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't display average speed for polygon due the error {:?}", err);
             }
         };
-        let anchor_intensity = Point::new(self.coordinates[0].x, self.coordinates[0].y + 35);
+        let anchor_intensity = Point::new(first_pt.x, first_pt.y + 35);
         match put_text(img, &format!("count: {}", self.sum_intensity), anchor_intensity, FONT_HERSHEY_SIMPLEX, 0.7, Scalar::from((0.0, 255.0, 255.0)), 2, LINE_8, false) {
             Ok(_) => {},
             Err(err) => {
@@ -370,15 +362,15 @@ impl ConvexPolygon {
     }
     pub fn to_geojson(&self) -> PolygonFeatureGeoJSON {
         let mut euclidean: Vec<Vec<i32>> = Vec::new();
-        for pt in self.coordinates.iter() {
-            euclidean.push(vec![pt.x, pt.y]);
+        for pt in self.pixel_coordinates.iter() {
+            euclidean.push(vec![pt.x as i32, pt.y as i32]);
         }
         let mut geojson_poly = vec![];
         let mut poly_element = vec![];
-        for v in self.coordinates_wgs84.iter() {
+        for v in self.spatial_cooridnates.iter() {
             poly_element.push(vec![v.x, v.y]);
         }
-        poly_element.push(vec![self.coordinates_wgs84[0].x, self.coordinates_wgs84[0].y]);
+        poly_element.push(vec![self.spatial_cooridnates[0].x, self.spatial_cooridnates[0].y]);
         geojson_poly.push(poly_element);
         return PolygonFeatureGeoJSON{
             typ: "Feature".to_string(),
@@ -404,47 +396,47 @@ mod tests {
         let convex_polygons = vec![
             ConvexPolygon::default_from(
                 vec![
-                    Point::new(0, 0),
-                    Point::new(5, 0),
-                    Point::new(5, 5),
-                    Point::new(0, 5),
+                    Point2f::new(0.0, 0.0),
+                    Point2f::new(5.0, 0.0),
+                    Point2f::new(5.0, 5.0),
+                    Point2f::new(0.0, 5.0),
                 ]
             ),
             ConvexPolygon::default_from(
                 vec![
-                    Point::new(0, 0),
-                    Point::new(5, 0),
-                    Point::new(5, 5),
-                    Point::new(0, 5),
+                    Point2f::new(0.0, 0.0),
+                    Point2f::new(5.0, 0.0),
+                    Point2f::new(5.0, 5.0),
+                    Point2f::new(0.0, 5.0),
                 ]
             ),
             ConvexPolygon::default_from(
                 vec![
-                    Point::new(0, 0),
-                    Point::new(5, 5),
-                    Point::new(5, 0),
+                    Point2f::new(0.0, 0.0),
+                    Point2f::new(5.0, 5.0),
+                    Point2f::new(5.0, 0.0),
                 ]
             ),
             ConvexPolygon::default_from(
                 vec![
-                    Point::new(0, 0),
-                    Point::new(5, 5),
-                    Point::new(5, 0),
+                    Point2f::new(0.0, 0.0),
+                    Point2f::new(5.0, 5.0),
+                    Point2f::new(5.0, 0.0),
                 ]
             ),
             ConvexPolygon::default_from(
                 vec![
-                    Point::new(0, 0),
-                    Point::new(5, 5),
-                    Point::new(5, 0),
+                    Point2f::new(0.0, 0.0),
+                    Point2f::new(5.0, 5.0),
+                    Point2f::new(5.0, 0.0),
                 ]
             ),
             ConvexPolygon::default_from(
                 vec![
-                    Point::new(0, 0),
-                    Point::new(5, 0),
-                    Point::new(5, 5),
-                    Point::new(0, 5),
+                    Point2f::new(0.0, 0.0),
+                    Point2f::new(5.0, 0.0),
+                    Point2f::new(5.0, 5.0),
+                    Point2f::new(0.0, 5.0),
                 ]
             )
         ];
@@ -473,10 +465,10 @@ mod tests {
     fn test_object_entered() {
         let polygon = ConvexPolygon::default_from(
             vec![
-                Point::new(23, 15),
-                Point::new(67, 15),
-                Point::new(67, 41),
-                Point::new(23, 41),
+                Point2f::new(23.0, 15.0),
+                Point2f::new(67.0, 15.0),
+                Point2f::new(67.0, 41.0),
+                Point2f::new(23.0, 41.0),
             ]
         );
 
@@ -516,10 +508,10 @@ mod tests {
     fn test_object_left() {
         let polygon = ConvexPolygon::default_from(
             vec![
-                Point::new(23, 15),
-                Point::new(67, 15),
-                Point::new(67, 41),
-                Point::new(23, 41),
+                Point2f::new(23.0, 15.0),
+                Point2f::new(67.0, 15.0),
+                Point2f::new(67.0, 41.0),
+                Point2f::new(23.0, 41.0),
             ]
         );
 
