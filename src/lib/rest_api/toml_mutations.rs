@@ -1,6 +1,5 @@
 use actix_web::{HttpResponse, web, Error};
 use serde::{
-    Deserialize,
     Serialize
 };
 use crate::lib::rest_api::Storage;

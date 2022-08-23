@@ -32,13 +32,13 @@ pub async fn polygons_list(data: web::Data<Storage>) -> Result<HttpResponse, Err
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct AllPolygonsStats {
     pub equipment_id: String,
     pub data: Vec<PolygonStats>
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct PolygonStats {
     pub lane_number: u16,
     pub lane_direction: u8,
@@ -47,7 +47,7 @@ pub struct PolygonStats {
     pub statistics: HashMap<String, VehicleTypeParameters>
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct VehicleTypeParameters {
     pub estimated_avg_speed: f32,
     pub estimated_sum_intensity: u32

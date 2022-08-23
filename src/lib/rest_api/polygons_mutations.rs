@@ -6,12 +6,12 @@ use serde::{
 use crate::lib::polygons::ConvexPolygon;
 use crate::lib::rest_api::Storage;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct ErrorResponse {
     pub error_text: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 pub struct PolygonUpdateRequest {
     pub polygon_id: String,
     pub pixel_points: Option<[[u16; 2]; 4]>,
@@ -100,7 +100,7 @@ pub async fn change_polygon(data: web::Data<Storage>, update_polygon: web::Json<
 }
 
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 pub struct PolygonDeleteRequest {
     pub polygon_id: String,
 }
@@ -134,7 +134,7 @@ pub async fn delete_polygon(data: web::Data<Storage>, delete_polygon: web::Json<
     }));
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 pub struct PolygonCreateRequest {
     pub pixel_points: Option<[[u16; 2]; 4]>,
     pub spatial_points: Option<[[f32; 2]; 4]>,
