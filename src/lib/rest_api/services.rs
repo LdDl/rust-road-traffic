@@ -84,8 +84,15 @@ pub async fn all_polygons_stats(data: web::Data<Storage>) -> Result<HttpResponse
     return Ok(HttpResponse::Ok().json(ans));
 }
 
+
+async fn ui_page() -> impl Responder {
+    let content = include_str!("ui.html");
+    return HttpResponse::Ok().append_header(("Content-Type", "text/html")).body(content);
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg
+        .route("/", web::get().to(ui_page))
         .service(
             web::scope("/api")
             .route("/ping", web::get().to(say_ping))

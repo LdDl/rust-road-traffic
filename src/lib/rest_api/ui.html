@@ -1,0 +1,151 @@
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1.0">
+        <title>Rust Road Traffic</title>
+        <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+        <script src="https://unpkg.com/maplibre-gl@2.3.0/dist/maplibre-gl.js"></script>
+        <link href="https://unpkg.com/maplibre-gl@2.3.0/dist/maplibre-gl.css" rel="stylesheet" />
+        <style>
+            body { margin: 0; padding: 0; }
+            #flex_component {
+                display: flex;
+                font-family: arial, sans-serif;
+                height: 100%
+            }
+
+            #grid_component {
+                width: 50%;
+                color: #ff00ff;
+                background: #eeeeee;
+                display: grid;
+                grid-auto-flow: rows;
+                grid-template-areas: 
+                    "A"
+                    "B";
+                grid-template-rows: 80% 20%;
+            }
+
+            #map {
+                width: 50%;
+                color: #ff00ff;
+                background: #eeeeee;
+                color: #222;
+                background: #ccc;
+            }
+
+            #mjpeg {
+                grid-area: A;
+                background: green;
+            }
+
+            #fit_img {
+                height: 100%;
+                width: 100%;
+            }
+            #fit_canvas {
+                height: 80%;
+                width: 50%;
+                background-color: transparent;
+                position: absolute;
+                left: 0;
+                top: 0;
+            }
+            #configuration {
+                grid-area: B;
+                background: blue;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="flex_component">
+            <div id="grid_component">
+                <div id="mjpeg">
+                <!-- <img id="fit_img" src="http://localhost:42002/live_streaming" width="500" height="500"> -->
+                <img id="fit_img" src="https://pngimg.com/uploads/google/google_PNG19632.png">
+                <canvas id="fit_canvas"></canvas>
+                </div>
+                <div id="configuration">@todo</div>
+            </div>
+            
+            <div id="map"></div>
+        </div>
+
+        <script type="text/javascript">
+            window.onload = function() {
+                var map = new maplibregl.Map({
+                    container: 'map', // container id
+                    style: 'https://demotiles.maplibre.org/style.json', // style URL
+                    center: [0, 0], // starting position [lng, lat]
+                    zoom: 1 // starting zoom
+                });
+
+                let polygon = [];
+                let isDone = false;
+                function drawCountour(canvas, coordinates){
+                    const clientW = canvas.clientWidth;
+                    const clientH = canvas.clientHeight;
+                    canvas.width = clientW;
+                    canvas.height = clientH;
+                    let ctx = canvas.getContext('2d');
+                    ctx.lineWidth = 4;
+                    ctx.strokeStyle = 'blue';
+
+                    console.log('draw countour', clientW, clientH)
+                    ctx.clearRect(0, 0, clientW, clientH);
+                    ctx.beginPath();
+                    ctx.moveTo(coordinates[0].x, coordinates[0].y);
+                    for(index=1; index<coordinates.length;index++) {
+                        ctx.lineTo(coordinates[index].x, coordinates[index].y);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+                    console.log(coordinates)
+                    console.log(ctx.lineWidth)
+                }
+
+                let canvas = document.getElementById('fit_canvas');
+                let image = document.getElementById('fit_img');
+                image.addEventListener('click', function (e) {
+                    // need to find true pixel coordinate
+                    const imgW = this.naturalWidth;
+                    const imgH = this.naturalHeight;
+                    const clientW = this.clientWidth;
+                    const clientH = this.clientHeight;
+                    const bbox = this.getBoundingClientRect();
+                    const left = bbox.left;
+                    const top = bbox.top;
+                    const clickX = e.pageX - left;
+                    const clickY = e.pageY - top;
+                    const trueX = (clickX / clientW)*imgW;
+                    const trueY = (clickY / clientH)*imgH;
+                    console.log(trueX, trueY);
+                });
+                canvas.addEventListener('click', function (e) {
+                    // need to find true pixel coordinate
+                    if(isDone || polygon.length > 3){
+                        isDone = true;
+                        return;
+                    }
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('canvas click', image.naturalHeight/canvas.clientHeight, canvas.clientWidth/image.naturalWidth)
+                    const imgW = image.naturalWidth;
+                    const imgH = image.naturalHeight;
+                    const clientW = this.clientWidth;
+                    const clientH = this.clientHeight;
+                    const bbox = this.getBoundingClientRect();
+                    const left = bbox.left;
+                    const top = bbox.top;
+                    const clickX = e.pageX - left;
+                    const clickY = e.pageY - top;
+                    const trueX = (clickX / clientW)*imgW;
+                    const trueY = (clickY / clientH)*imgH;
+                    polygon.push({ x:clickX, y:clickY });
+                    console.log('drawing', trueX, trueY, clickX, clickY);
+                    drawCountour(canvas, polygon);
+                });
+            }
+        </script>
+    </body>
+</html>

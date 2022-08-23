@@ -264,7 +264,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
             enable_mjpeg = v.enable;
             if v.enable {
                 thread::spawn(move || {
-                    match mjpeg_streaming::start_mjpeg_streaming(v.host, v.port, rx_mjpeg, frame_cols as u32, frame_rows as u32) {
+                    match mjpeg_streaming::start_mjpeg_streaming(v.host, v.port, rx_mjpeg) {
                         Ok(_) => {},
                         Err(err) => {
                             panic!("Can't start MJPEG streaming due the error: {:?}", err)
@@ -425,9 +425,9 @@ fn run(config_file: &str) -> opencv::Result<()> {
             if resized_frame.size()?.width > 0 {
                 imshow(window, &mut resized_frame)?;
             }
-            let key = wait_key(10)?;
+            let key = wait_key(0)?;
             if key > 0 && key != 255 {
-                break;
+                // break;
             }
         }
 

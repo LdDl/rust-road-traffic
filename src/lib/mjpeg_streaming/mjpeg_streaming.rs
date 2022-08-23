@@ -27,12 +27,12 @@ use std::sync::{
 };
 
 #[actix_web::main]
-pub async fn start_mjpeg_streaming(server_host: String, server_port: i32, rx_frames_data: Receiver<Vector<u8>>, input_width: u32, input_height: u32) -> std::io::Result<()> {
+pub async fn start_mjpeg_streaming(server_host: String, server_port: i32, rx_frames_data: Receiver<Vector<u8>>) -> std::io::Result<()> {
     let bind_address = format!("{}:{}", server_host, server_port);
     println!("MJPEG Streamer is starting on host:port {}:{}", server_host, server_port);
 
     let broadcaster = web::Data::new(Mutex::new(Broadcaster::default()));
-    Broadcaster::spawn_reciever(broadcaster.clone(), rx_frames_data, input_width, input_height);
+    Broadcaster::spawn_reciever(broadcaster.clone(), rx_frames_data);
     
     HttpServer::new(move || {
         let cors = Cors::default()
