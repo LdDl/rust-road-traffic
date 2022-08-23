@@ -2,14 +2,26 @@ use std::sync::{Arc, RwLock};
 use actix_web::{web, http, App, HttpServer};
 use actix_cors::Cors;
 
+use crate::settings::AppSettings;
 use crate::lib::rest_api::services;
 use crate::lib::data_storage::DataStorage;
 
+pub struct Storage {
+    pub data_storage: Arc<RwLock<DataStorage>>,
+    pub app_settings: AppSettings,
+    pub settings_filename: String
+}
+
 #[actix_web::main]
-pub async fn start_rest_api(server_host: String, server_port: i32, data_storage: Arc<RwLock<DataStorage>>) -> std::io::Result<()> {
+pub async fn start_rest_api(server_host: String, server_port: i32, data_storage: Arc<RwLock<DataStorage>>, app_settings: AppSettings, settings_filename: &str) -> std::io::Result<()> {
     let bind_address = format!("{}:{}", server_host, server_port);
     println!("REST API is starting on host:port {}:{}", server_host, server_port);
-    let data = web::Data::new(data_storage);
+    let storage = Storage{
+        data_storage: data_storage,
+        app_settings: app_settings,
+        settings_filename: settings_filename.to_string()
+    };
+    let data = web::Data::new(storage);
     HttpServer::new(move || {
         let cors = Cors::default()
             .allow_any_origin()

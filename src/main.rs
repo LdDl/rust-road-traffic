@@ -16,14 +16,11 @@ use opencv::{
     imgcodecs::imencode,
     dnn::DNN_BACKEND_CUDA,
     dnn::DNN_TARGET_CUDA,
-    dnn::Net,
     dnn::read_net,
-    dnn::read_net_from_caffe,
-    dnn::blob_from_image,
+    dnn::blob_from_image
 };
 
 use chrono::{
-    DateTime,
     Utc,
     Duration
 };
@@ -36,8 +33,7 @@ use lib::data_storage::{
     DataStorage
 };
 use lib::detection::{
-    process_yolo_detections,
-    process_mobilenet_detections
+    process_yolo_detections
 };
 
 mod settings;
@@ -75,6 +71,9 @@ const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", 
 fn run(config_file: &str) -> opencv::Result<()> {
 
     let app_settings = AppSettings::new_settings(config_file);
+    let settings_cloned = app_settings.clone();
+    let path_clone = config_file.to_owned();
+
     println!("Settings are:\n\t{}", app_settings);
 
     let output_width: i32 = app_settings.output.width;
@@ -150,7 +149,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
         let server_port = app_settings.rest_api.back_end_port;
         let convex_polygons_rest = convex_polygons_arc.clone();
         thread::spawn(move || {
-            match rest_api::start_rest_api(server_host, server_port, convex_polygons_rest) {
+            match rest_api::start_rest_api(server_host, server_port, convex_polygons_rest, settings_cloned, &path_clone) {
                 Ok(_) => {},
                 Err(err) => {
                     panic!("Can't start API due the error: {:?}", err)
@@ -304,23 +303,36 @@ fn run(config_file: &str) -> opencv::Result<()> {
                 let encoded = imencode(".jpg", &read_frame, &mut buffer, &params).unwrap();
                 if !encoded {
                     println!("image has not been encoded");
+                    continue;
                 }
-                tx_mjpeg.send(buffer).unwrap();
+                match tx_mjpeg.send(buffer) {
+                    Ok(_)=>{},
+                    Err(_err) => {
+                        // Closed channel?
+                        // println!("Error on send frame to MJPEG thread: {}", _err)
+                    }
+                };
             }
-            tx.send(ThreadedFrame{
+            match tx.send(ThreadedFrame{
                 frame: read_frame,
                 sec_diff: sec_diff,
                 last_time: last_time,
                 capture_millis: elapsed_capture,
-            }).unwrap();
+            }) {
+                Ok(_)=>{},
+                Err(_err) => {
+                    // Closed channel?
+                    // println!("Error on send frame to detection thread: {}", _err)
+                }
+            };
         }
     });
 
     for received in rx {
         let mut frame = received.frame.clone();
 
-        let blobimg = blob_from_image(&frame, blob_scale, net_size, blob_mean, true, false, CV_32F);
-        match neural_net.set_input(&blobimg.unwrap(), blob_name, 1.0, default_scalar) {
+        let blobimg = blob_from_image(&frame, blob_scale, net_size, blob_mean, true, false, CV_32F)?;
+        match neural_net.set_input(&blobimg, blob_name, 1.0, default_scalar) {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't set input of neural network due the error {:?}", err);
@@ -443,5 +455,10 @@ fn main() {
             "./data/conf.toml"
         }
     };
-    run(path_to_config).unwrap();
+    match run(path_to_config) {
+        Ok(_) => {},
+        Err(_err) => {
+            println!("Error: {}", _err);
+        }
+    };
 }
