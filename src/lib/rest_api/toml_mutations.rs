@@ -22,8 +22,8 @@ pub async fn save_toml(data: web::Data<Storage>) -> Result<HttpResponse, Error> 
             color_rgb: [polygon.color[0] as i16, polygon.color[1] as i16, polygon.color[2] as i16],
             geometry: vec![],
             geometry_wgs84: vec![],
-            lane_direction: 1,
-            lane_number: 2
+            lane_direction: polygon.road_lane_direction,
+            lane_number: polygon.road_lane_num
         });
         drop(polygon);
     }
