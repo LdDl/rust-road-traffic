@@ -139,7 +139,6 @@
                     ctx.lineWidth = 4;
                     ctx.strokeStyle = 'blue';
 
-                    console.log('draw countour', clientW, clientH)
                     ctx.clearRect(0, 0, clientW, clientH);
                     ctx.beginPath();
                     ctx.moveTo(coordinates[0].x, coordinates[0].y);
@@ -148,8 +147,6 @@
                     }
                     ctx.closePath();
                     ctx.stroke();
-                    console.log(coordinates)
-                    console.log(ctx.lineWidth)
                 }
 
                 let canvas = document.getElementById('fit_canvas');
@@ -167,7 +164,6 @@
                     const clickY = e.pageY - top;
                     const trueX = (clickX / clientW)*imgW;
                     const trueY = (clickY / clientH)*imgH;
-                    console.log(trueX, trueY);
                 });
                 canvas.addEventListener('click', (e) => {
                     // need to find true pixel coordinate
@@ -177,7 +173,6 @@
                     }
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log('canvas click', image.naturalHeight/canvas.clientHeight, canvas.clientWidth/image.naturalWidth)
                     const imgW = image.naturalWidth;
                     const imgH = image.naturalHeight;
                     const clientW = this.clientWidth;
@@ -190,7 +185,6 @@
                     const trueX = (clickX / clientW)*imgW;
                     const trueY = (clickY / clientH)*imgH;
                     polygon.push({ x:clickX, y:clickY });
-                    console.log('drawing', trueX, trueY, clickX, clickY);
                     drawCountour(canvas, polygon);
                 });
 
@@ -265,11 +259,9 @@
                 let lines = [];
                 let lineCounter = 0;
                 fbCanvas.on('mouse:down', (options) => {
-                    // console.log('mouse down');
                     if (isAddingPolygon === true) {
                         fbCanvas.selection = false;
                         setStartingPoint(options)
-                        console.log(drawX, drawY)
                         polygon.push({ x: drawX, y: drawY });
                         let points = [drawX, drawY, drawX, drawY]
                         let newLine = new fabric.Line(points, {
@@ -285,7 +277,6 @@
                             fbCanvas.selection = true;
                         });
                     }
-                    // @todo
                 });
 
                 fbCanvas.on('mouse:move', (options) => {
@@ -300,23 +291,21 @@
                 });
 
                 fbCanvas.on('mouse:dblclick', (options) => {
-                    console.log('mouse dblclick');
-                    polygon.forEach((value, index, ar) => {
+                    lines.forEach((value, index, ar) => {
                         fbCanvas.remove(value);
                     });
-                    let roof = makeContour(polygon);
-                    fbCanvas.add(roof);
+                    let contour = makeContour(polygon);
+                    fbCanvas.add(contour);
                     fbCanvas.renderAll();
                     lines = [];
                     lineCounter = 0;
-                    coordinates = [];
+                    polygon = [];
                     isAddingPolygon = false;
                 });
 
                 let addBtn = document.getElementById('add-btn');
                 addBtn.addEventListener('click', (e) => {
                     if (!isAddingPolygon) {
-                        console.log('Add polygon');
                         isAddingPolygon = true;
                     }
                 });
