@@ -52,11 +52,13 @@ const findLefTopX = (coordinates) => {
 const makeContour = (coordinates) => {
     let left = findLefTopX(coordinates);
     let top = findLeftTopY(coordinates);
-    coordinates[coordinates.length-1] = coordinates[0];                  
-    let contour = new fabric.Polyline(coordinates, {
+    coordinates.pop() // inplace mutation for delete last duplicate point
+    // coordinates[coordinates.length-1] = coordinates[0];  // In case of fabric.Polyline               
+    let contour = new fabric.Polygon(coordinates, {
         fill: 'rgba(0,0,0,0)',
         stroke:'#58c',
-        strokeWidth: 3
+        strokeWidth: 3,
+        objectCaching: false
     });
     contour.set({
         left: left,
@@ -76,6 +78,67 @@ const getClickPoint = (fbCanvas, options) => {
     return {x: drawX, y: drawY};
 }
 
+const getObjectSizeWithStroke = (object) => {
+    var stroke = new fabric.Point(
+        object.strokeUniform ? 1 / object.scaleX : 1, 
+        object.strokeUniform ? 1 / object.scaleY : 1
+    ).multiply(object.strokeWidth);
+    return new fabric.Point(object.width + stroke.x, object.height + stroke.y);
+}
+
+// define a function that can locate the controls.
+// this function will be used both for drawing and for interaction.
+// this is not an anonymus function since we need parent scope (`this`)
+const polygonPositionHandler = function (dim, finalMatrix, fabricObject) {
+    var x = (fabricObject.points[this.pointIndex].x - fabricObject.pathOffset.x);
+    var y = (fabricObject.points[this.pointIndex].y - fabricObject.pathOffset.y);
+    return fabric.util.transformPoint(
+        { x: x, y: y },
+        fabric.util.multiplyTransformMatrices(
+            fabricObject.canvas.viewportTransform,
+            fabricObject.calcTransformMatrix()
+        )
+    );
+}
+
+// define a function that will define what the control does
+// this function will be called on every mouse move after a control has been
+// clicked and is being dragged.
+// The function receive as argument the mouse event, the current trasnform object
+// and the current position in canvas coordinate
+// transform.target is a reference to the current object being transformed,
+const actionHandler = function (eventData, transform, x, y) {
+    let polygon = transform.target;
+    let currentControl = polygon.controls[polygon.__corner];
+    let mouseLocalPosition = polygon.toLocalPoint(new fabric.Point(x, y), 'center', 'center')
+    let polygonBaseSize = getObjectSizeWithStroke(polygon);
+    let size = polygon._getTransformedDimensions(0, 0);
+    let finalPointPosition = {
+        x: mouseLocalPosition.x * polygonBaseSize.x / size.x + polygon.pathOffset.x,
+        y: mouseLocalPosition.y * polygonBaseSize.y / size.y + polygon.pathOffset.y
+    };
+    polygon.points[currentControl.pointIndex] = finalPointPosition;
+    return true;
+}
+
+// define a function that can keep the polygon in the same position when we change its
+// width/height/top/left.
+const anchorWrapper = function (anchorIndex, fn) {
+    return function(eventData, transform, x, y) {
+        let fabricObject = transform.target;
+        let absolutePoint = fabric.util.transformPoint({
+            x: (fabricObject.points[anchorIndex].x - fabricObject.pathOffset.x),
+            y: (fabricObject.points[anchorIndex].y - fabricObject.pathOffset.y),
+        }, fabricObject.calcTransformMatrix());
+        let actionPerformed = fn(eventData, transform, x, y);
+        // let newDim = fabricObject._setPositionDimensions({});
+        let polygonBaseSize = getObjectSizeWithStroke(fabricObject);
+        let newX = (fabricObject.points[anchorIndex].x - fabricObject.pathOffset.x) / polygonBaseSize.x;
+        let newY = (fabricObject.points[anchorIndex].y - fabricObject.pathOffset.y) / polygonBaseSize.y;
+        fabricObject.setPositionByOrigin(absolutePoint, newX + 0.5, newY + 0.5);
+        return actionPerformed;
+    }
+}
 
 window.onload = function() {
     let map = new maplibregl.Map({
@@ -96,7 +159,6 @@ window.onload = function() {
     canvas.width = image.clientWidth;
     canvas.height = image.clientHeight;
     let fbCanvas = new fabric.Canvas('fit_canvas', {containerClass: 'custom-container-canvas'});
-
 
     let contourTemporary = [];
     let contourFinalized = [];
@@ -138,5 +200,37 @@ window.onload = function() {
         contourTemporary = [];
         contourFinalized = [];
         currentState = States.Waiting;
+
+        edit(fbCanvas);
+        
     });
+
+    function edit(fbCanvas) {
+        console.log('enter edit mode');
+        let lastContour = fbCanvas.getObjects()[0];
+		fbCanvas.setActiveObject(lastContour);
+        console.log('last', lastContour)
+        lastContour.edit = !lastContour.edit;
+        if (lastContour.edit) {
+            let lastControl = lastContour.points.length - 1;
+            lastContour.cornerStyle = 'circle';
+            lastContour.cornerColor = 'rgba(0,0,255,0.5)';
+            lastContour.controls = lastContour.points.reduce(function(acc, point, index) {
+				acc['p' + index] = new fabric.Control({
+					positionHandler: polygonPositionHandler,
+					actionHandler: anchorWrapper(index > 0 ? index - 1 : lastControl, actionHandler),
+					actionName: 'modifyPolygon',
+					pointIndex: index
+				});
+                console.log('acc');
+				return acc;
+			}, { });
+        } else {
+            lastContour.cornerColor = 'red';
+            lastContour.cornerStyle = 'rect';
+			lastContour.controls = fabric.Object.prototype.controls;
+        }
+        lastContour.hasBorders = !lastContour.edit;
+		fbCanvas.requestRenderAll();
+    }
 }
