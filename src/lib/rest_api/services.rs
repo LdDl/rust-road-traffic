@@ -89,8 +89,8 @@ pub async fn all_polygons_stats(data: web::Data<Storage>) -> Result<HttpResponse
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     let generated = generate();
 
+    cfg.service(ResourceFiles::new("/", generated));
     cfg
-        .service(ResourceFiles::new("/", generated))
         .service(
             web::scope("/api")
             .route("/ping", web::get().to(say_ping))
