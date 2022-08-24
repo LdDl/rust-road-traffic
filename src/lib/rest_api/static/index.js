@@ -39,13 +39,13 @@ const findLefTopX = (coordinates) => {
     })));
 }
 
-const makeContour = (coordinates) => {
+const makeContour = (coordinates, color = '#58c') => {
     let left = findLefTopX(coordinates);
     let top = findLeftTopY(coordinates);
     // coordinates[coordinates.length-1] = coordinates[0];  // In case of fabric.Polyline               
     let contour = new fabric.Polygon(coordinates, {
         fill: 'rgba(0,0,0,0)',
-        stroke:'#58c',
+        stroke: color,
         strokeWidth: 3,
         objectCaching: false
     });
@@ -191,7 +191,7 @@ const drawGeoPolygons = (map, featureCollection) => {
             'source': `source-polygon-${feature.id}`,
             'layout': {},
             'paint': {
-                'fill-color': '#00ff00',
+                'fill-color': `rgb(${feature.properties.color_rgb[0]},${feature.properties.color_rgb[1]},${feature.properties.color_rgb[2]})`,
                 'fill-opacity': 0.8
             }
         });
@@ -217,7 +217,7 @@ const drawPolygons = (fbCanvas, data, state, widthScale, heightScale) => {
                 y: element[1]*heightScale
             }
         });
-        let contour = makeContour(contourFinalized);
+        let contour = makeContour(contourFinalized, `rgb(${feature.properties.color_rgb[0]},${feature.properties.color_rgb[1]},${feature.properties.color_rgb[2]})`);
         contour.on('mousedown', (options) => {
             options.e.preventDefault();
             options.e.stopPropagation();
