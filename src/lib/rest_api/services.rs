@@ -1,5 +1,7 @@
 use actix_web::{HttpResponse, web, Responder, Error};
-use actix_files as fs;
+use actix_web_static_files::ResourceFiles;
+include!(concat!(env!("OUT_DIR"), "/generated.rs"));
+
 use std::collections::HashMap;
 use crate::lib::geojson::PolygonsGeoJSON;
 use crate::lib::rest_api::Storage;
@@ -84,16 +86,11 @@ pub async fn all_polygons_stats(data: web::Data<Storage>) -> Result<HttpResponse
     return Ok(HttpResponse::Ok().json(ans));
 }
 
-
-async fn ui_page() -> impl Responder {
-    let content = include_str!("./static/index.html");
-    return HttpResponse::Ok().append_header(("Content-Type", "text/html")).body(content);
-}
-
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
+    let generated = generate();
+
     cfg
-        // .route("/", web::get().to(ui_page))
-        .service(fs::Files::new("/", "./src/lib/rest_api/static").prefer_utf8(true).index_file("index.html"))
+        .service(ResourceFiles::new("/", generated))
         .service(
             web::scope("/api")
             .route("/ping", web::get().to(say_ping))
