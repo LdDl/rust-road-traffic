@@ -66,6 +66,32 @@ const makeContour = (coordinates) => {
     return contour;
 }
 
+function editContour(editContour, fbCanvas) {
+    fbCanvas.setActiveObject(editContour);
+    editContour.edit = !editContour.edit;
+    if (editContour.edit) {
+        let lastControl = editContour.points.length - 1;
+        editContour.cornerStyle = 'circle';
+        editContour.cornerSize = 15;
+        editContour.cornerColor = 'rgba(0, 0, 255, 1.0)';
+        editContour.controls = editContour.points.reduce(function(acc, point, index) {
+            acc['p' + index] = new fabric.Control({
+                positionHandler: polygonPositionHandler,
+                actionHandler: anchorWrapper(index > 0 ? index - 1 : lastControl, actionHandler),
+                actionName: 'modifyPolygon',
+                pointIndex: index
+            });
+            return acc;
+        }, { });
+    } else {
+        editContour.cornerColor = 'rgb(178, 204, 255)';
+        editContour.cornerStyle = 'rect';
+        editContour.controls = fabric.Object.prototype.controls;
+    }
+    editContour.hasBorders = !editContour.edit;
+    fbCanvas.requestRenderAll();
+}
+
 const getClickPoint = (fbCanvas, options) => {
     // const bbox = canvas.getBoundingClientRect();
     // const left = bbox.left;
@@ -150,42 +176,35 @@ const addTooltip = (parentDiv, options) => {
     // parentDiv.appendChild(div);
 }
 
-async function addPolygons(map) {
-    try {
-        let res = await axios({
-            method: 'GET',
-            url: 'http://localhost:42001/api/polygons/geojson',
-            timeout: 5000,
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        if (res.status == 200) {
-            console.log(res.data)
-            drawGeoPolygons(map, res.data)
-        };
-    }
-    catch (err) {
-        console.log('Error', err)
-    };
+async function getPolygons() {
+    return await axios({
+        method: 'GET',
+        url: 'http://localhost:42001/api/polygons/geojson',
+        timeout: 5000,
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(res => res.data)
+    .catch (err => console.error(err));
 }
 
 const drawGeoPolygons = (map, featureCollection) => {
-    map.addSource('road-polygons-source', {
-        'type': 'geojson',
-        'data': featureCollection
-    });
-    map.addLayer({
-        'id': 'road-polygons-layer',
-        'type': 'fill',
-        'source': 'road-polygons-source',
-        'layout': {
-
-        },
-        'paint': {
-            'fill-color': '#088',
-            'fill-opacity': 0.8
-        }
+    featureCollection.features.forEach(feature => {
+        map.addSource(`source-polygon-${feature.id}`, {
+            'type': 'geojson',
+            'data': feature
+        });
+        map.addLayer({
+            'id': `layer-polygon-${feature.id}`,
+            'type': 'fill',
+            'source': `source-polygon-${feature.id}`,
+            'layout': {},
+            'paint': {
+                'fill-color': '#00ff00',
+                'fill-opacity': 0.8
+            }
+        });
     });
     if (featureCollection.features.length === 0) {
         return
@@ -199,6 +218,23 @@ const drawGeoPolygons = (map, featureCollection) => {
         padding: 20
     });
 };
+
+const drawPolygons = (fbCanvas, data, state) => {
+    data.forEach(feature => {
+        const contourFinalized = feature.properties.coordinates.map(element => {return {x: element[0], y: element[1]}});
+        let contour = makeContour(contourFinalized);
+        contour.on('mousedown', (options) => {
+            options.e.preventDefault();
+            options.e.stopPropagation();
+            if (options.button === 3) {
+                state = States.EditingPolygon;
+                editContour(contour, fbCanvas);
+            }
+        });
+        fbCanvas.add(contour);
+        fbCanvas.renderAll();
+    })
+}
 
 window.onload = function() {
     let map = new maplibregl.Map({
@@ -227,10 +263,18 @@ window.onload = function() {
     let fbCanvasParent = document.getElementsByClassName('custom-container-canvas')[0];
     fbCanvasParent.id = "fbcanvas";
 
-    map.on('load', () => {
-        addPolygons(map);
+
+    let dataStorage = new Map();
+    getPolygons().then((data) => {
+        data.features.forEach(feature => {
+            dataStorage.set(feature.id, feature);
+        });
+        map.on('load', () => {
+            drawGeoPolygons(map, data);
+        });
+        drawPolygons(fbCanvas, dataStorage, currentState);
     })
-    
+
     let contourTemporary = [];
     let contourFinalized = [];
     fbCanvas.on('mouse:down', (options) => {
@@ -283,30 +327,4 @@ window.onload = function() {
             fbCanvas.renderAll();
         }
     });
-
-    function editContour(editContour, fbCanvas) {
-		fbCanvas.setActiveObject(editContour);
-        editContour.edit = !editContour.edit;
-        if (editContour.edit) {
-            let lastControl = editContour.points.length - 1;
-            editContour.cornerStyle = 'circle';
-            editContour.cornerSize = 15;
-            editContour.cornerColor = 'rgba(0, 0, 255, 1.0)';
-            editContour.controls = editContour.points.reduce(function(acc, point, index) {
-				acc['p' + index] = new fabric.Control({
-					positionHandler: polygonPositionHandler,
-					actionHandler: anchorWrapper(index > 0 ? index - 1 : lastControl, actionHandler),
-					actionName: 'modifyPolygon',
-					pointIndex: index
-				});
-				return acc;
-			}, { });
-        } else {
-            editContour.cornerColor = 'rgb(178, 204, 255)';
-            editContour.cornerStyle = 'rect';
-			editContour.controls = fabric.Object.prototype.controls;
-        }
-        editContour.hasBorders = !editContour.edit;
-		fbCanvas.requestRenderAll();
-    }
 }
