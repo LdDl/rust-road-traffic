@@ -7,7 +7,7 @@ function Enum(obj) {
     }
     return Object.freeze(newObj);
 }
-const States = Enum({ AddingPolygon: true, Waiting: true });
+const States = Enum({ AddingPolygon: true, Waiting: true, EditingPolygon: true });
 var currentState = States.Waiting;
 
 const drawCountour = (fbCanvas, coordinates) => {
@@ -52,7 +52,6 @@ const findLefTopX = (coordinates) => {
 const makeContour = (coordinates) => {
     let left = findLefTopX(coordinates);
     let top = findLeftTopY(coordinates);
-    coordinates.pop() // inplace mutation for delete last duplicate point
     // coordinates[coordinates.length-1] = coordinates[0];  // In case of fabric.Polyline               
     let contour = new fabric.Polygon(coordinates, {
         fill: 'rgba(0,0,0,0)',
@@ -79,7 +78,7 @@ const getClickPoint = (fbCanvas, options) => {
 }
 
 const getObjectSizeWithStroke = (object) => {
-    var stroke = new fabric.Point(
+    let stroke = new fabric.Point(
         object.strokeUniform ? 1 / object.scaleX : 1, 
         object.strokeUniform ? 1 / object.scaleY : 1
     ).multiply(object.strokeWidth);
@@ -90,8 +89,8 @@ const getObjectSizeWithStroke = (object) => {
 // this function will be used both for drawing and for interaction.
 // this is not an anonymus function since we need parent scope (`this`)
 const polygonPositionHandler = function (dim, finalMatrix, fabricObject) {
-    var x = (fabricObject.points[this.pointIndex].x - fabricObject.pathOffset.x);
-    var y = (fabricObject.points[this.pointIndex].y - fabricObject.pathOffset.y);
+    let x = (fabricObject.points[this.pointIndex].x - fabricObject.pathOffset.x);
+    let y = (fabricObject.points[this.pointIndex].y - fabricObject.pathOffset.y);
     return fabric.util.transformPoint(
         { x: x, y: y },
         fabric.util.multiplyTransformMatrices(
@@ -131,13 +130,24 @@ const anchorWrapper = function (anchorIndex, fn) {
             y: (fabricObject.points[anchorIndex].y - fabricObject.pathOffset.y),
         }, fabricObject.calcTransformMatrix());
         let actionPerformed = fn(eventData, transform, x, y);
-        // let newDim = fabricObject._setPositionDimensions({});
+        let newDim = fabricObject._setPositionDimensions({});
         let polygonBaseSize = getObjectSizeWithStroke(fabricObject);
         let newX = (fabricObject.points[anchorIndex].x - fabricObject.pathOffset.x) / polygonBaseSize.x;
         let newY = (fabricObject.points[anchorIndex].y - fabricObject.pathOffset.y) / polygonBaseSize.y;
         fabricObject.setPositionByOrigin(absolutePoint, newX + 0.5, newY + 0.5);
         return actionPerformed;
     }
+}
+
+const addTooltip = (parentDiv, options) => {
+    // @todo make cool popup with edit/trash signs
+
+    // let div = document.createElement('div');
+    // div.style.cssText = 'position:fixed;padding:7px;background:gold;pointer-events:none;width:30px';
+    // div.innerHTML = 'potato';
+    // div.style.left = `${options.target.aCoords.br.x}px`;
+    // div.style.top = `${options.target.aCoords.br.y}px`; 
+    // parentDiv.appendChild(div);
 }
 
 window.onload = function() {
@@ -158,7 +168,14 @@ window.onload = function() {
     let image = document.getElementById('fit_img');
     canvas.width = image.clientWidth;
     canvas.height = image.clientHeight;
-    let fbCanvas = new fabric.Canvas('fit_canvas', {containerClass: 'custom-container-canvas'});
+    let fbCanvas = new fabric.Canvas('fit_canvas', {
+        containerClass: 'custom-container-canvas',
+        fireRightClick: true,  
+        fireMiddleClick: true, 
+        stopContextMenu: true
+    });
+    let fbCanvasParent = document.getElementsByClassName('custom-container-canvas')[0];
+    fbCanvasParent.id = "fbcanvas";
 
     let contourTemporary = [];
     let contourFinalized = [];
@@ -179,6 +196,29 @@ window.onload = function() {
             fbCanvas.on('mouse:up', function (options) {
                 fbCanvas.selection = true;
             });
+
+            if (contourFinalized.length > 3) {
+                contourTemporary.forEach((value) => {
+                    fbCanvas.remove(value);
+                });
+                let contour = makeContour(contourFinalized);
+                contour.on('mousedown', (options) => {
+                    options.e.preventDefault();
+                    options.e.stopPropagation();
+                    // Handle right-click
+                    // Turn on "Edit" mode
+                    if (options.button === 3) {
+                        // addTooltip(fbCanvasParent, options);
+                        currentState = States.EditingPolygon;
+                        editContour(contour, fbCanvas);
+                    }
+                });
+                fbCanvas.add(contour);
+                fbCanvas.renderAll();
+                contourTemporary = [];
+                contourFinalized = [];
+                currentState = States.Waiting;
+            }
         }
     });
 
@@ -190,47 +230,43 @@ window.onload = function() {
         }
     });
 
-    fbCanvas.on('mouse:dblclick', (options) => {
-        contourTemporary.forEach((value) => {
-            fbCanvas.remove(value);
-        });
-        let contour = makeContour(contourFinalized);
-        fbCanvas.add(contour);
-        fbCanvas.renderAll();
-        contourTemporary = [];
-        contourFinalized = [];
-        currentState = States.Waiting;
+    // fbCanvas.on('mouse:dblclick', (options) => {
+    //     contourFinalized.pop() // inplace mutation for delete last duplicate point (since there is click anyway)
+    //     contourTemporary.forEach((value) => {
+    //         fbCanvas.remove(value);
+    //     });
+    //     let contour = makeContour(contourFinalized);
+    //     fbCanvas.add(contour);
+    //     fbCanvas.renderAll();
+    //     contourTemporary = [];
+    //     contourFinalized = [];
+    //     currentState = States.Waiting;
+    //     editContour(fbCanvas);
+    // });
 
-        edit(fbCanvas);
-        
-    });
-
-    function edit(fbCanvas) {
-        console.log('enter edit mode');
-        let lastContour = fbCanvas.getObjects()[0];
-		fbCanvas.setActiveObject(lastContour);
-        console.log('last', lastContour)
-        lastContour.edit = !lastContour.edit;
-        if (lastContour.edit) {
-            let lastControl = lastContour.points.length - 1;
-            lastContour.cornerStyle = 'circle';
-            lastContour.cornerColor = 'rgba(0,0,255,0.5)';
-            lastContour.controls = lastContour.points.reduce(function(acc, point, index) {
+    function editContour(editContour, fbCanvas) {
+		fbCanvas.setActiveObject(editContour);
+        editContour.edit = !editContour.edit;
+        if (editContour.edit) {
+            let lastControl = editContour.points.length - 1;
+            editContour.cornerStyle = 'circle';
+            editContour.cornerSize = 15;
+            editContour.cornerColor = 'rgba(0, 0, 255, 1.0)';
+            editContour.controls = editContour.points.reduce(function(acc, point, index) {
 				acc['p' + index] = new fabric.Control({
 					positionHandler: polygonPositionHandler,
 					actionHandler: anchorWrapper(index > 0 ? index - 1 : lastControl, actionHandler),
 					actionName: 'modifyPolygon',
 					pointIndex: index
 				});
-                console.log('acc');
 				return acc;
 			}, { });
         } else {
-            lastContour.cornerColor = 'red';
-            lastContour.cornerStyle = 'rect';
-			lastContour.controls = fabric.Object.prototype.controls;
+            editContour.cornerColor = 'rgb(178, 204, 255)';
+            editContour.cornerStyle = 'rect';
+			editContour.controls = fabric.Object.prototype.controls;
         }
-        lastContour.hasBorders = !lastContour.edit;
+        editContour.hasBorders = !editContour.edit;
 		fbCanvas.requestRenderAll();
     }
 }

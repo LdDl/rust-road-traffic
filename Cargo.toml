@@ -20,6 +20,7 @@ serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 actix-web = "4"
 actix-cors = "0.6.2"
+actix-files = "0.6.2"
 ctrlc = { version = "3.0", features = ["termination"] }
 redis = "*"
 tokio = { version = "1.16.1", features = ["full"] }
