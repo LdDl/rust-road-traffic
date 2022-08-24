@@ -29,7 +29,7 @@ pub async fn polygons_list(data: web::Data<Storage>) -> Result<HttpResponse, Err
     return Ok(HttpResponse::Ok().json(ans));
 }
 
-use serde::{Deserialize, Serialize};
+use serde::{Serialize};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize)]
