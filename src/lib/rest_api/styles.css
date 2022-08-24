@@ -1,0 +1,92 @@
+@import url("https://fonts.googleapis.com/css?family=Roboto");
+body { margin: 0; padding: 0; font-family: 'Roboto', sans-serif;}
+#flex_component {
+    display: flex;
+    font-family: arial, sans-serif;
+    height: 100%
+}
+#grid_component {
+    width: 50%;
+    color: #ff00ff;
+    background: #eeeeee;
+    display: grid;
+    grid-auto-flow: rows;
+    grid-template-areas: 
+        "A"
+        "B";
+    grid-template-rows: 80% 20%;
+}
+#map {
+    width: 50%;
+    color: #ff00ff;
+    background: #eeeeee;
+    color: #222;
+    background: #ccc;
+}
+#mjpeg {
+    grid-area: A;
+    background: green;
+}
+#fit_img {
+    height: 100%;
+    width: 100%;
+}
+#fit_canvas {
+    height: 80%;
+    width: 50%;
+    background-color: transparent;
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+#configuration {
+    grid-area: B;
+    background: blue;
+}
+.custom-container-canvas {
+    position: absolute !important; 
+    left: 0;
+    top: 0;
+}
+.floating-container {
+    position: fixed;
+    width: 100px;
+    height: 100px;
+    bottom: 0;
+    right: 0;
+    margin: 35px 25px;
+    z-index: 999;
+}
+.floating-container .floating-button {
+    position: absolute;
+    width: 65px;
+    height: 65px;
+    background: #2cb3f0;
+    bottom: 0;
+    border-radius: 50%;
+    left: 0;
+    right: 0;
+    margin: auto;
+    color: white;
+    line-height: 65px;
+    text-align: center;
+    font-size: 23px;
+    z-index: 100;
+    box-shadow: 0 10px 25px -5px rgba(44, 179, 240, 0.6);
+    cursor: pointer;
+    -webkit-transition: all 0.3s;
+    transition: all 0.3s;
+}
+.floating-container:hover .floating-button {
+    box-shadow: 0 10px 25px rgba(44, 179, 240, 0.6);
+    -webkit-transform: translatey(5px);
+    transform: translatey(5px);
+    -webkit-transition: all 0.3s;
+    transition: all 0.3s;
+    -webkit-touch-callout: none; 
+    -webkit-user-select: none;
+    -khtml-user-select: none; 
+    -moz-user-select: none; 
+    -ms-user-select: none; 
+    user-select: none;
+}
