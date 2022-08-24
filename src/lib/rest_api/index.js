@@ -26,29 +26,32 @@ const drawCountour = (fbCanvas, coordinates) => {
     ctx.stroke();
 }
 
-const findLeftTopY = (coordinates, lineCounter) => {
-    var result = 999999;
-    for (var f = 0; f < lineCounter; f++) {
-        if (coordinates[f].y < result) {
-            result = coordinates[f].y;
-        }
-    }
-    return Math.abs(result);
+const minMax = (arr) => {
+    return arr.reduce(function(acc, cur) {
+        console.log(acc, cur)
+        return [
+            Math.min(cur.x, acc[0].x),
+            Math.max(cur.x, acc[1].x)
+        ]
+    }, [{x: Number.POSITIVE_INFINITY}, {x: Number.NEGATIVE_INFINITY}]);
 }
 
-const findLefTopX = (coordinates, lineCounter) => {
-    var result = 999999;
-    for (var i = 0; i < lineCounter; i++) {
-        if (coordinates[i].x < result) {
-            result = coordinates[i].x;
-        }
-    }
-    return Math.abs(result);
+const findLeftTopY = (coordinates) => {
+    return Math.abs(Math.min.apply(Math, coordinates.map(function(a) { 
+        return a.y;
+    })));
+
 }
 
-const makeContour = (coordinates, lineCounter) => {
-    let left = findLefTopX(coordinates, lineCounter);
-    let top = findLeftTopY(coordinates, lineCounter);
+const findLefTopX = (coordinates) => {
+    return Math.abs(Math.min.apply(Math, coordinates.map(function(a) { 
+        return a.x;
+    })));
+}
+
+const makeContour = (coordinates) => {
+    let left = findLefTopX(coordinates);
+    let top = findLeftTopY(coordinates);
     coordinates[coordinates.length-1] = coordinates[0];                  
     let contour = new fabric.Polyline(coordinates, {
         fill: 'rgba(0,0,0,0)',
@@ -95,24 +98,22 @@ window.onload = function() {
     let fbCanvas = new fabric.Canvas('fit_canvas', {containerClass: 'custom-container-canvas'});
 
 
-    let lines = [];
-    let lineCounter = 0;
-    let polygon = [];
+    let contourTemporary = [];
+    let contourFinalized = [];
     fbCanvas.on('mouse:down', (options) => {
         if (currentState === States.AddingPolygon) {
             fbCanvas.selection = false;
             let clicked = getClickPoint(fbCanvas, options);
-            polygon.push({ x: clicked.x, y: clicked.y });
+            contourFinalized.push({ x: clicked.x, y: clicked.y });
             let points = [clicked.x, clicked.y, clicked.x, clicked.y]
             let newLine = new fabric.Line(points, {
                 strokeWidth: 3,
                 selectable: false,
                 stroke: 'purple',
             })
-            // lines.push(n.setOriginX(clickX).setOriginY(clickY));
-            lines.push(newLine);
-            fbCanvas.add(lines[lineCounter]);
-            lineCounter += 1;
+            // contourTemporary.push(n.setOriginX(clickX).setOriginY(clickY));
+            contourTemporary.push(newLine);
+            fbCanvas.add(newLine);
             fbCanvas.on('mouse:up', function (options) {
                 fbCanvas.selection = true;
             });
@@ -120,23 +121,22 @@ window.onload = function() {
     });
 
     fbCanvas.on('mouse:move', (options) => {
-        if (lines[0] !== null && lines[0] !== undefined && currentState === States.AddingPolygon) {
+        if (contourTemporary[0] !== null && contourTemporary[0] !== undefined && currentState === States.AddingPolygon) {
             let clicked = getClickPoint(fbCanvas, options);
-            lines[lineCounter - 1].set({ x2: clicked.x, y2: clicked.y });
+            contourTemporary[contourTemporary.length - 1].set({ x2: clicked.x, y2: clicked.y });
             fbCanvas.renderAll();
         }
     });
 
     fbCanvas.on('mouse:dblclick', (options) => {
-        lines.forEach((value) => {
+        contourTemporary.forEach((value) => {
             fbCanvas.remove(value);
         });
-        let contour = makeContour(polygon, lineCounter);
+        let contour = makeContour(contourFinalized);
         fbCanvas.add(contour);
         fbCanvas.renderAll();
-        lines = [];
-        lineCounter = 0;
-        polygon = [];
+        contourTemporary = [];
+        contourFinalized = [];
         currentState = States.Waiting;
     });
 }
