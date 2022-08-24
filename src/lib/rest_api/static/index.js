@@ -153,7 +153,7 @@ const addTooltip = (parentDiv, options) => {
 window.onload = function() {
     let map = new maplibregl.Map({
         container: 'map', // container id
-        style: 'https://demotiles.maplibre.org/style.json', // style URL
+        style: 'https://api.maptiler.com/maps/44abc03b-626b-41bb-8fcd-a0e5083c9d0d/style.json?key=dznzK4GQ1Lj5U7XsI22j',
         center: [0, 0], // starting position [lng, lat]
         zoom: 1 // starting zoom
     });
@@ -229,20 +229,6 @@ window.onload = function() {
             fbCanvas.renderAll();
         }
     });
-
-    // fbCanvas.on('mouse:dblclick', (options) => {
-    //     contourFinalized.pop() // inplace mutation for delete last duplicate point (since there is click anyway)
-    //     contourTemporary.forEach((value) => {
-    //         fbCanvas.remove(value);
-    //     });
-    //     let contour = makeContour(contourFinalized);
-    //     fbCanvas.add(contour);
-    //     fbCanvas.renderAll();
-    //     contourTemporary = [];
-    //     contourFinalized = [];
-    //     currentState = States.Waiting;
-    //     editContour(fbCanvas);
-    // });
 
     function editContour(editContour, fbCanvas) {
 		fbCanvas.setActiveObject(editContour);

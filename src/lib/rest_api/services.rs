@@ -88,8 +88,7 @@ pub async fn all_polygons_stats(data: web::Data<Storage>) -> Result<HttpResponse
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     let generated = generate();
-
-    cfg.service(ResourceFiles::new("/", generated));
+    
     cfg
         .service(
             web::scope("/api")
@@ -111,4 +110,5 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
                 .route("/save_toml", web::get().to(toml_mutations::save_toml))
             )
         );
+    cfg.service(ResourceFiles::new("/", generated));
 }
