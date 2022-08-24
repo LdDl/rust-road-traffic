@@ -26,16 +26,6 @@ const drawCountour = (fbCanvas, coordinates) => {
     ctx.stroke();
 }
 
-const minMax = (arr) => {
-    return arr.reduce(function(acc, cur) {
-        console.log(acc, cur)
-        return [
-            Math.min(cur.x, acc[0].x),
-            Math.max(cur.x, acc[1].x)
-        ]
-    }, [{x: Number.POSITIVE_INFINITY}, {x: Number.NEGATIVE_INFINITY}]);
-}
-
 const findLeftTopY = (coordinates) => {
     return Math.abs(Math.min.apply(Math, coordinates.map(function(a) { 
         return a.y;
@@ -219,9 +209,14 @@ const drawGeoPolygons = (map, featureCollection) => {
     });
 };
 
-const drawPolygons = (fbCanvas, data, state) => {
+const drawPolygons = (fbCanvas, data, state, widthScale, heightScale) => {
     data.forEach(feature => {
-        const contourFinalized = feature.properties.coordinates.map(element => {return {x: element[0], y: element[1]}});
+        const contourFinalized = feature.properties.coordinates.map(element => {
+            return {
+                x: element[0]*widthScale,
+                y: element[1]*heightScale
+            }
+        });
         let contour = makeContour(contourFinalized);
         contour.on('mousedown', (options) => {
             options.e.preventDefault();
@@ -263,7 +258,6 @@ window.onload = function() {
     let fbCanvasParent = document.getElementsByClassName('custom-container-canvas')[0];
     fbCanvasParent.id = "fbcanvas";
 
-
     let dataStorage = new Map();
     getPolygons().then((data) => {
         data.features.forEach(feature => {
@@ -272,7 +266,7 @@ window.onload = function() {
         map.on('load', () => {
             drawGeoPolygons(map, data);
         });
-        drawPolygons(fbCanvas, dataStorage, currentState);
+        drawPolygons(fbCanvas, dataStorage, currentState, image.clientWidth/image.naturalWidth, image.clientHeight/image.naturalHeight);
     })
 
     let contourTemporary = [];
