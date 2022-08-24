@@ -121,13 +121,27 @@
 
         <script type="text/javascript">
             window.onload = function() {
+                function Enum(obj) {
+                    const newObj = {};
+                    for( const prop in obj ) {
+                        if (obj.hasOwnProperty(prop)) {
+                            newObj[prop] = Symbol(obj[prop]);
+                        }
+                    }
+                    return Object.freeze(newObj);
+                }
+                const States = Enum({ AddingPolygon: true, Waiting: true });
+                var currentState = States.Waiting;
+
                 var map = new maplibregl.Map({
                     container: 'map', // container id
                     style: 'https://demotiles.maplibre.org/style.json', // style URL
                     center: [0, 0], // starting position [lng, lat]
                     zoom: 1 // starting zoom
                 });
+                var state = {
 
+                }
                 let polygon = [];
                 let isDone = false;
                 function drawCountour(canvas, coordinates){
@@ -138,7 +152,6 @@
                     let ctx = canvas.getContext('2d');
                     ctx.lineWidth = 4;
                     ctx.strokeStyle = 'blue';
-
                     ctx.clearRect(0, 0, clientW, clientH);
                     ctx.beginPath();
                     ctx.moveTo(coordinates[0].x, coordinates[0].y);
@@ -151,43 +164,6 @@
 
                 let canvas = document.getElementById('fit_canvas');
                 let image = document.getElementById('fit_img');
-                image.addEventListener('click', (e) => {
-                    // need to find true pixel coordinate
-                    const imgW = this.naturalWidth;
-                    const imgH = this.naturalHeight;
-                    const clientW = this.clientWidth;
-                    const clientH = this.clientHeight;
-                    const bbox = this.getBoundingClientRect();
-                    const left = bbox.left;
-                    const top = bbox.top;
-                    const clickX = e.pageX - left;
-                    const clickY = e.pageY - top;
-                    const trueX = (clickX / clientW)*imgW;
-                    const trueY = (clickY / clientH)*imgH;
-                });
-                canvas.addEventListener('click', (e) => {
-                    // need to find true pixel coordinate
-                    if(isDone || polygon.length > 3){
-                        isDone = true;
-                        return;
-                    }
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const imgW = image.naturalWidth;
-                    const imgH = image.naturalHeight;
-                    const clientW = this.clientWidth;
-                    const clientH = this.clientHeight;
-                    const bbox = this.getBoundingClientRect();
-                    const left = bbox.left;
-                    const top = bbox.top;
-                    const clickX = e.pageX - left;
-                    const clickY = e.pageY - top;
-                    const trueX = (clickX / clientW)*imgW;
-                    const trueY = (clickY / clientH)*imgH;
-                    polygon.push({ x:clickX, y:clickY });
-                    drawCountour(canvas, polygon);
-                });
-
 
                 // FabricJS stuff
                 let drawX = 0;
@@ -234,32 +210,16 @@
                     return contour;
                 }
 
-                let isAddingPolygon = false;
+                
                 const clientW = image.clientWidth;
                 const clientH = image.clientHeight;
                 canvas.width = clientW;
                 canvas.height = clientH;
                 let fbCanvas = new fabric.Canvas('fit_canvas', {containerClass: 'custom-container-canvas'});
-                var points = [{x: 0, y: 0}, {x: 100, y: 0}, {x: 100, y: 100}, {x: 0, y: 100}];
-                var newPoly = new fabric.Polygon(points, {
-                    left: 0,
-                    top: 0,
-                    position: 'absolute',
-                    fill: 'transparent',
-                    strokeWidth: 4,
-                    stroke: 'red',
-                    scaleX: 1,
-                    scaleY: 1,
-                    objectCaching: false,
-                    transparentCorners: false,
-                    cornerColor: 'blue',
-                });
-                // fbCanvas.add(newPoly);
-
                 let lines = [];
                 let lineCounter = 0;
                 fbCanvas.on('mouse:down', (options) => {
-                    if (isAddingPolygon === true) {
+                    if (currentState === States.AddingPolygon) {
                         fbCanvas.selection = false;
                         setStartingPoint(options)
                         polygon.push({ x: drawX, y: drawY });
@@ -280,7 +240,7 @@
                 });
 
                 fbCanvas.on('mouse:move', (options) => {
-                    if (lines[0] !== null && lines[0] !== undefined && isAddingPolygon === true) {
+                    if (lines[0] !== null && lines[0] !== undefined && currentState === States.AddingPolygon) {
                         setStartingPoint(options);
                         lines[lineCounter - 1].set({
                             x2: drawX,
@@ -300,13 +260,13 @@
                     lines = [];
                     lineCounter = 0;
                     polygon = [];
-                    isAddingPolygon = false;
+                    currentState = States.Waiting;
                 });
 
                 let addBtn = document.getElementById('add-btn');
                 addBtn.addEventListener('click', (e) => {
-                    if (!isAddingPolygon) {
-                        isAddingPolygon = true;
+                    if (currentState !== States.AddingPolygon) {
+                        currentState = States.AddingPolygon
                     }
                 });
             }
