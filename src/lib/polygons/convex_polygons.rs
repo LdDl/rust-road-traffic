@@ -378,7 +378,8 @@ impl ConvexPolygon {
             properties: PolygonFeaturePropertiesGeoJSON{
                 road_lane_num: self.road_lane_num,
                 road_lane_direction: self.road_lane_direction,
-                coordinates: euclidean
+                coordinates: euclidean,
+                color_rgb: [self.color[2] as i16, self.color[1] as i16, self.color[0] as i16]
             },
             geometry: GeoPolygon{
                 geometry_type: "Polygon".to_string(),

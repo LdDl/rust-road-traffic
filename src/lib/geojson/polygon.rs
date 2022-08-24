@@ -30,6 +30,7 @@ pub struct PolygonFeaturePropertiesGeoJSON {
     pub road_lane_num: u16,
     pub road_lane_direction: u8,
     pub coordinates: Vec<Vec<i32>>,
+    pub color_rgb: [i16; 3]
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
