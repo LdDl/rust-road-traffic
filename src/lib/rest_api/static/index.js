@@ -150,6 +150,56 @@ const addTooltip = (parentDiv, options) => {
     // parentDiv.appendChild(div);
 }
 
+async function addPolygons(map) {
+    try {
+        let res = await axios({
+            method: 'GET',
+            url: 'http://localhost:42001/api/polygons/geojson',
+            timeout: 5000,
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        if (res.status == 200) {
+            console.log(res.data)
+            drawGeoPolygons(map, res.data)
+        };
+    }
+    catch (err) {
+        console.log('Error', err)
+    };
+}
+
+const drawGeoPolygons = (map, featureCollection) => {
+    map.addSource('road-polygons-source', {
+        'type': 'geojson',
+        'data': featureCollection
+    });
+    map.addLayer({
+        'id': 'road-polygons-layer',
+        'type': 'fill',
+        'source': 'road-polygons-source',
+        'layout': {
+
+        },
+        'paint': {
+            'fill-color': '#088',
+            'fill-opacity': 0.8
+        }
+    });
+    if (featureCollection.features.length === 0) {
+        return
+    }
+    const firstCoordinates = featureCollection.features[0].geometry.coordinates;
+    let llBbox = new maplibregl.LngLatBounds(firstCoordinates[0]);
+    for (const coord of firstCoordinates) {
+        llBbox.extend(coord);
+    }
+    map.fitBounds(llBbox, {
+        padding: 20
+    });
+};
+
 window.onload = function() {
     let map = new maplibregl.Map({
         container: 'map', // container id
@@ -177,6 +227,10 @@ window.onload = function() {
     let fbCanvasParent = document.getElementsByClassName('custom-container-canvas')[0];
     fbCanvasParent.id = "fbcanvas";
 
+    map.on('load', () => {
+        addPolygons(map);
+    })
+    
     let contourTemporary = [];
     let contourFinalized = [];
     fbCanvas.on('mouse:down', (options) => {
