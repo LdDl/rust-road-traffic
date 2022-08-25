@@ -36,6 +36,25 @@ const UUIDv4 = new function() {
 	};
 };
 
+function getRandomRGB() {
+    // https://stackoverflow.com/a/23095731/6026885
+    const num = Math.round(0xffffff * Math.random());
+    const r = num >> 16;
+    const g = num >> 8 & 255;
+    const b = num & 255;
+    return 'rgb(' + r + ', ' + g + ', ' + b + ')';
+}
+
+const rgba2array = (rgbValue) => {
+    // https://stackoverflow.com/a/34980657/6026885
+    const match = rgbValue.match(/rgba?\((\d{1,3}), ?(\d{1,3}), ?(\d{1,3})\)?(?:, ?(\d(?:\.\d?))\))?/);
+    return match ? [
+        match[1],
+        match[2],
+        match[3]
+    ].map(Number) : [];
+}
+
 function Enum(obj) {
     const newObj = {};
     for( const prop in obj ) {
@@ -77,7 +96,7 @@ const findLefTopX = (coordinates) => {
     })));
 }
 
-const makeContour = (coordinates, color = '#58c') => {
+const makeContour = (coordinates, color = getRandomRGB()) => {
     let left = findLefTopX(coordinates);
     let top = findLeftTopY(coordinates);
     // coordinates[coordinates.length-1] = coordinates[0];  // In case of fabric.Polyline               
@@ -247,12 +266,12 @@ const drawGeoPolygons = (map, featureCollection) => {
     });
 };
 
-const drawPolygons = (fbCanvas, data, state, widthScale, heightScale) => {
-    data.forEach(feature => {
+const drawPolygons = (fbCanvas, dataStorage, state, scaleWidth, scaleHeight) => {
+    dataStorage.forEach(feature => {
         const contourFinalized = feature.properties.coordinates.map(element => {
             return {
-                x: element[0]*widthScale,
-                y: element[1]*heightScale
+                x: element[0]*scaleWidth,
+                y: element[1]*scaleHeight
             }
         });
         let contour = makeContour(contourFinalized, `rgb(${feature.properties.color_rgb[0]},${feature.properties.color_rgb[1]},${feature.properties.color_rgb[2]})`);
@@ -297,6 +316,9 @@ window.onload = function() {
     let fbCanvasParent = document.getElementsByClassName('custom-container-canvas')[0];
     fbCanvasParent.id = "fbcanvas";
 
+    let scaleWidth = image.clientWidth/image.naturalWidth;
+    let scaleHeight = image.clientHeight/image.naturalHeight;
+
     let dataStorage = new Map();
     getPolygons().then((data) => {
         data.features.forEach(feature => {
@@ -305,7 +327,7 @@ window.onload = function() {
         map.on('load', () => {
             drawGeoPolygons(map, data);
         });
-        drawPolygons(fbCanvas, dataStorage, currentState, image.clientWidth/image.naturalWidth, image.clientHeight/image.naturalHeight);
+        drawPolygons(fbCanvas, dataStorage, currentState, scaleWidth, scaleHeight);
     })
 
     let contourTemporary = [];
@@ -345,6 +367,25 @@ window.onload = function() {
                     }
                 });
                 contour.unid = UUIDv4.generate();
+                dataStorage.set(contour.unid, {
+                    type: 'Feature',
+                    id: contour.unid,
+                    properties: {
+                        'color_rgb': rgba2array(contour.stroke),
+                        'coordinates': contour.points.map(element => {
+                            return [
+                                Math.floor(element.x/scaleWidth),
+                                Math.floor(element.y/scaleHeight)
+                            ]
+                        }),
+                        'road_lane_direction': -1,
+                        'road_lane_num': -1
+                    },
+                    geometry: {
+                        type: 'Polygon',
+                        coordinates: [[[], [], [], [], []]]
+                    }
+                });
                 fbCanvas.add(contour);
                 fbCanvas.renderAll();
                 contourTemporary = [];
