@@ -296,7 +296,14 @@ window.onload = function() {
         center: [0, 0], // starting position [lng, lat]
         zoom: 1 // starting zoom
     });
-    let addBtn = document.getElementById('add-btn');
+
+    const elems = document.querySelectorAll('.fixed-action-btn');
+    const instances = M.FloatingActionButton.init(elems, {
+        direction: 'left',
+        hoverEnabled: false
+    });
+
+    const addBtn = document.getElementById('add-btn');
     addBtn.addEventListener('click', (e) => {
         if (currentState !== States.AddingPolygon) {
             currentState = States.AddingPolygon

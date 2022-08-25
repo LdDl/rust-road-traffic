@@ -57,36 +57,49 @@ body { margin: 0; padding: 0; font-family: 'Roboto', sans-serif;}
     margin: 35px 25px;
     z-index: 999;
 }
-.floating-container .floating-button {
-    position: absolute;
-    width: 65px;
-    height: 65px;
-    background: #2cb3f0;
-    bottom: 0;
-    border-radius: 50%;
-    left: 0;
-    right: 0;
-    margin: auto;
-    color: white;
-    line-height: 65px;
-    text-align: center;
-    font-size: 23px;
-    z-index: 100;
-    box-shadow: 0 10px 25px -5px rgba(44, 179, 240, 0.6);
-    cursor: pointer;
-    -webkit-transition: all 0.3s;
-    transition: all 0.3s;
+.fixed-action-btn.spin-close .btn-large {
+    position: relative;
 }
-.floating-container:hover .floating-button {
-    box-shadow: 0 10px 25px rgba(44, 179, 240, 0.6);
-    -webkit-transform: translatey(5px);
-    transform: translatey(5px);
-    -webkit-transition: all 0.3s;
-    transition: all 0.3s;
-    -webkit-touch-callout: none; 
-    -webkit-user-select: none;
-    -khtml-user-select: none; 
-    -moz-user-select: none; 
-    -ms-user-select: none; 
-    user-select: none;
+.fixed-action-btn.spin-close .btn-large i {
+    opacity: 1;
+    transition: transform 0.3s, opacity 0.3s;
+}
+.fixed-action-btn.spin-close .btn-large:before {
+    transition: transform 0.3s, opacity 0.3s;
+    content: ' ';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1.64rem;
+    height: 2px;
+    background: white;
+    margin-top: -2px;
+    margin-left: -0.82rem;
+    transform: rotate(0);
+    opacity: 0;
+}
+.fixed-action-btn.spin-close .btn-large:after {
+    transition: transform 0.3s, opacity 0.3s;
+    content: ' ' ;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1.64rem;
+    height: 2px;
+    background: white;
+    margin-top: -2px;
+    margin-left: -0.82rem;
+    transform: rotate(0);
+    opacity: 0;
+}
+.fixed-action-btn.spin-close.active .btn-large i {
+    opacity: 0;
+}
+.fixed-action-btn.spin-close.active .btn-large:before {
+    opacity: 1;
+    transform: rotate(135deg);
+}
+.fixed-action-btn.spin-close.active .btn-large:after {
+    opacity: 1;
+    transform: rotate(405deg);
 }
