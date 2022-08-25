@@ -300,6 +300,8 @@ window.onload = function() {
     addBtn.addEventListener('click', (e) => {
         if (currentState !== States.AddingPolygon) {
             currentState = States.AddingPolygon
+        } else {
+            currentState = States.Waiting;
         }
     });
 
@@ -394,6 +396,14 @@ window.onload = function() {
             }
         }
     });
+
+    fbCanvas.on('selection:created', (options) => {
+        console.log('selections created', options)
+    })
+
+    fbCanvas.on('selection:updated', (options) => {
+        console.log('selections updated', options)
+    })
 
     fbCanvas.on('mouse:move', (options) => {
         if (contourTemporary[0] !== null && contourTemporary[0] !== undefined && currentState === States.AddingPolygon) {
