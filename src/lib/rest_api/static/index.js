@@ -64,7 +64,7 @@ function Enum(obj) {
     }
     return Object.freeze(newObj);
 }
-const States = Enum({ AddingPolygon: true, Waiting: true, EditingPolygon: true });
+const States = Enum({ AddingPolygon: true, Waiting: true, EditingPolygon: true, DeletingPolygon: true, PickPolygon: true});
 var currentState = States.Waiting;
 
 const drawCountour = (fbCanvas, coordinates) => {
@@ -113,15 +113,15 @@ const makeContour = (coordinates, color = getRandomRGB()) => {
     return contour;
 }
 
-function editContour(editContour, fbCanvas) {
-    fbCanvas.setActiveObject(editContour);
-    editContour.edit = !editContour.edit;
-    if (editContour.edit) {
-        let lastControl = editContour.points.length - 1;
-        editContour.cornerStyle = 'circle';
-        editContour.cornerSize = 15;
-        editContour.cornerColor = 'rgba(0, 0, 255, 1.0)';
-        editContour.controls = editContour.points.reduce(function(acc, point, index) {
+function editContour(contour, fbCanvas) {
+    fbCanvas.setActiveObject(contour);
+    contour.edit = !contour.edit;
+    if (contour.edit) {
+        let lastControl = contour.points.length - 1;
+        contour.cornerStyle = 'circle';
+        contour.cornerSize = 15;
+        contour.cornerColor = 'rgba(0, 0, 255, 1.0)';
+        contour.controls = contour.points.reduce(function(acc, point, index) {
             acc['p' + index] = new fabric.Control({
                 positionHandler: polygonPositionHandler,
                 actionHandler: anchorWrapper(index > 0 ? index - 1 : lastControl, actionHandler),
@@ -131,12 +131,23 @@ function editContour(editContour, fbCanvas) {
             return acc;
         }, { });
     } else {
-        editContour.cornerColor = 'rgb(178, 204, 255)';
-        editContour.cornerStyle = 'rect';
-        editContour.controls = fabric.Object.prototype.controls;
+        contour.cornerColor = 'rgb(178, 204, 255)';
+        contour.cornerStyle = 'rect';
+        contour.controls = fabric.Object.prototype.controls;
     }
-    editContour.hasBorders = !editContour.edit;
+    contour.hasBorders = !contour.edit;
     fbCanvas.requestRenderAll();
+}
+
+function deleteContour(contour, fbCanvas, dataStorage, map) {
+    fbCanvas.remove(contour[0]);
+    dataStorage.delete(contour[0].unid);
+    if (map.getLayer(`layer-polygon-${contour[0].unid}`)) {
+        map.removeLayer(`layer-polygon-${contour[0].unid}`);
+    }
+    if (map.getSource(`source-polygon-${contour[0].unid}`)) {
+        map.removeSource(`source-polygon-${contour[0].unid}`);
+    }
 }
 
 const getClickPoint = (fbCanvas, options) => {
@@ -278,8 +289,14 @@ const drawPolygons = (fbCanvas, dataStorage, state, scaleWidth, scaleHeight) => 
         contour.on('mousedown', (options) => {
             options.e.preventDefault();
             options.e.stopPropagation();
+            state = States.PickPolygon;
             if (options.button === 3) {
                 state = States.EditingPolygon;
+                if (state !== States.EditingPolygon) {
+                    state = States.EditingPolygon;
+                } else {
+                    state = States.Waiting;
+                }
                 editContour(contour, fbCanvas);
             }
         });
@@ -307,6 +324,15 @@ window.onload = function() {
     addBtn.addEventListener('click', (e) => {
         if (currentState !== States.AddingPolygon) {
             currentState = States.AddingPolygon
+        } else {
+            currentState = States.Waiting;
+        }
+    });
+
+    const delBtn = document.getElementById('del-btn');
+    delBtn.addEventListener('click', (e) => {
+        if (currentState !== States.DeletingPolygon) {
+            currentState = States.DeletingPolygon
         } else {
             currentState = States.Waiting;
         }
@@ -367,11 +393,16 @@ window.onload = function() {
                 contour.on('mousedown', (options) => {
                     options.e.preventDefault();
                     options.e.stopPropagation();
+                    currentState = States.PickPolygon;
                     // Handle right-click
                     // Turn on "Edit" mode
                     if (options.button === 3) {
                         // addTooltip(fbCanvasParent, options);
-                        currentState = States.EditingPolygon;
+                        if (currentState !== States.EditingPolygon) {
+                            currentState = States.EditingPolygon;
+                        } else {
+                            currentState = States.Waiting;
+                        }
                         editContour(contour, fbCanvas);
                     }
                 });
@@ -405,11 +436,17 @@ window.onload = function() {
     });
 
     fbCanvas.on('selection:created', (options) => {
-        console.log('selections created', options)
+        if (currentState === States.DeletingPolygon) {
+            deleteContour(options.selected, fbCanvas, dataStorage, map);
+            currentState = States.Waiting;
+        }
     })
 
     fbCanvas.on('selection:updated', (options) => {
-        console.log('selections updated', options)
+        if (currentState === States.DeletingPolygon) {
+            deleteContour(options.selected, fbCanvas, dataStorage, map);
+            currentState = States.Waiting;
+        }
     })
 
     fbCanvas.on('mouse:move', (options) => {
