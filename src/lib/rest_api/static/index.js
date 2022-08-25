@@ -65,7 +65,6 @@ function Enum(obj) {
     return Object.freeze(newObj);
 }
 const States = Enum({ AddingPolygon: true, Waiting: true, EditingPolygon: true, DeletingPolygon: true, PickPolygon: true});
-var currentState = States.Waiting;
 
 const drawCountour = (fbCanvas, coordinates) => {
     const clientW = fbCanvas.clientWidth;
@@ -306,7 +305,67 @@ const drawPolygons = (fbCanvas, dataStorage, state, scaleWidth, scaleHeight) => 
     })
 }
 
+class ApplicationUI {
+    constructor() {
+        this.dataStorage = new Map();
+        this.initCanvas();
+        this.state = States.Waiting;
+    }
+    initCanvas() {
+        let canvas = document.getElementById('fit_canvas');
+        let image = document.getElementById('fit_img');
+        canvas.width = image.clientWidth;
+        canvas.height = image.clientHeight;
+        this.fbCanvas = new fabric.Canvas('fit_canvas', {
+            containerClass: 'custom-container-canvas',
+            fireRightClick: true,  
+            fireMiddleClick: true, 
+            stopContextMenu: true
+        });
+        this.fbCanvasParent = document.getElementsByClassName('custom-container-canvas')[0];
+        this.fbCanvasParent.id = "fbcanvas";
+    }
+    attachMap(map) {
+        this.map = map;
+    }
+    deletePolygon(polygonID) {
+        this.fbCanvas.getObjects().forEach( contour => {
+            if (contour.unid === polygonID) {
+                this.fbCanvas.remove(contour);
+                return
+            }
+        })
+        this.dataStorage.delete(polygonID);
+        if (this.map.getLayer(`layer-polygon-${polygonID}`)) {
+            this.map.removeLayer(`layer-polygon-${polygonID}`);
+        }
+        if (this.map.getSource(`source-polygon-${polygonID}`)) {
+            this.map.removeSource(`source-polygon-${polygonID}`);
+        }
+    }
+    stateAdd() {
+        if (this.state !== States.AddingPolygon) {
+            this.state = States.AddingPolygon
+        } else {
+            this.state = States.Waiting;
+        }
+    }
+    stateDel() {
+        if (this.state !== States.DeletingPolygon) {
+            this.state = States.DeletingPolygon
+        } else {
+            this.state = States.Waiting;
+        }
+    }
+}
+
 window.onload = function() {
+    const elems = document.querySelectorAll('.fixed-action-btn');
+    const instances = M.FloatingActionButton.init(elems, {
+        direction: 'left',
+        hoverEnabled: false
+    });
+
     let map = new maplibregl.Map({
         container: 'map', // container id
         style: 'https://api.maptiler.com/maps/44abc03b-626b-41bb-8fcd-a0e5083c9d0d/style.json?key=dznzK4GQ1Lj5U7XsI22j',
@@ -314,63 +373,39 @@ window.onload = function() {
         zoom: 1 // starting zoom
     });
 
-    const elems = document.querySelectorAll('.fixed-action-btn');
-    const instances = M.FloatingActionButton.init(elems, {
-        direction: 'left',
-        hoverEnabled: false
-    });
+    let app = new ApplicationUI();
+    app.attachMap(map);
 
     const addBtn = document.getElementById('add-btn');
     addBtn.addEventListener('click', (e) => {
-        if (currentState !== States.AddingPolygon) {
-            currentState = States.AddingPolygon
-        } else {
-            currentState = States.Waiting;
-        }
+        app.stateAdd();
     });
 
     const delBtn = document.getElementById('del-btn');
     delBtn.addEventListener('click', (e) => {
-        if (currentState !== States.DeletingPolygon) {
-            currentState = States.DeletingPolygon
-        } else {
-            currentState = States.Waiting;
-        }
+        app.stateDel();
     });
 
-    let canvas = document.getElementById('fit_canvas');
     let image = document.getElementById('fit_img');
-    canvas.width = image.clientWidth;
-    canvas.height = image.clientHeight;
-    let fbCanvas = new fabric.Canvas('fit_canvas', {
-        containerClass: 'custom-container-canvas',
-        fireRightClick: true,  
-        fireMiddleClick: true, 
-        stopContextMenu: true
-    });
-    let fbCanvasParent = document.getElementsByClassName('custom-container-canvas')[0];
-    fbCanvasParent.id = "fbcanvas";
-
     let scaleWidth = image.clientWidth/image.naturalWidth;
     let scaleHeight = image.clientHeight/image.naturalHeight;
 
-    let dataStorage = new Map();
     getPolygons().then((data) => {
         data.features.forEach(feature => {
-            dataStorage.set(feature.id, feature);
+            app.dataStorage.set(feature.id, feature);
         });
         map.on('load', () => {
             drawGeoPolygons(map, data);
         });
-        drawPolygons(fbCanvas, dataStorage, currentState, scaleWidth, scaleHeight);
+        drawPolygons(app.fbCanvas, app.dataStorage, app.state, scaleWidth, scaleHeight);
     })
 
     let contourTemporary = [];
     let contourFinalized = [];
-    fbCanvas.on('mouse:down', (options) => {
-        if (currentState === States.AddingPolygon) {
-            fbCanvas.selection = false;
-            let clicked = getClickPoint(fbCanvas, options);
+    app.fbCanvas.on('mouse:down', (options) => {
+        if (app.state === States.AddingPolygon) {
+            app.fbCanvas.selection = false;
+            let clicked = getClickPoint(app.fbCanvas, options);
             contourFinalized.push({ x: clicked.x, y: clicked.y });
             let points = [clicked.x, clicked.y, clicked.x, clicked.y]
             let newLine = new fabric.Line(points, {
@@ -380,34 +415,34 @@ window.onload = function() {
             })
             // contourTemporary.push(n.setOriginX(clickX).setOriginY(clickY));
             contourTemporary.push(newLine);
-            fbCanvas.add(newLine);
-            fbCanvas.on('mouse:up', function (options) {
-                fbCanvas.selection = true;
+            app.fbCanvas.add(newLine);
+            app.fbCanvas.on('mouse:up', function (options) {
+                app.fbCanvas.selection = true;
             });
 
             if (contourFinalized.length > 3) {
                 contourTemporary.forEach((value) => {
-                    fbCanvas.remove(value);
+                    app.fbCanvas.remove(value);
                 });
                 let contour = makeContour(contourFinalized);
                 contour.on('mousedown', (options) => {
                     options.e.preventDefault();
                     options.e.stopPropagation();
-                    currentState = States.PickPolygon;
+                    app.state = States.PickPolygon;
                     // Handle right-click
                     // Turn on "Edit" mode
                     if (options.button === 3) {
                         // addTooltip(fbCanvasParent, options);
-                        if (currentState !== States.EditingPolygon) {
-                            currentState = States.EditingPolygon;
+                        if (app.state !== States.EditingPolygon) {
+                            app.state = States.EditingPolygon;
                         } else {
-                            currentState = States.Waiting;
+                            app.state = States.Waiting;
                         }
-                        editContour(contour, fbCanvas);
+                        editContour(contour, app.fbCanvas);
                     }
                 });
                 contour.unid = UUIDv4.generate();
-                dataStorage.set(contour.unid, {
+                app.dataStorage.set(contour.unid, {
                     type: 'Feature',
                     id: contour.unid,
                     properties: {
@@ -426,34 +461,34 @@ window.onload = function() {
                         coordinates: [[[], [], [], [], []]]
                     }
                 });
-                fbCanvas.add(contour);
-                fbCanvas.renderAll();
+                app.fbCanvas.add(contour);
+                app.fbCanvas.renderAll();
                 contourTemporary = [];
                 contourFinalized = [];
-                currentState = States.Waiting;
+                app.state = States.Waiting;
             }
         }
     });
 
-    fbCanvas.on('selection:created', (options) => {
-        if (currentState === States.DeletingPolygon) {
-            deleteContour(options.selected, fbCanvas, dataStorage, map);
-            currentState = States.Waiting;
+    app.fbCanvas.on('selection:created', (options) => {
+        if (app.state === States.DeletingPolygon) {
+            app.deletePolygon(options.selected[0].unid);
+            app.state = States.Waiting;
         }
     })
 
-    fbCanvas.on('selection:updated', (options) => {
-        if (currentState === States.DeletingPolygon) {
-            deleteContour(options.selected, fbCanvas, dataStorage, map);
-            currentState = States.Waiting;
+    app.fbCanvas.on('selection:updated', (options) => {
+        if (app.state === States.DeletingPolygon) {
+            app.deletePolygon(options.selected[0].unid);
+            app.state = States.Waiting;
         }
     })
 
-    fbCanvas.on('mouse:move', (options) => {
-        if (contourTemporary[0] !== null && contourTemporary[0] !== undefined && currentState === States.AddingPolygon) {
-            let clicked = getClickPoint(fbCanvas, options);
+    app.fbCanvas.on('mouse:move', (options) => {
+        if (contourTemporary[0] !== null && contourTemporary[0] !== undefined && app.state === States.AddingPolygon) {
+            let clicked = getClickPoint(app.fbCanvas, options);
             contourTemporary[contourTemporary.length - 1].set({ x2: clicked.x, y2: clicked.y });
-            fbCanvas.renderAll();
+            app.fbCanvas.renderAll();
         }
     });
 }
