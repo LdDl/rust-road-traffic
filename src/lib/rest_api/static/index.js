@@ -464,8 +464,10 @@ class ApplicationUI {
         }
         // this.draw.trash();
     }
-    attachCanvasToSpatial() {
-        console.log('fired: @todo')
+    attachCanvasToSpatial(spatialID, canvasID) {
+        let feature = this.dataStorage.get(canvasID);
+        feature.properties.spatial_object_id = spatialID;
+        this.dataStorage.set(canvasID, feature)
     }
 }
 
@@ -553,7 +555,7 @@ window.onload = function() {
 
     getPolygons().then((data) => {
         data.features.forEach(feature => {
-            feature.properties.canvas_object_id = feature.id;
+            feature.properties.spatial_object_id = feature.id;
             app.dataStorage.set(feature.id, feature);
         });
         app.map.on('load', () => {
