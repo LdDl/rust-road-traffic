@@ -512,13 +512,25 @@ window.onload = function() {
         app.stateDel();
     });
 
-
-
     map.on('click', 'gl-draw-polygon-fill-inactive.cold', function (e) {
+        const options = Array.from(app.dataStorage.values()).map((feature, idx) => { return `<option value="${idx + 1}">${feature.id}</option>`});
+        const popupContent = `
+<div id="custom-popup">
+    <div class="input-field col s12">
+        <select>
+            <option value="" disabled selected>Pick up polygon</option>
+            ${options.join('\n')}
+        </select>
+        <label>Attach canvas polygons</label>
+    </div>
+</div>
+        `
         new maplibregl.Popup({ className: "custom-popup" })
-          .setLngLat(e.lngLat)
-          .setHTML('<div id="custom-popup">@todo</div>')
-          .addTo(map);
+            .setLngLat(e.lngLat)
+            .setHTML(popupContent)
+            .addTo(map);
+        const selects = document.querySelectorAll('select');
+        const selectsInstances = M.FormSelect.init(selects, {});
     });
 
     getPolygons().then((data) => {
