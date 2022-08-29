@@ -453,6 +453,9 @@ class ApplicationUI {
         // this.draw.trash();
     }
     attachCanvasToSpatial(spatialID, canvasID) {
+        if (spatialID === '' || canvasID === '' || spatialID === null || canvasID === null || spatialID === undefined|| canvasID === undefined) {
+            return
+        }
         let feature = this.dataStorage.get(canvasID);
         let mapFeature = this.draw.get(spatialID);
         // Scan for other spatial objects to share same canvas ID
@@ -536,16 +539,34 @@ window.onload = function() {
         const options = Array.from(app.dataStorage.values()).map((feature, idx) => { return `<option value="${feature.id}">${feature.id}</option>`});
         const popupContent = `
 <div id="custom-popup">
-    <div class="input-field s12">
-        <select id="select-canvas">
-            <option value="" disabled selected>Pick up polygon</option>
-            ${options.join('\n')}
-        </select>
-        <label>Attach canvas polygons</label>
+    <div class="row">
+        <div class="input-field col s12">
+            <select id="select-canvas">
+                <option value="" disabled selected>Pick up polygon</option>
+                ${options.join('\n')}
+            </select>
+            <label>Attach canvas polygons</label>
+        </div>
     </div>
-    <button id="attach-canvas-btn" class="btn-small waves-effect waves-light" type="submit" name="action" onclick>Save
-        <i class="material-icons right">save</i>
-    </button>
+    <div class="row">
+        <div class="input-field col s12">
+            <input value="0" id="lane_direction" type="number" class="validate">
+            <label class="active" for="lane_direction">Direction value</label>
+        </div>
+    </div>
+    <div class="row">
+        <div class="input-field col s12">
+            <input value="0" id="lane_number" type="number" class="validate">
+            <label class="active" for="lane_number">Lane</label>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col s12">
+            <button id="attach-canvas-btn" class="btn-small waves-effect waves-light" type="submit" name="action" onclick>Save
+                <i class="material-icons right">save</i>
+            </button>
+        </div>
+    </div>
 </div>
         `
         new maplibregl.Popup({ className: "custom-popup" })

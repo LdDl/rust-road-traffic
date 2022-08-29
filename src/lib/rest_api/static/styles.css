@@ -103,3 +103,11 @@ body { margin: 0; padding: 0; font-family: 'Roboto', sans-serif;}
     opacity: 1;
     transform: rotate(405deg);
 }
+
+.maplibregl-popup-content {
+    background-color: rgb(240, 240, 240);
+}
+
+.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip, .maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+    border-top-color: rgb(240, 240, 240) ;
+}
