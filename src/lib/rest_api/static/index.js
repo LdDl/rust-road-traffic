@@ -464,6 +464,9 @@ class ApplicationUI {
         }
         // this.draw.trash();
     }
+    attachCanvasToSpatial() {
+        console.log('fired: @todo')
+    }
 }
 
 window.onload = function() {
@@ -512,17 +515,17 @@ window.onload = function() {
     });
 
     app.map.on('click', 'gl-draw-polygon-fill-inactive.cold', function (e) {
-        const options = Array.from(app.dataStorage.values()).map((feature, idx) => { return `<option value="${idx + 1}">${feature.id}</option>`});
+        const options = Array.from(app.dataStorage.values()).map((feature, idx) => { return `<option value="${feature.id}">${feature.id}</option>`});
         const popupContent = `
 <div id="custom-popup">
     <div class="input-field s12">
-        <select>
+        <select id="select-canvas">
             <option value="" disabled selected>Pick up polygon</option>
             ${options.join('\n')}
         </select>
         <label>Attach canvas polygons</label>
     </div>
-    <button class="btn-small waves-effect waves-light" type="submit" name="action">Save
+    <button id="attach-canvas-btn" class="btn-small waves-effect waves-light" type="submit" name="action" onclick>Save
         <i class="material-icons right">save</i>
     </button>
 </div>
@@ -531,12 +534,26 @@ window.onload = function() {
             .setLngLat(e.lngLat)
             .setHTML(popupContent)
             .addTo(app.map);
+        
+        const feature = e.features[0];
         const selects = document.querySelectorAll('select');
         const selectsInstances = M.FormSelect.init(selects, {});
+
+        const attachBtn = document.getElementById('attach-canvas-btn');
+        attachBtn.addEventListener('click', (e) => {
+            const selectElem = document.getElementById("select-canvas");
+            // https://github.com/Dogfalo/materialize/issues/6536 - There is a workaround to get correct selected values via `getSelectedValues()` call
+            // So just leave next two code lines just for history:
+            // const selectInstance = M.FormSelect.getInstance(selectElem);
+            // console.log("bug", selectInstance.getSelectedValues())
+            app.attachCanvasToSpatial(feature.properties.id, selectElem.value);
+        });
+
     });
 
     getPolygons().then((data) => {
         data.features.forEach(feature => {
+            feature.properties.canvas_object_id = feature.id;
             app.dataStorage.set(feature.id, feature);
         });
         app.map.on('load', () => {
