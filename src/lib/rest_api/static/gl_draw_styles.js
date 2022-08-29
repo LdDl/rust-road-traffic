@@ -1,3 +1,5 @@
+const EMPTY_POLYGON_RGB = 'rgb(127, 127, 127)';
+
 const CUSTOM_GL_DRAW_STYLES = [
   // ACTIVE (draw)
   {
@@ -22,7 +24,7 @@ const CUSTOM_GL_DRAW_STYLES = [
           'fill-color': [
               'case',
               ['==', ['get', 'user_color_rgb_str'], null],
-              'rgb(127, 127, 127)',
+              EMPTY_POLYGON_RGB,
               ['get', 'user_color_rgb_str']
           ],
           'fill-outline-color': 'rgb(0, 0, 0)',
@@ -95,7 +97,7 @@ const CUSTOM_GL_DRAW_STYLES = [
           'fill-color': [
               'case',
               ['==', ['get', 'user_color_rgb_str'], null],
-              'rgb(127, 127, 127)',
+              EMPTY_POLYGON_RGB,
               ['get', 'user_color_rgb_str']
           ],
           'fill-outline-color': 'rgb(0, 0, 0)',
