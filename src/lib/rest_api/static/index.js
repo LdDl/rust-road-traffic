@@ -246,29 +246,15 @@ async function getPolygons() {
     .catch (err => console.error(err));
 }
 
-const drawGeoPolygons = (map, draw, featureCollection) => {
-    featureCollection.features.forEach(feature => {
+const drawGeoPolygons = (map, draw, dataStorage) => {
+    dataStorage.forEach(feature => {
         feature.properties.color_rgb_str = `rgb(${feature.properties.color_rgb[0]},${feature.properties.color_rgb[1]},${feature.properties.color_rgb[2]})`;
-        // map.addSource(`source-polygon-${feature.id}`, {
-        //     'type': 'geojson',
-        //     'data': feature
-        // });
-        // map.addLayer({
-        //     'id': `layer-polygon-${feature.id}`,
-        //     'type': 'fill',
-        //     'source': `source-polygon-${feature.id}`,
-        //     'layout': {},
-        //     'paint': {
-        //         'fill-color': ['get', 'color_rgb_str'],
-        //         'fill-opacity': 0.8
-        //     }
-        // });
         draw.add(feature);
     });
-    if (featureCollection.features.length === 0) {
+    if (dataStorage.length === 0) {
         return
     }
-    const firstCoordinates = featureCollection.features[0].geometry.coordinates;
+    const firstCoordinates = Array.from(dataStorage.values())[0].geometry.coordinates;
     let llBbox = new maplibregl.LngLatBounds(firstCoordinates[0]);
     for (const coord of firstCoordinates) {
         llBbox.extend(coord);
@@ -401,6 +387,7 @@ class ApplicationUI {
                         id: contour.unid,
                         properties: {
                             'color_rgb': rgba2array(contour.stroke),
+                            'color_rgb_str': contour.stroke,
                             'coordinates': contour.points.map(element => {
                                 return [
                                     Math.floor(element.x/scaleWidth),
@@ -467,7 +454,8 @@ class ApplicationUI {
     attachCanvasToSpatial(spatialID, canvasID) {
         let feature = this.dataStorage.get(canvasID);
         feature.properties.spatial_object_id = spatialID;
-        this.dataStorage.set(canvasID, feature)
+        this.dataStorage.set(canvasID, feature);
+        this.draw.setFeatureProperty(spatialID, 'color_rgb_str', feature.properties.color_rgb_str);
     }
 }
 
@@ -559,7 +547,7 @@ window.onload = function() {
             app.dataStorage.set(feature.id, feature);
         });
         app.map.on('load', () => {
-            drawGeoPolygons(app.map, draw, data);
+            drawGeoPolygons(app.map, draw, app.dataStorage);
         });
         drawPolygons(app);
     })
