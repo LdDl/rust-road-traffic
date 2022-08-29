@@ -248,7 +248,6 @@ async function getPolygons() {
 
 const drawGeoPolygons = (map, draw, dataStorage) => {
     dataStorage.forEach(feature => {
-        feature.properties.color_rgb_str = `rgb(${feature.properties.color_rgb[0]},${feature.properties.color_rgb[1]},${feature.properties.color_rgb[2]})`;
         draw.add(feature);
     });
     if (dataStorage.length === 0) {
@@ -395,7 +394,9 @@ class ApplicationUI {
                                 ]
                             }),
                             'road_lane_direction': -1,
-                            'road_lane_num': -1
+                            'road_lane_num': -1,
+                            'spatial_object_id': null,
+                            'canvas_object_id': null,
                         },
                         geometry: {
                             type: 'Polygon',
@@ -453,8 +454,25 @@ class ApplicationUI {
     }
     attachCanvasToSpatial(spatialID, canvasID) {
         let feature = this.dataStorage.get(canvasID);
-        feature.properties.spatial_object_id = spatialID;
-        this.dataStorage.set(canvasID, feature);
+        let mapFeature = this.draw.get(spatialID);
+        // Scan for other spatial objects to share same canvas ID
+        this.draw.getAll().features.forEach(element => {
+            if (element.id === spatialID) {
+                // Skip picked map feature
+                return
+            }
+            if (element.properties.canvas_object_id === canvasID) {
+                element.properties.canvas_object_id = null;
+                element.properties.color_rgb = [127, 127, 127];
+                element.properties.color_rgb_str = EMPTY_POLYGON_RGB;
+                this.draw.add(element)
+                this.draw.setFeatureProperty(element.id, 'color_rgb_str', EMPTY_POLYGON_RGB);
+            }
+        })
+        mapFeature.properties.canvas_object_id = canvasID;
+        mapFeature.properties.color_rgb = feature.properties.color_rgb;
+        mapFeature.properties.color_rgb_str = feature.properties.color_rgb_str;
+        this.draw.add(mapFeature)
         this.draw.setFeatureProperty(spatialID, 'color_rgb_str', feature.properties.color_rgb_str);
     }
 }
@@ -491,7 +509,17 @@ window.onload = function() {
     });
     app.map.addControl(draw);
     app.attachGLDraw(draw);
-    app.map.on("draw.create", function(e){
+    app.map.on("draw.create", function(e) {
+        e.features[0].properties = {
+            'color_rgb': [127, 127, 127],
+            'color_rgb_str': EMPTY_POLYGON_RGB,
+            'coordinates': e.features[0].geometry.coordinates,
+            'road_lane_direction': -1,
+            'road_lane_num': -1,
+            'spatial_object_id': e.features[0].id,
+            'canvas_object_id': null,
+        }
+        app.draw.add(e.features[0])
         app.state = States.Waiting;
     })
     const addBtn = document.getElementById('add-btn');
@@ -544,6 +572,8 @@ window.onload = function() {
     getPolygons().then((data) => {
         data.features.forEach(feature => {
             feature.properties.spatial_object_id = feature.id;
+            feature.properties.canvas_object_id = feature.id;
+            feature.properties.color_rgb_str = `rgb(${feature.properties.color_rgb[0]},${feature.properties.color_rgb[1]},${feature.properties.color_rgb[2]})`;
             app.dataStorage.set(feature.id, feature);
         });
         app.map.on('load', () => {
