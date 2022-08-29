@@ -551,14 +551,14 @@ window.onload = function() {
     </div>
     <div class="row">
         <div class="input-field col s12">
-            <input value="${mapFeature.properties.road_lane_direction}" id="lane_direction" type="number" class="validate">
-            <label class="active" for="lane_direction">Direction value</label>
+            <input value="${mapFeature.properties.road_lane_direction}" id="lane-direction" type="number" class="validate">
+            <label class="active" for="lane-direction">Direction value</label>
         </div>
     </div>
     <div class="row">
         <div class="input-field col s12">
-            <input value="${mapFeature.properties.road_lane_num}" id="lane_number" type="number" class="validate">
-            <label class="active" for="lane_number">Lane</label>
+            <input value="${mapFeature.properties.road_lane_num}" id="lane-number" type="number" class="validate">
+            <label class="active" for="lane-number">Lane</label>
         </div>
     </div>
     <div class="row">
@@ -582,6 +582,11 @@ window.onload = function() {
         const attachBtn = document.getElementById('attach-canvas-btn');
         attachBtn.addEventListener('click', (e) => {
             const selectElem = document.getElementById("select-canvas");
+            const directionElem = document.getElementById("lane-direction");
+            const laneElem = document.getElementById("lane-number");
+            // @todo deal with extra fields
+            console.log(directionElem.value, laneElem.value)
+            
             // https://github.com/Dogfalo/materialize/issues/6536 - There is a workaround to get correct selected values via `getSelectedValues()` call
             // So just leave next two code lines just for history:
             // const selectInstance = M.FormSelect.getInstance(selectElem);
