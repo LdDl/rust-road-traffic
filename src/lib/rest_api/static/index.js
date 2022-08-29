@@ -246,22 +246,26 @@ async function getPolygons() {
     .catch (err => console.error(err));
 }
 
-const drawGeoPolygons = (map, featureCollection) => {
+const drawGeoPolygons = (map, draw, featureCollection) => {
     featureCollection.features.forEach(feature => {
-        map.addSource(`source-polygon-${feature.id}`, {
-            'type': 'geojson',
-            'data': feature
-        });
-        map.addLayer({
-            'id': `layer-polygon-${feature.id}`,
-            'type': 'fill',
-            'source': `source-polygon-${feature.id}`,
-            'layout': {},
-            'paint': {
-                'fill-color': `rgb(${feature.properties.color_rgb[0]},${feature.properties.color_rgb[1]},${feature.properties.color_rgb[2]})`,
-                'fill-opacity': 0.8
-            }
-        });
+        feature.properties.color_rgb_str = `rgb(${feature.properties.color_rgb[0]},${feature.properties.color_rgb[1]},${feature.properties.color_rgb[2]})`;
+        // map.addSource(`source-polygon-${feature.id}`, {
+        //     'type': 'geojson',
+        //     'data': feature
+        // });
+        // map.addLayer({
+        //     'id': `layer-polygon-${feature.id}`,
+        //     'type': 'fill',
+        //     'source': `source-polygon-${feature.id}`,
+        //     'layout': {},
+        //     'paint': {
+        //         'fill-color': ['get', 'color_rgb_str'],
+        //         'fill-opacity': 0.8
+        //     }
+        // });
+        console.log(feature)
+        draw.add(feature);
+        // console.log(featureIds);
     });
     if (featureCollection.features.length === 0) {
         return
@@ -425,6 +429,9 @@ class ApplicationUI {
     attachMap(map) {
         this.map = map;
     }
+    attachGLDraw(draw) {
+        this.draw = draw;
+    }
     deletePolygon(polygonID) {
         this.fbCanvas.getObjects().forEach( contour => {
             if (contour.unid === polygonID) {
@@ -433,12 +440,13 @@ class ApplicationUI {
             }
         })
         this.dataStorage.delete(polygonID);
-        if (this.map.getLayer(`layer-polygon-${polygonID}`)) {
-            this.map.removeLayer(`layer-polygon-${polygonID}`);
-        }
-        if (this.map.getSource(`source-polygon-${polygonID}`)) {
-            this.map.removeSource(`source-polygon-${polygonID}`);
-        }
+        this.draw.delete(polygonID)
+        // if (this.map.getLayer(`layer-polygon-${polygonID}`)) {
+        //     this.map.removeLayer(`layer-polygon-${polygonID}`);
+        // }
+        // if (this.map.getSource(`source-polygon-${polygonID}`)) {
+        //     this.map.removeSource(`source-polygon-${polygonID}`);
+        // }
     }
     stateAdd() {
         if (this.state !== States.AddingPolygon) {
@@ -446,6 +454,7 @@ class ApplicationUI {
         } else {
             this.state = States.Waiting;
         }
+        this.draw.changeMode('draw_restricted_polygon');
     }
     stateDel() {
         if (this.state !== States.DeletingPolygon) {
@@ -453,12 +462,13 @@ class ApplicationUI {
         } else {
             this.state = States.Waiting;
         }
+        // this.draw.trash();
     }
 }
 
 window.onload = function() {
-    const elems = document.querySelectorAll('.fixed-action-btn');
-    const instances = M.FloatingActionButton.init(elems, {
+    const fixedButtons = document.querySelectorAll('.fixed-action-btn');
+    const fixedButtonsInstances = M.FloatingActionButton.init(fixedButtons, {
         direction: 'left',
         hoverEnabled: false
     });
@@ -473,6 +483,25 @@ window.onload = function() {
     let app = new ApplicationUI();
     app.attachMap(map);
 
+    PolygonFourPointsOnly.maxVertices = 4;
+    let draw = new MapboxDraw({
+        userProperties: true,
+        displayControlsDefault: false,
+        controls: {
+            polygon: false,
+            trash: false
+        },
+        modes: Object.assign({
+            draw_restricted_polygon: PolygonFourPointsOnly,
+        }, MapboxDraw.modes),
+        styles: CUSTOM_GL_DRAW_STYLES
+    });
+    app.map.addControl(draw);
+    app.attachGLDraw(draw);
+    // map.on("draw.create", function(e){
+    //     e.features[0].properties.color_rgb_str = 'rgb(127, 127, 127)';
+    //     console.log('created one', e.features[0].id)
+    // })
     const addBtn = document.getElementById('add-btn');
     addBtn.addEventListener('click', (e) => {
         app.stateAdd();
@@ -483,12 +512,21 @@ window.onload = function() {
         app.stateDel();
     });
 
+
+
+    map.on('click', 'gl-draw-polygon-fill-inactive.cold', function (e) {
+        new maplibregl.Popup({ className: "custom-popup" })
+          .setLngLat(e.lngLat)
+          .setHTML('<div id="custom-popup">@todo</div>')
+          .addTo(map);
+    });
+
     getPolygons().then((data) => {
         data.features.forEach(feature => {
             app.dataStorage.set(feature.id, feature);
         });
         map.on('load', () => {
-            drawGeoPolygons(map, data);
+            drawGeoPolygons(map, draw, data);
         });
         drawPolygons(app);
     })

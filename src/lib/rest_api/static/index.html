@@ -14,6 +14,8 @@
         <link href="styles.css" rel="stylesheet" />
     </head>
     <body>
+        <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.2.0/mapbox-gl-draw.js"></script>
+        <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.2.0/mapbox-gl-draw.css" type="text/css"/>
         <div class="fixed-action-btn horizontal click-to-toggle spin-close">
             <a class="btn-floating btn-large red">
               <i class="material-icons">edit</i>
@@ -26,8 +28,8 @@
         <div id="flex_component">
             <div id="grid_component">
                 <div id="mjpeg">
-                    <img id="fit_img" src="http://localhost:42002/live_streaming" width="500" height="500">
-                    <!-- <img id="fit_img" src="https://pngimg.com/uploads/google/google_PNG19632.png"> -->
+                    <!-- <img id="fit_img" src="http://localhost:42002/live_streaming" width="500" height="500"> -->
+                    <img id="fit_img" src="https://pngimg.com/uploads/google/google_PNG19632.png">
                     <canvas id="fit_canvas"></canvas>
                 </div>
                 <div id="configuration">@todo</div>
@@ -35,6 +37,8 @@
             
             <div id="map"></div>
         </div>
+        <script type="text/javascript" src="gl_draw_styles.js"></script>
+        <script type="text/javascript" src="custom_poly.js"></script>
         <script type="text/javascript" src="index.js"></script>
     </body>
 </html>
