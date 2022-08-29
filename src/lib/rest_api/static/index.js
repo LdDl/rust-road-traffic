@@ -263,9 +263,7 @@ const drawGeoPolygons = (map, draw, featureCollection) => {
         //         'fill-opacity': 0.8
         //     }
         // });
-        console.log(feature)
         draw.add(feature);
-        // console.log(featureIds);
     });
     if (featureCollection.features.length === 0) {
         return
@@ -422,6 +420,7 @@ class ApplicationUI {
                     this.contourTemporary = [];
                     this.contourFinalized = [];
                     this.state = States.Waiting;
+                    this.draw.changeMode('simple_select');
                 }
             }
         });
@@ -451,10 +450,11 @@ class ApplicationUI {
     stateAdd() {
         if (this.state !== States.AddingPolygon) {
             this.state = States.AddingPolygon
+            this.draw.changeMode('draw_restricted_polygon');
         } else {
             this.state = States.Waiting;
+            this.draw.changeMode('simple_select');
         }
-        this.draw.changeMode('draw_restricted_polygon');
     }
     stateDel() {
         if (this.state !== States.DeletingPolygon) {
@@ -498,10 +498,9 @@ window.onload = function() {
     });
     app.map.addControl(draw);
     app.attachGLDraw(draw);
-    // map.on("draw.create", function(e){
-    //     e.features[0].properties.color_rgb_str = 'rgb(127, 127, 127)';
-    //     console.log('created one', e.features[0].id)
-    // })
+    app.map.on("draw.create", function(e){
+        app.state = States.Waiting;
+    })
     const addBtn = document.getElementById('add-btn');
     addBtn.addEventListener('click', (e) => {
         app.stateAdd();
@@ -512,23 +511,26 @@ window.onload = function() {
         app.stateDel();
     });
 
-    map.on('click', 'gl-draw-polygon-fill-inactive.cold', function (e) {
+    app.map.on('click', 'gl-draw-polygon-fill-inactive.cold', function (e) {
         const options = Array.from(app.dataStorage.values()).map((feature, idx) => { return `<option value="${idx + 1}">${feature.id}</option>`});
         const popupContent = `
 <div id="custom-popup">
-    <div class="input-field col s12">
+    <div class="input-field s12">
         <select>
             <option value="" disabled selected>Pick up polygon</option>
             ${options.join('\n')}
         </select>
         <label>Attach canvas polygons</label>
     </div>
+    <button class="btn-small waves-effect waves-light" type="submit" name="action">Save
+        <i class="material-icons right">save</i>
+    </button>
 </div>
         `
         new maplibregl.Popup({ className: "custom-popup" })
             .setLngLat(e.lngLat)
             .setHTML(popupContent)
-            .addTo(map);
+            .addTo(app.map);
         const selects = document.querySelectorAll('select');
         const selectsInstances = M.FormSelect.init(selects, {});
     });
@@ -537,8 +539,8 @@ window.onload = function() {
         data.features.forEach(feature => {
             app.dataStorage.set(feature.id, feature);
         });
-        map.on('load', () => {
-            drawGeoPolygons(map, draw, data);
+        app.map.on('load', () => {
+            drawGeoPolygons(app.map, draw, data);
         });
         drawPolygons(app);
     })
