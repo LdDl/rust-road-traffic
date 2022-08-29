@@ -537,6 +537,7 @@ window.onload = function() {
 
     app.map.on('click', 'gl-draw-polygon-fill-inactive.cold', function (e) {
         const options = Array.from(app.dataStorage.values()).map((feature, idx) => { return `<option value="${feature.id}">${feature.id}</option>`});
+        const mapFeature = app.draw.get(e.features[0].properties.id);
         const popupContent = `
 <div id="custom-popup">
     <div class="row">
@@ -550,13 +551,13 @@ window.onload = function() {
     </div>
     <div class="row">
         <div class="input-field col s12">
-            <input value="0" id="lane_direction" type="number" class="validate">
+            <input value="${mapFeature.properties.road_lane_direction}" id="lane_direction" type="number" class="validate">
             <label class="active" for="lane_direction">Direction value</label>
         </div>
     </div>
     <div class="row">
         <div class="input-field col s12">
-            <input value="0" id="lane_number" type="number" class="validate">
+            <input value="${mapFeature.properties.road_lane_num}" id="lane_number" type="number" class="validate">
             <label class="active" for="lane_number">Lane</label>
         </div>
     </div>
