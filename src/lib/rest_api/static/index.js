@@ -452,7 +452,7 @@ class ApplicationUI {
         }
         // this.draw.trash();
     }
-    attachCanvasToSpatial(spatialID, canvasID, options = {road_lane_direction: -1, road_lane_num: -1}) {
+    attachCanvasToSpatial(spatialID, canvasID, options = {road_lane_direction: -1, road_lane_num: -1, coordinates: []}) {
         if (spatialID === '' || canvasID === '' || spatialID === null || canvasID === null || spatialID === undefined|| canvasID === undefined) {
             return
         }
@@ -465,13 +465,15 @@ class ApplicationUI {
                 return
             }
             if (element.properties.canvas_object_id === canvasID) {
+                // Reset information for MAP object:
                 element.properties.canvas_object_id = null;
                 element.properties.color_rgb = [127, 127, 127];
                 element.properties.color_rgb_str = EMPTY_POLYGON_RGB;
-                this.draw.add(element)
+                this.draw.add(element);
                 this.draw.setFeatureProperty(element.id, 'color_rgb_str', EMPTY_POLYGON_RGB);
             }
         })
+        // Update information for MAP object
         mapFeature.properties.canvas_object_id = canvasID;
         mapFeature.properties.color_rgb = feature.properties.color_rgb;
         mapFeature.properties.color_rgb_str = feature.properties.color_rgb_str;
@@ -479,6 +481,12 @@ class ApplicationUI {
         mapFeature.properties.road_lane_num = options.road_lane_num;
         this.draw.add(mapFeature);
         this.draw.setFeatureProperty(spatialID, 'color_rgb_str', feature.properties.color_rgb_str);
+        // Update information for DATASTORE object
+        feature.properties.spatial_object_id = spatialID;
+        feature.properties.road_lane_direction = options.road_lane_direction;
+        feature.properties.road_lane_num = options.road_lane_num;
+        feature.geometry.coordinates = options.coordinates;
+        this.dataStorage.set(canvasID, feature);
     }
 }
 
@@ -590,7 +598,7 @@ window.onload = function() {
         const selectsInstances = M.FormSelect.init(selectElem, {});
 
         const attachBtn = document.getElementById('attach-canvas-btn');
-        attachBtn.addEventListener('click', (e) => {
+        attachBtn.addEventListener('click', (clickEvent) => {
             const directionElem = document.getElementById("lane-direction");
             const laneElem = document.getElementById("lane-number");
             
@@ -598,7 +606,7 @@ window.onload = function() {
             // So just leave next two code lines just for history:
             // const selectInstance = M.FormSelect.getInstance(selectElem);
             // console.log("bug", selectInstance.getSelectedValues())
-            app.attachCanvasToSpatial(feature.properties.id, selectElem.value, {road_lane_direction: directionElem.value, road_lane_num: laneElem.value});
+            app.attachCanvasToSpatial(feature.properties.id, selectElem.value, {road_lane_direction: directionElem.value, road_lane_num: laneElem.value, coordinates: app.draw.get(feature.properties.id).geometry.coordinates});
         });
 
     });
