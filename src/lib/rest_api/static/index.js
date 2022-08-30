@@ -452,7 +452,7 @@ class ApplicationUI {
         }
         // this.draw.trash();
     }
-    attachCanvasToSpatial(spatialID, canvasID) {
+    attachCanvasToSpatial(spatialID, canvasID, options = {road_lane_direction: -1, road_lane_num: -1}) {
         if (spatialID === '' || canvasID === '' || spatialID === null || canvasID === null || spatialID === undefined|| canvasID === undefined) {
             return
         }
@@ -475,7 +475,9 @@ class ApplicationUI {
         mapFeature.properties.canvas_object_id = canvasID;
         mapFeature.properties.color_rgb = feature.properties.color_rgb;
         mapFeature.properties.color_rgb_str = feature.properties.color_rgb_str;
-        this.draw.add(mapFeature)
+        mapFeature.properties.road_lane_direction = options.road_lane_direction;
+        mapFeature.properties.road_lane_num = options.road_lane_num;
+        this.draw.add(mapFeature);
         this.draw.setFeatureProperty(spatialID, 'color_rgb_str', feature.properties.color_rgb_str);
     }
 }
@@ -576,22 +578,27 @@ window.onload = function() {
             .addTo(app.map);
         
         const feature = e.features[0];
-        const selects = document.querySelectorAll('select');
-        const selectsInstances = M.FormSelect.init(selects, {});
+        // const selects = document.querySelectorAll('select');
+        const selectElem = document.getElementById("select-canvas");
+        Array.from(app.dataStorage.values()).some(element => {
+            // Pick default value if it's possible
+            if (element.properties.spatial_object_id === mapFeature.id) {
+                selectElem.value = element.id;
+                return true;
+            }
+        })
+        const selectsInstances = M.FormSelect.init(selectElem, {});
 
         const attachBtn = document.getElementById('attach-canvas-btn');
         attachBtn.addEventListener('click', (e) => {
-            const selectElem = document.getElementById("select-canvas");
             const directionElem = document.getElementById("lane-direction");
             const laneElem = document.getElementById("lane-number");
-            // @todo deal with extra fields
-            console.log(directionElem.value, laneElem.value)
             
             // https://github.com/Dogfalo/materialize/issues/6536 - There is a workaround to get correct selected values via `getSelectedValues()` call
             // So just leave next two code lines just for history:
             // const selectInstance = M.FormSelect.getInstance(selectElem);
             // console.log("bug", selectInstance.getSelectedValues())
-            app.attachCanvasToSpatial(feature.properties.id, selectElem.value);
+            app.attachCanvasToSpatial(feature.properties.id, selectElem.value, {road_lane_direction: directionElem.value, road_lane_num: laneElem.value});
         });
 
     });
