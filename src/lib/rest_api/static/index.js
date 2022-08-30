@@ -556,6 +556,9 @@ window.onload = function() {
         app.stateDel();
     });
 
+    const collapsibleElem = document.querySelectorAll('.collapsible');
+    const collapsibleInstances = M.Collapsible.init(collapsibleElem, {});
+
     app.map.on('click', 'gl-draw-polygon-fill-inactive.cold', function (e) {
         const options = Array.from(app.dataStorage.values()).map((feature, idx) => { return `<option value="${feature.id}">${feature.id}</option>`});
         const mapFeature = app.draw.get(e.features[0].properties.id);
@@ -618,6 +621,7 @@ window.onload = function() {
             // const selectInstance = M.FormSelect.getInstance(selectElem);
             // console.log("bug", selectInstance.getSelectedValues())
             app.attachCanvasToSpatial(feature.properties.id, selectElem.value, {road_lane_direction: directionElem.value, road_lane_num: laneElem.value, coordinates: app.draw.get(feature.properties.id).geometry.coordinates});
+
         });
 
     });
