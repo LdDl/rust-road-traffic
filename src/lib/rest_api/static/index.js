@@ -458,6 +458,17 @@ class ApplicationUI {
         }
         let feature = this.dataStorage.get(canvasID);
         let mapFeature = this.draw.get(spatialID);
+
+        // Reset information for previously attached DATASTORAGE object
+        if (mapFeature.properties.canvas_object_id !== null && mapFeature.properties.canvas_object_id !== undefined) {
+            let previousFeature = this.dataStorage.get(mapFeature.properties.canvas_object_id);
+            previousFeature.properties.spatial_object_id = null;
+            previousFeature.properties.road_lane_direction = -1;
+            previousFeature.properties.road_lane_num = -1;
+            previousFeature.geometry.coordinates = [[], [], [], [], []];
+            this.dataStorage.set(mapFeature.properties.canvas_object_id, previousFeature);
+        }
+
         // Scan for other spatial objects to share same canvas ID
         this.draw.getAll().features.forEach(element => {
             if (element.id === spatialID) {
