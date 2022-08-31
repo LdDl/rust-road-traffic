@@ -263,7 +263,7 @@ const drawGeoPolygons = (map, draw, dataStorage) => {
     });
 };
 
-const drawPolygons = (app) => {
+const drawCanvasPolygons = (app) => {
     let fbCanvas = app.fbCanvas;
     let dataStorage = app.dataStorage;
     let state = app.state;
@@ -502,25 +502,55 @@ class ApplicationUI {
 }
 
 const templateCollapsible = (data) => {
-    let html = `
+    let liValues = [];
+    data.forEach(element => {
+        const li = `
         <li>
-            <div class="collapsible-header"><i class="material-icons">place</i>Poly 1</div>
-            <div class="collapsible-body"><span>Some polygons parameters</span></div>
-        </li>
-        <li>
-            <div class="collapsible-header"><i class="material-icons">place</i>Poly 2</div>
-            <div class="collapsible-body"><span>Some polygons parameters</span></div>
-        </li>
-        <li>
-            <div class="collapsible-header"><i class="material-icons">place</i>Poly 3</div>
-            <div class="collapsible-body"><span>Some polygons parameters</span></div>
-        </li>
-        <li>
-            <div class="collapsible-header"><i class="material-icons">place</i>Poly 4</div>
-            <div class="collapsible-body"><span>Some polygons parameters</span></div>
-        </li>
-    `;
+            <div class="collapsible-header"><i class="material-icons">place</i>Polygon identifier: ${element.id}</div>
+            <div class="collapsible-body">
+                <table class="collapsible-table">
+                    <thead>
+                        <tr>
+                            <th>Attirubute</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Road lane direction</td>
+                            <td>${element.properties.road_lane_direction}</td>
+                        </tr>
+                        <tr>
+                            <td>Road lane number</td>
+                            <td>${element.properties.road_lane_num}</td>
+                        </tr>
+                        <tr>
+                            <td>Color</td>
+                            <td><div style="background-color: ${element.properties.color_rgb_str}; width: 32px; height: 16px; border: 1px solid #000000;"></div></td>
+                        </tr>
+                        <tr>
+                            <td>Canvas coordinates</td>
+                            <td>${JSON.stringify(element.properties.coordinates)}</td>
+                        </tr>
+                        <tr>
+                            <td>Spatial coordinates</td>
+                            <td>${JSON.stringify(element.geometry.coordinates)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </li>        
+        `;
+        liValues.push(li);
+    });
+    let html = liValues.join('\n');
     return html
+}
+
+const updateCollapsible = (data) => {
+    const collapsibleElem = document.getElementById('collapsible-data');
+    collapsibleElem.innerHTML = templateCollapsible(data);
+    const collapsibleInstances = M.Collapsible.init(collapsibleElem, {});
 }
 
 window.onload = function() {
@@ -578,9 +608,8 @@ window.onload = function() {
         app.stateDel();
     });
 
-    const collapsibleElem = document.querySelectorAll('.collapsible');
-    const ul = document.getElementById('collapsible-data');
-    ul.innerHTML = templateCollapsible();
+    const collapsibleElem = document.getElementById('collapsible-data');
+    // collapsibleElem.innerHTML = templateCollapsible();
     const collapsibleInstances = M.Collapsible.init(collapsibleElem, {});
 
     app.map.on('click', 'gl-draw-polygon-fill-inactive.cold', function (e) {
@@ -660,6 +689,7 @@ window.onload = function() {
         app.map.on('load', () => {
             drawGeoPolygons(app.map, draw, app.dataStorage);
         });
-        drawPolygons(app);
+        drawCanvasPolygons(app);
+        updateCollapsible(app.dataStorage);
     })
 }
