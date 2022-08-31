@@ -501,6 +501,28 @@ class ApplicationUI {
     }
 }
 
+const templateCollapsible = (data) => {
+    let html = `
+        <li>
+            <div class="collapsible-header"><i class="material-icons">place</i>Poly 1</div>
+            <div class="collapsible-body"><span>Some polygons parameters</span></div>
+        </li>
+        <li>
+            <div class="collapsible-header"><i class="material-icons">place</i>Poly 2</div>
+            <div class="collapsible-body"><span>Some polygons parameters</span></div>
+        </li>
+        <li>
+            <div class="collapsible-header"><i class="material-icons">place</i>Poly 3</div>
+            <div class="collapsible-body"><span>Some polygons parameters</span></div>
+        </li>
+        <li>
+            <div class="collapsible-header"><i class="material-icons">place</i>Poly 4</div>
+            <div class="collapsible-body"><span>Some polygons parameters</span></div>
+        </li>
+    `;
+    return html
+}
+
 window.onload = function() {
     const fixedButtons = document.querySelectorAll('.fixed-action-btn');
     const fixedButtonsInstances = M.FloatingActionButton.init(fixedButtons, {
@@ -557,6 +579,8 @@ window.onload = function() {
     });
 
     const collapsibleElem = document.querySelectorAll('.collapsible');
+    const ul = document.getElementById('collapsible-data');
+    ul.innerHTML = templateCollapsible();
     const collapsibleInstances = M.Collapsible.init(collapsibleElem, {});
 
     app.map.on('click', 'gl-draw-polygon-fill-inactive.cold', function (e) {
