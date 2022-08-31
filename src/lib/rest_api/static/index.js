@@ -553,6 +553,10 @@ class ApplicationUI {
         collapsibleElem.innerHTML = this.templateCollapsible(this.dataStorage);
         const collapsibleInstances = M.Collapsible.init(collapsibleElem, {});
     }
+
+    saveTOML() {
+        console.log("TBD");
+    }
 }
 
 window.onload = function() {
@@ -608,6 +612,11 @@ window.onload = function() {
     const delBtn = document.getElementById('del-btn');
     delBtn.addEventListener('click', (e) => {
         app.stateDel();
+    });
+
+    const saveBtn = document.getElementById('save-btn');
+    saveBtn.addEventListener('click', (e) => {
+        app.saveTOML();
     });
 
     const collapsibleElem = document.getElementById('collapsible-data');
