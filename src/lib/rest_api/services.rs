@@ -107,6 +107,7 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
                 .route("/create_polygon", web::post().to(polygons_mutations::create_polygon))
                 .route("/change_polygon", web::post().to(polygons_mutations::change_polygon))
                 .route("/delete_polygon", web::post().to(polygons_mutations::delete_polygon))
+                .route("/replace_all", web::post().to(polygons_mutations::replace_all))
                 .route("/save_toml", web::get().to(toml_mutations::save_toml))
             )
         );
