@@ -280,13 +280,20 @@ const drawCanvasPolygons = (app) => {
         contour.on('mousedown', (options) => {
             options.e.preventDefault();
             options.e.stopPropagation();
-            state = States.PickPolygon;
+            // state = States.PickPolygon;
             if (options.button === 3) {
-                state = States.EditingPolygon;
-                if (state !== States.EditingPolygon) {
+                if (state != States.EditingPolygon) {
                     state = States.EditingPolygon;
                 } else {
                     state = States.Waiting;
+                    let existingContour = dataStorage.get(contour.unid);
+                    existingContour.properties.coordinates = contour.points.map(element => {
+                        return [
+                            Math.floor(element.x/scaleWidth),
+                            Math.floor(element.y/scaleHeight)
+                        ]
+                    })
+                    dataStorage.set(contour.unid, existingContour);
                 }
                 editContour(contour, fbCanvas);
             }
@@ -367,7 +374,7 @@ class ApplicationUI {
                     contour.on('mousedown', (options) => {
                         options.e.preventDefault();
                         options.e.stopPropagation();
-                        this.state = States.PickPolygon;
+                        // this.state = States.PickPolygon;
                         // Handle right-click
                         // Turn on "Edit" mode
                         if (options.button === 3) {
@@ -376,6 +383,14 @@ class ApplicationUI {
                                 this.state = States.EditingPolygon;
                             } else {
                                 this.state = States.Waiting;
+                                let existingContour = this.dataStorage.get(contour.unid);
+                                existingContour.properties.coordinates = contour.points.map(element => {
+                                    return [
+                                        Math.floor(element.x/app.scaleWidth),
+                                        Math.floor(element.y/app.scaleHeight)
+                                    ]
+                                })
+                                this.dataStorage.set(contour.unid, existingContour);
                             }
                             editContour(contour, this.fbCanvas);
                         }
@@ -556,6 +571,18 @@ class ApplicationUI {
 
     saveTOML() {
         console.log("TBD");
+        let sendData = {
+            data: Array.from(this.dataStorage.values()).map(element => {
+                return {
+                    lane_number: element.properties.road_lane_num,  
+                    lane_direction: element.properties.road_lane_direction,
+                    color_rgb: element.properties.color_rgb,
+                    pixel_points: element.properties.coordinates,
+                    spatial_points: [...element.geometry.coordinates[0].slice(0, -1)]
+                };
+            })
+        };
+        console.log(sendData);
     }
 }
 
