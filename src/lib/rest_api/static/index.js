@@ -499,58 +499,58 @@ class ApplicationUI {
         feature.geometry.coordinates = options.coordinates;
         this.dataStorage.set(canvasID, feature);
     }
-}
 
-const templateCollapsible = (data) => {
-    let liValues = [];
-    data.forEach(element => {
-        const li = `
-        <li>
-            <div class="collapsible-header"><i class="material-icons">place</i>Polygon identifier: ${element.id}</div>
-            <div class="collapsible-body">
-                <table class="collapsible-table">
-                    <thead>
-                        <tr>
-                            <th>Attirubute</th>
-                            <th>Value</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Road lane direction</td>
-                            <td>${element.properties.road_lane_direction}</td>
-                        </tr>
-                        <tr>
-                            <td>Road lane number</td>
-                            <td>${element.properties.road_lane_num}</td>
-                        </tr>
-                        <tr>
-                            <td>Color</td>
-                            <td><div style="background-color: ${element.properties.color_rgb_str}; width: 32px; height: 16px; border: 1px solid #000000;"></div></td>
-                        </tr>
-                        <tr>
-                            <td>Canvas coordinates</td>
-                            <td>${JSON.stringify(element.properties.coordinates)}</td>
-                        </tr>
-                        <tr>
-                            <td>Spatial coordinates</td>
-                            <td>${JSON.stringify(element.geometry.coordinates)}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </li>        
-        `;
-        liValues.push(li);
-    });
-    let html = liValues.join('\n');
-    return html
-}
-
-const updateCollapsible = (data) => {
-    const collapsibleElem = document.getElementById('collapsible-data');
-    collapsibleElem.innerHTML = templateCollapsible(data);
-    const collapsibleInstances = M.Collapsible.init(collapsibleElem, {});
+    templateCollapsible (data) {
+        let liValues = [];
+        data.forEach(element => {
+            const li = `
+            <li>
+                <div class="collapsible-header"><i class="material-icons">place</i>Polygon identifier: ${element.id}</div>
+                <div class="collapsible-body">
+                    <table class="collapsible-table">
+                        <thead>
+                            <tr>
+                                <th>Attirubute</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Road lane direction</td>
+                                <td>${element.properties.road_lane_direction}</td>
+                            </tr>
+                            <tr>
+                                <td>Road lane number</td>
+                                <td>${element.properties.road_lane_num}</td>
+                            </tr>
+                            <tr>
+                                <td>Color</td>
+                                <td><div style="background-color: ${element.properties.color_rgb_str}; width: 32px; height: 16px; border: 1px solid #000000;"></div></td>
+                            </tr>
+                            <tr>
+                                <td>Canvas coordinates</td>
+                                <td>${JSON.stringify(element.properties.coordinates)}</td>
+                            </tr>
+                            <tr>
+                                <td>Spatial coordinates</td>
+                                <td>${JSON.stringify(element.geometry.coordinates)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </li>        
+            `;
+            liValues.push(li);
+        });
+        let html = liValues.join('\n');
+        return html
+    }
+    
+    updateCollapsible () {
+        const collapsibleElem = document.getElementById('collapsible-data');
+        collapsibleElem.innerHTML = this.templateCollapsible(this.dataStorage);
+        const collapsibleInstances = M.Collapsible.init(collapsibleElem, {});
+    }
 }
 
 window.onload = function() {
@@ -668,15 +668,12 @@ window.onload = function() {
         attachBtn.addEventListener('click', (clickEvent) => {
             const directionElem = document.getElementById("lane-direction");
             const laneElem = document.getElementById("lane-number");
-            
             // https://github.com/Dogfalo/materialize/issues/6536 - There is a workaround to get correct selected values via `getSelectedValues()` call
             // So just leave next two code lines just for history:
             // const selectInstance = M.FormSelect.getInstance(selectElem);
             // console.log("bug", selectInstance.getSelectedValues())
             app.attachCanvasToSpatial(feature.properties.id, selectElem.value, {road_lane_direction: directionElem.value, road_lane_num: laneElem.value, coordinates: app.draw.get(feature.properties.id).geometry.coordinates});
-
         });
-
     });
 
     getPolygons().then((data) => {
@@ -690,6 +687,6 @@ window.onload = function() {
             drawGeoPolygons(app.map, draw, app.dataStorage);
         });
         drawCanvasPolygons(app);
-        updateCollapsible(app.dataStorage);
+        app.updateCollapsible();
     })
 }
