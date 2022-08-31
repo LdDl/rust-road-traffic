@@ -498,6 +498,8 @@ class ApplicationUI {
         feature.properties.road_lane_num = options.road_lane_num;
         feature.geometry.coordinates = options.coordinates;
         this.dataStorage.set(canvasID, feature);
+        // Update collapsible table (very simple reactivity)
+        this.updateCollapsible();
     }
 
     templateCollapsible (data) {
