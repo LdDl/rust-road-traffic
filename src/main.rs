@@ -245,7 +245,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
     let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(25);
     // Enable REST (and MJPEG optionally) if needed
     let mut enable_mjpeg = false;
-    match app_settings.mjpeg_streaming {
+    match app_settings.rest_api.mjpeg_streaming {
         Some(v) => {
             enable_mjpeg = v.enable;
         },

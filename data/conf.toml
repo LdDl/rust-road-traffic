@@ -71,6 +71,8 @@
     host = "0.0.0.0"
     back_end_port = 42001
     api_scope = "/api"
+    [rest_api.mjpeg_streaming]
+        enable = true
 
 [redis_publisher]
     enable = false
@@ -79,8 +81,3 @@
     password = ""
     db_index = 0
     channel_name = "DETECTORS_STATISTICS"
-
-[mjpeg_streaming]
-    enable = true
-    host = "0.0.0.0"
-    port = 42002

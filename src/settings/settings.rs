@@ -16,7 +16,6 @@ pub struct AppSettings {
     pub worker: WorkerSettings,
     pub rest_api: RestAPISettings,
     pub redis_publisher: RedisPublisherSettings,
-    pub mjpeg_streaming: Option<MJPEGStreamingSettings>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -81,6 +80,7 @@ pub struct RestAPISettings {
     pub host: String,
     pub back_end_port: i32,
     pub api_scope: String,
+    pub mjpeg_streaming: Option<MJPEGStreamingSettings>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -96,8 +96,6 @@ pub struct RedisPublisherSettings {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MJPEGStreamingSettings {
     pub enable: bool,
-    pub host: String,
-    pub port: i32,
 }
 
 use crate::lib::polygons::ConvexPolygon;
@@ -175,7 +173,6 @@ impl AppSettings {
             worker: self.worker.clone(),
             rest_api: self.rest_api.clone(),
             redis_publisher: self.redis_publisher.clone(),
-            mjpeg_streaming: self.mjpeg_streaming.clone(),
         }
     }
 }
