@@ -1,0 +1,49 @@
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1.0">
+        <title>Rust Road Traffic</title>
+        <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.27.2/axios.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/4.5.0/fabric.min.js"></script>
+        <script src="https://unpkg.com/maplibre-gl@2.3.0/dist/maplibre-gl.js"></script>
+        <link href="https://unpkg.com/maplibre-gl@2.3.0/dist/maplibre-gl.css" rel="stylesheet" />
+        <link href="styles.css" rel="stylesheet" />
+    </head>
+    <body>
+        <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.2.0/mapbox-gl-draw.js"></script>
+        <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.2.0/mapbox-gl-draw.css" type="text/css"/>
+        <div class="fixed-action-btn horizontal click-to-toggle spin-close">
+            <a class="btn-floating btn-large red">
+              <i class="material-icons">edit</i>
+            </a>
+            <ul>
+              <li><a id="add-btn" class="btn-floating green"><i class="material-icons">add</i></a></li>
+              <li><a id="del-btn" class="btn-floating blue"><i class="material-icons">delete</i></a></li>
+              <li><a id="save-btn" class="btn-floating grey"><i class="material-icons">save</i></a></li>
+            </ul>
+        </div>
+        <div id="flex_component">
+            <div id="grid_component">
+                <div id="mjpeg">
+                    <img id="fit_img" src="/live_streaming" width="500" height="500">
+                    <!-- <img id="fit_img" src="https://pngimg.com/uploads/google/google_PNG19632.png"> -->
+                    <canvas id="fit_canvas"></canvas>
+                </div>
+                <div id="configuration">
+                    <div id="configuration-content">
+                        <ul id="collapsible-data" class="collapsible"></ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="map"></div>
+        </div>
+        <script type="text/javascript" src="gl_draw_styles.js"></script>
+        <script type="text/javascript" src="custom_poly.js"></script>
+        <script type="text/javascript" src="index.js"></script>
+    </body>
+</html>

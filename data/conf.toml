@@ -13,7 +13,7 @@
 
 [debug]
     enable = true
-    
+
 [output]
     enable = true
     width = 416
@@ -32,7 +32,7 @@
     net_classes = ["car", "motorbike", "bus", "truck"]
     # Default COCO classes
     # net_classes = ["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]
-    
+
 [tracking]
     max_points_in_track = 100
 
@@ -71,6 +71,8 @@
     host = "0.0.0.0"
     back_end_port = 42001
     api_scope = "/api"
+    [rest_api.mjpeg_streaming]
+        enable = true
 
 [redis_publisher]
     enable = false
@@ -79,8 +81,3 @@
     password = ""
     db_index = 0
     channel_name = "DETECTORS_STATISTICS"
-
-[mjpeg_streaming]
-    enable = false
-    host = "0.0.0.0"
-    port = 42002

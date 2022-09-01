@@ -144,20 +144,6 @@ fn run(config_file: &str) -> opencv::Result<()> {
         });
     }
 
-    if app_settings.rest_api.enable {
-        let server_host = app_settings.rest_api.host;
-        let server_port = app_settings.rest_api.back_end_port;
-        let convex_polygons_rest = convex_polygons_arc.clone();
-        thread::spawn(move || {
-            match rest_api::start_rest_api(server_host, server_port, convex_polygons_rest, settings_cloned, &path_clone) {
-                Ok(_) => {},
-                Err(err) => {
-                    panic!("Can't start API due the error: {:?}", err)
-                }
-            }
-        });
-    }
-    
     let convex_polygons_cv = convex_polygons_arc.clone();
     let convex_polygons_cv_read = convex_polygons_cv.read().unwrap();
     let convex_polygons_cloned = convex_polygons_cv_read.clone_polygons_arc();
@@ -257,25 +243,28 @@ fn run(config_file: &str) -> opencv::Result<()> {
 
     let (tx, rx) = mpsc::sync_channel(25);
     let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(25);
-    /* Enable MJPEG streaming server if needed */
+    // Enable REST (and MJPEG optionally) if needed
     let mut enable_mjpeg = false;
-    match app_settings.mjpeg_streaming {
+    match app_settings.rest_api.mjpeg_streaming {
         Some(v) => {
             enable_mjpeg = v.enable;
-            if v.enable {
-                thread::spawn(move || {
-                    match mjpeg_streaming::start_mjpeg_streaming(v.host, v.port, rx_mjpeg, frame_cols as u32, frame_rows as u32) {
-                        Ok(_) => {},
-                        Err(err) => {
-                            panic!("Can't start MJPEG streaming due the error: {:?}", err)
-                        }
-                    }
-                });
-            }
         },
         None => { }
     }
-    
+    if app_settings.rest_api.enable {
+        let server_host = app_settings.rest_api.host;
+        let server_port = app_settings.rest_api.back_end_port;
+        let convex_polygons_rest = convex_polygons_arc.clone();
+        thread::spawn(move || {
+            match rest_api::start_rest_api(server_host, server_port, convex_polygons_rest, enable_mjpeg, rx_mjpeg, settings_cloned, &path_clone) {
+                Ok(_) => {},
+                Err(err) => {
+                    panic!("Can't start API due the error: {:?}", err)
+                }
+            }
+        });
+    }
+
     thread::spawn(move || {
         loop {
             let capture_now = Instant::now();

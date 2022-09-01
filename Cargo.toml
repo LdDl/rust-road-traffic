@@ -20,7 +20,15 @@ serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 actix-web = "4"
 actix-cors = "0.6.2"
+actix-web-static-files = "4.0"
+static-files = "0.2.1"
 ctrlc = { version = "3.0", features = ["termination"] }
 redis = "*"
 tokio = { version = "1.16.1", features = ["full"] }
 futures = "0.3.1"
+
+[build-dependencies]
+static-files = "0.2.1"
+
+[build]
+build = "build.rs"

@@ -63,6 +63,11 @@ Vehicle detection/tracking and speed estimation via next instruments:
     curl -XGET 'http://localhost:42001/api/stats/all'
     ```
 
+    If you enabled MJPEG streaming and you want to adjust parameters for velocity estimation you could open http://localhost:42001/ in your browser and adjust polygons as you need (this UI still needs to be debugged and polished):
+
+    <img src="data/ui.png" width="640">
+
+
 ## Screenshots
 * imshow() output:
 

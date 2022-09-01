@@ -47,7 +47,7 @@ impl Broadcaster {
         self.clients.push(tx);
         return Client(rx);
     }
-    pub fn make_message_block(buffer: &Vector<u8>, width: u32, height: u32) -> Vec<u8> {
+    pub fn make_message_block(buffer: &Vector<u8>) -> Vec<u8> {
         let bfu8 = buffer.as_ref();
         let mut msg = format!("--boundarydonotcross\r\nContent-Length:{}\r\nContent-Type:image/jpeg\r\n\r\n", bfu8.len()).into_bytes();
         msg.extend(bfu8);
@@ -64,10 +64,10 @@ impl Broadcaster {
         }
         self.clients = ok_clients;
     }
-    pub fn spawn_reciever(_self: web::Data<Mutex<Self>>, rx_frames_data: STDReceiver<Vector<u8>>, width: u32, height: u32) {
+    pub fn spawn_reciever(_self: web::Data<Mutex<Self>>, rx_frames_data: STDReceiver<Vector<u8>>) {
         thread::spawn(move || {
             for received in rx_frames_data {
-                let msg = Broadcaster::make_message_block(&received, width, height);
+                let msg = Broadcaster::make_message_block(&received);
                 _self.lock().unwrap().send_image(&msg);
             }
         });

@@ -1,8 +1,10 @@
 use actix_web::{HttpResponse, web, Responder, Error};
-
+use actix_web_static_files::ResourceFiles;
+include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 use std::collections::HashMap;
 use crate::lib::geojson::PolygonsGeoJSON;
 use crate::lib::rest_api::Storage;
+use crate::lib::mjpeg_streaming::Broadcaster;
 
 use crate::lib::rest_api::{
     polygons_mutations,
@@ -29,7 +31,7 @@ pub async fn polygons_list(data: web::Data<Storage>) -> Result<HttpResponse, Err
     return Ok(HttpResponse::Ok().json(ans));
 }
 
-use serde::{Deserialize, Serialize};
+use serde::{Serialize};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize)]
@@ -84,27 +86,55 @@ pub async fn all_polygons_stats(data: web::Data<Storage>) -> Result<HttpResponse
     return Ok(HttpResponse::Ok().json(ans));
 }
 
-pub fn init_routes(cfg: &mut web::ServiceConfig) {
-    cfg
-        .service(
-            web::scope("/api")
-            .route("/ping", web::get().to(say_ping))
+pub fn init_routes(enable_mjpeg: bool) -> impl Fn(&mut web::ServiceConfig) {
+
+    move |cfg| {
+        let generated = generate();
+
+        if enable_mjpeg {
+            cfg
+                .route("/live", web::get().to(mjpeg_page))
+                .route("/live_streaming", web::get().to(add_new_client));
+        }
+
+        cfg
             .service(
-                web::scope("/polygons")
-                .route("/geojson", web::get().to(polygons_list))
-            )
-            .service(
-                web::scope("/stats")
-                .route("/all", web::get().to(all_polygons_stats))
-                // .route("/by_polygon_id/{polygon_id}", web::get().to(/*todo*/))
-            )
-            .service(
-                web::scope("/mutations")
-                .route("/create_polygon", web::post().to(polygons_mutations::create_polygon))
-                .route("/change_polygon", web::post().to(polygons_mutations::change_polygon))
-                .route("/delete_polygon", web::post().to(polygons_mutations::delete_polygon))
-                .route("/replace_all", web::post().to(polygons_mutations::replace_all))
-                .route("/save_toml", web::get().to(toml_mutations::save_toml))
-            )
-        );
+                web::scope("/api")
+                .route("/ping", web::get().to(say_ping))
+                .service(
+                    web::scope("/polygons")
+                    .route("/geojson", web::get().to(polygons_list))
+                )
+                .service(
+                    web::scope("/stats")
+                    .route("/all", web::get().to(all_polygons_stats))
+                    // .route("/by_polygon_id/{polygon_id}", web::get().to(/*todo*/))
+                )
+                .service(
+                    web::scope("/mutations")
+                    .route("/create_polygon", web::post().to(polygons_mutations::create_polygon))
+                    .route("/change_polygon", web::post().to(polygons_mutations::change_polygon))
+                    .route("/delete_polygon", web::post().to(polygons_mutations::delete_polygon))
+                    .route("/replace_all", web::post().to(polygons_mutations::replace_all))
+                    .route("/save_toml", web::get().to(toml_mutations::save_toml))
+                )
+            );
+        cfg.service(ResourceFiles::new("/", generated));
+    }
+}
+
+async fn add_new_client(ds: web::Data<Storage>) -> impl Responder {
+    let rx = ds.mjpeg_broadcaster.lock().unwrap().add_client();
+    HttpResponse::Ok()
+        .append_header(("Cache-Control", "no-store, must-revalidate"))
+        .append_header(("Pragma", "no-cache"))
+        .append_header(("Expires", "0"))
+        .append_header(("Connection", "close"))
+        .append_header(("Content-Type", "multipart/x-mixed-replace;boundary=boundarydonotcross"))
+        .streaming(rx)
+}
+
+async fn mjpeg_page() -> impl Responder {
+    let content = include_str!("mjpeg.html");
+    return HttpResponse::Ok().append_header(("Content-Type", "text/html")).body(content);
 }
