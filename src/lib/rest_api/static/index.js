@@ -109,6 +109,7 @@ const makeContour = (coordinates, color = getRandomRGB()) => {
         left: left,
         top: top,
     });
+    contour.current_points = contour.points;
     return contour;
 }
 
@@ -287,7 +288,7 @@ const drawCanvasPolygons = (app) => {
                 } else {
                     state = States.Waiting;
                     let existingContour = dataStorage.get(contour.unid);
-                    existingContour.properties.coordinates = contour.points.map(element => {
+                    existingContour.properties.coordinates = contour.current_points.map(element => {
                         return [
                             Math.floor(element.x/scaleWidth),
                             Math.floor(element.y/scaleHeight)
@@ -298,6 +299,27 @@ const drawCanvasPolygons = (app) => {
                 editContour(contour, fbCanvas);
             }
         });
+        contour.on('modified', (options) => {
+            // Recalculate points
+            const matrix = contour.calcTransformMatrix();
+            const transformedPoints = contour.points.map(function (p) {
+                    return new fabric.Point(
+                        p.x - contour.pathOffset.x,
+                        p.y - contour.pathOffset.y
+                    );
+                }).map(function (p) {
+                    return fabric.util.transformPoint(p, matrix);
+                });
+            contour.current_points = transformedPoints;
+            let existingContour = dataStorage.get(contour.unid);
+            existingContour.properties.coordinates = contour.current_points.map(element => {
+                return [
+                    Math.floor(element.x/scaleWidth),
+                    Math.floor(element.y/scaleHeight)
+                ]
+            })
+            dataStorage.set(contour.unid, existingContour);
+        })
         contour.unid = feature.id;
         fbCanvas.add(contour);
         fbCanvas.renderAll();
@@ -384,7 +406,7 @@ class ApplicationUI {
                             } else {
                                 this.state = States.Waiting;
                                 let existingContour = this.dataStorage.get(contour.unid);
-                                existingContour.properties.coordinates = contour.points.map(element => {
+                                existingContour.properties.coordinates = contour.current_points.map(element => {
                                     return [
                                         Math.floor(element.x/app.scaleWidth),
                                         Math.floor(element.y/app.scaleHeight)
@@ -395,6 +417,27 @@ class ApplicationUI {
                             editContour(contour, this.fbCanvas);
                         }
                     });
+                    contour.on('modified', (options) => {
+                        // Recalculate points
+                        const matrix = contour.calcTransformMatrix();
+                        const transformedPoints = contour.points.map(function (p) {
+                                return new fabric.Point(
+                                    p.x - contour.pathOffset.x,
+                                    p.y - contour.pathOffset.y
+                                );
+                            }).map(function (p) {
+                                return fabric.util.transformPoint(p, matrix);
+                            });
+                        contour.current_points = transformedPoints;
+                        let existingContour = this.dataStorage.get(contour.unid);
+                        existingContour.properties.coordinates = contour.current_points.map(element => {
+                            return [
+                                Math.floor(element.x/scaleWidth),
+                                Math.floor(element.y/scaleHeight)
+                            ]
+                        })
+                        this.dataStorage.set(contour.unid, existingContour);
+                    })
                     contour.unid = UUIDv4.generate();
                     this.dataStorage.set(contour.unid, {
                         type: 'Feature',
@@ -402,7 +445,7 @@ class ApplicationUI {
                         properties: {
                             'color_rgb': rgba2array(contour.stroke),
                             'color_rgb_str': contour.stroke,
-                            'coordinates': contour.points.map(element => {
+                            'coordinates': contour.current_points.map(element => {
                                 return [
                                     Math.floor(element.x/scaleWidth),
                                     Math.floor(element.y/scaleHeight)
