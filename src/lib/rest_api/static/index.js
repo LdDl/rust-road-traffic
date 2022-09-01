@@ -546,14 +546,14 @@ class ApplicationUI {
         mapFeature.properties.canvas_object_id = canvasID;
         mapFeature.properties.color_rgb = feature.properties.color_rgb;
         mapFeature.properties.color_rgb_str = feature.properties.color_rgb_str;
-        mapFeature.properties.road_lane_direction = options.road_lane_direction;
-        mapFeature.properties.road_lane_num = options.road_lane_num;
+        mapFeature.properties.road_lane_direction = Number(options.road_lane_direction);
+        mapFeature.properties.road_lane_num = Number(options.road_lane_num);
         this.draw.add(mapFeature);
         this.draw.setFeatureProperty(spatialID, 'color_rgb_str', feature.properties.color_rgb_str);
         // Update information for DATASTORE object
         feature.properties.spatial_object_id = spatialID;
-        feature.properties.road_lane_direction = options.road_lane_direction;
-        feature.properties.road_lane_num = options.road_lane_num;
+        feature.properties.road_lane_direction = Number(options.road_lane_direction);
+        feature.properties.road_lane_num = Number(options.road_lane_num);
         feature.geometry.coordinates = options.coordinates;
         this.dataStorage.set(canvasID, feature);
         // Update collapsible table (very simple reactivity)
@@ -635,6 +635,18 @@ class ApplicationUI {
         })
         .then(res => {
             console.log("New polygons IDs:", res.data)
+            axios({
+                method: 'GET',
+                url: 'http://localhost:42001/api/mutations/save_toml',
+                timeout: 5000,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(res => {
+                console.log("TOML has been upadated. Reply from server:", res.data)
+            })
+            .catch (err => console.error(err));
         })
         .catch (err => console.error(err));
     }
