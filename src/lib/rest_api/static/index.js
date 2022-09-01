@@ -237,7 +237,7 @@ const addTooltip = (parentDiv, options) => {
 async function getPolygons() {
     return await axios({
         method: 'GET',
-        url: 'http://localhost:42001/api/polygons/geojson',
+        url: '/api/polygons/geojson',
         timeout: 5000,
         headers: {
             'Content-Type': 'application/json'
@@ -626,7 +626,7 @@ class ApplicationUI {
         };
         axios({
             method: 'POST',
-            url: 'http://localhost:42001/api/mutations/replace_all',
+            url: '/api/mutations/replace_all',
             timeout: 5000,
             headers: {
                 'Content-Type': 'application/json'
@@ -637,7 +637,7 @@ class ApplicationUI {
             console.log("New polygons IDs:", res.data)
             axios({
                 method: 'GET',
-                url: 'http://localhost:42001/api/mutations/save_toml',
+                url: '/api/mutations/save_toml',
                 timeout: 5000,
                 headers: {
                     'Content-Type': 'application/json'
