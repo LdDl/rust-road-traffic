@@ -414,9 +414,9 @@ fn run(config_file: &str) -> opencv::Result<()> {
             if resized_frame.size()?.width > 0 {
                 imshow(window, &mut resized_frame)?;
             }
-            let key = wait_key(0)?;
+            let key = wait_key(10)?;
             if key > 0 && key != 255 {
-                // break;
+                break;
             }
         }
 
