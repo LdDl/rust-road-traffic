@@ -613,7 +613,6 @@ class ApplicationUI {
     }
 
     saveTOML() {
-        console.log("TBD");
         let sendData = {
             data: Array.from(this.dataStorage.values()).map(element => {
                 return {
@@ -625,7 +624,19 @@ class ApplicationUI {
                 };
             })
         };
-        console.log(sendData);
+        axios({
+            method: 'POST',
+            url: 'http://localhost:42001/api/mutations/replace_all',
+            timeout: 5000,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            data: sendData,
+        })
+        .then(res => {
+            console.log("New polygons IDs:", res.data)
+        })
+        .catch (err => console.error(err));
     }
 }
 

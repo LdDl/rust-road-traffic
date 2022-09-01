@@ -26,7 +26,7 @@ pub async fn start_rest_api(server_host: String, server_port: i32, data_storage:
         let cors = Cors::default()
             .allow_any_origin()
             .allowed_headers(vec![http::header::ORIGIN, http::header::AUTHORIZATION, http::header::CONTENT_TYPE, http::header::CONTENT_LENGTH, http::header::ACCEPT, http::header::ACCEPT_ENCODING])
-            .allowed_methods(vec!["GET"])
+            .allowed_methods(vec!["GET", "POST"])
             .expose_headers(vec![http::header::CONTENT_LENGTH])
             .supports_credentials()
             .max_age(5600);
