@@ -230,8 +230,6 @@ fn run(config_file: &str) -> opencv::Result<()> {
     let frame_rows = frame.rows() as f32;
     let mut last_ms: f64 = 0.0;
 	let mut last_time = Utc::now();
-
-   
     
     println!("Waiting for Ctrl-C...");
     ctrlc::set_handler(move || {
@@ -239,7 +237,6 @@ fn run(config_file: &str) -> opencv::Result<()> {
         thread::sleep(STDDuration::from_secs(2));
         process::exit(1);
     }).expect("\nError setting Ctrl-C handler");
-
 
     let (tx, rx) = mpsc::sync_channel(25);
     let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(25);
@@ -276,6 +273,9 @@ fn run(config_file: &str) -> opencv::Result<()> {
                     break;
                 }
             };
+            if read_frame.empty() {
+                continue;
+            }
             /* Evaluate time difference */
             let current_ms = video_capture.get(VIDEOCAPTURE_POS_MSEC).unwrap();
             let ms_diff = current_ms - last_ms;
