@@ -19,9 +19,6 @@ impl KalmanBlobiesTracker {
             min_threshold_distance: 30.0
         }
     }
-    pub fn get_objects_num(&self) -> usize {
-        return self.objects.len();
-    }
     fn prepare(&mut self) {
         for (_, b) in self.objects.iter_mut() {
             b.set_exists(false);
@@ -89,7 +86,6 @@ impl KalmanBlobiesTracker {
 #[cfg(test)]
 mod tests {
     use opencv::{
-        prelude::*,
         core::Rect,
     };
     use chrono::{

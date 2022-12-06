@@ -1,12 +1,10 @@
 use opencv::{
-    prelude::*,
     core::Mat,
 };
 
 use chrono::{
     DateTime,
-    Utc,
-    Duration
+    Utc
 };
 
 pub struct ThreadedFrame {

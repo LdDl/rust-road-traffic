@@ -53,7 +53,6 @@ use publisher::{
 };
 
 use lib::rest_api;
-use lib::mjpeg_streaming;
 
 use std::env;
 use std::time::Duration as STDDuration;
@@ -190,7 +189,6 @@ fn run(config_file: &str) -> opencv::Result<()> {
     let blob_mean = default_scalar;
     let blob_name = "";
     let coco_classnames = app_settings.detection.net_classes;
-    let classes_num: usize = coco_classnames.len();
 
     let out_layers_names = match neural_net.get_unconnected_out_layers_names() {
         Ok(result) => result,
@@ -340,7 +338,6 @@ fn run(config_file: &str) -> opencv::Result<()> {
                     max_points_in_track,
                     &coco_classnames,
                     COCO_FILTERED_CLASSNAMES,
-                    classes_num,
                     received.last_time,
                     received.sec_diff,
                 );

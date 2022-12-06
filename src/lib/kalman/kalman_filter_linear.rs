@@ -13,12 +13,9 @@ impl Error for KalmanFilterLinearError {}
 use nalgebra;
 
 type Matrix6x6f32 = nalgebra::SMatrix<f32, 6, 6>;
-type Matrix4x4f32 = nalgebra::SMatrix<f32, 4, 4>;
 type Matrix2x6f32 = nalgebra::SMatrix<f32, 2, 6>;
-type Matrix2x4f32 = nalgebra::SMatrix<f32, 2, 4>;
 type Matrix2x2f32 = nalgebra::SMatrix<f32, 2, 2>;
 type Matrix3x3f32 = nalgebra::SMatrix<f32, 3, 3>;
-pub type Matrix4x1f32 = nalgebra::SMatrix<f32, 4, 1>;
 pub type Matrix6x1f32 = nalgebra::SMatrix<f32, 6, 1>;
 pub type Matrix2x1f32 = nalgebra::SMatrix<f32, 2, 1>;
 
@@ -165,24 +162,6 @@ impl KalmanFilterLinear {
     pub fn set_time(&mut self, dt: f32) {
         self.a[(0, 2)] = dt;
         self.a[(1, 3)] = dt;
-    }
-}
-
-pub struct KFTrackerConstantAcceleration {
-    time_step: u32,
-    process_noise_scale: f32,
-    measurement_noise_scale: f32
-}
-
-impl KFTrackerConstantAcceleration {
-    pub fn default() -> Self {
-        let kf = KFTrackerConstantAcceleration{
-            time_step: 1,
-            process_noise_scale: 1.0,
-            measurement_noise_scale: 1.0
-        };
-
-        return kf
     }
 }
 

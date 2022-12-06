@@ -1,7 +1,6 @@
 // Strictly taken from https://github.com/LdDl/mjpeg-rs/blob/master/src/mjpeg_streaming/broadcaster.rs
 
 use opencv::{
-    prelude::*,
     core::Vector,
 };
 

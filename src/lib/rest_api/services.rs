@@ -4,7 +4,6 @@ include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 use std::collections::HashMap;
 use crate::lib::geojson::PolygonsGeoJSON;
 use crate::lib::rest_api::Storage;
-use crate::lib::mjpeg_streaming::Broadcaster;
 
 use crate::lib::rest_api::{
     polygons_mutations,

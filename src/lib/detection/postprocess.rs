@@ -15,7 +15,7 @@ use crate::lib::tracking::{
     KalmanBlobie
 };
 
-pub fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, nms_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &Vec<String>, filtered_classes: &'static [&'static str], classes_num: usize, last_time: DateTime<Utc>, sec_diff: f64) -> Vec<KalmanBlobie> {
+pub fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, nms_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &Vec<String>, filtered_classes: &'static [&'static str], last_time: DateTime<Utc>, sec_diff: f64) -> Vec<KalmanBlobie> {
     let mut class_names = vec![];
     let mut confidences = Vector::<f32>::new();
     let mut bboxes = Vector::<Rect>::new();

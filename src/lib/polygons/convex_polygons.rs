@@ -21,7 +21,6 @@ use opencv::{
     core::Point2f,
     core::Scalar,
     core::Mat,
-    core::Vector,
     imgproc::put_text,
     imgproc::FONT_HERSHEY_SIMPLEX,
     imgproc::LINE_8,

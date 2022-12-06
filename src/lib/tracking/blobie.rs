@@ -62,36 +62,8 @@ const EMPTY_U: Matrix6x1f32 = Matrix6x1f32::new(
 
 impl KalmanBlobie {
     pub fn new(rect: &Rect, max_points_in_track: usize) -> Self {
-        let center_x = rect.x as f32 + 0.5 * rect.width as f32;
-        let center_y = rect.y as f32 + 0.5 * rect.height as f32;
-        // let center = Point::new(center_x.round() as i32, center_y.round() as i32);
-        let center = Point::new(center_x as i32, center_y as i32);
-        let diagonal = f32::sqrt((i32::pow(rect.width, 2) + i32::pow(rect.height, 2)) as f32);
-        let mut custom_kf = KalmanFilterLinear::new();
-        // custom_kf.set_time(1.0);
-        custom_kf.set_state_value(center_x, center_y);
-        let current_time = Utc::now();
-        let kb = KalmanBlobie {
-            id : Uuid::new_v4(),
-            class_name: "Undefined".to_string(),
-            confidence: 0.0,
-            center: center,
-            predicted_next_position: Point::default(),
-            current_rect: *rect,
-            diagonal: diagonal,
-            exists: true,
-            no_match_times: 0,
-            max_points_in_track: max_points_in_track,
-            is_still_tracked: true,
-            track: vec![center],
-            custom_kf: custom_kf,
-            time: current_time,
-            delta_time: 0.0,
-            track_time: vec![current_time],
-            avg_speed: -1.0,
-            speed: -1.0,
-        };
-        return kb 
+        let tm = Utc::now();
+        return KalmanBlobie::new_with_time(rect, max_points_in_track, tm, 0.0); 
     }
     pub fn new_with_time(rect: &Rect, max_points_in_track: usize, tm: DateTime<Utc>, sec_diff: f64) -> Self {
         let center_x = rect.x as f32 + 0.5 * rect.width as f32;
@@ -326,14 +298,6 @@ impl KalmanBlobie {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't draw bounding box of object due the error {:?}", err);
-            }
-        };
-    }
-    pub fn draw_line_to_blob(&self, img: &mut Mat, nextb: &KalmanBlobie, color: Scalar) {
-        match line(img, self.center, nextb.center, color, 2, LINE_8, 0) {
-            Ok(_) => {},
-            Err(err) => {
-                panic!("Can't draw circle at blob's center due the error: {:?}", err)
             }
         };
     }

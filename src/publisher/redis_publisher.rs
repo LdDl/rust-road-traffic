@@ -1,7 +1,7 @@
 
 extern crate redis;
 
-use redis::{ Client, ConnectionLike, Commands };
+use redis::{ Client, Commands };
 use std::sync::{ Arc, RwLock };
 use std::error::Error;
 use std::collections::HashMap;
@@ -17,13 +17,6 @@ pub struct RedisConnection {
 }
 
 impl RedisConnection {
-    pub fn default() -> RedisConnection {
-        let client = Client::open("redis://localhost:6379/").unwrap();
-        return RedisConnection {
-            channel_name: "DETECTORS_STATISTICS".to_string(),
-            client: Arc::new(client),
-        }
-    }
     pub fn new(host: String, port: i32, db_index: i32) -> RedisConnection {
         let client = Client::open(format!("redis://{}:{}/{}", host, port, db_index)).unwrap();
         return RedisConnection {

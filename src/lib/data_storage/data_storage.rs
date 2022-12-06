@@ -35,15 +35,6 @@ pub struct DataStorage {
 }
 
 impl DataStorage {
-    pub fn new() -> Self {
-        let now = Utc::now();
-        return DataStorage {
-            polygons: Arc::new(RwLock::new(HashMap::<String, Mutex<ConvexPolygon>>::new())),
-            period_start: now,
-            period_end: None,
-            id: "Empty ID".to_string(),
-        };
-    }
     pub fn new_with_id(_id: String) -> Self {
         let now = Utc::now();
         return DataStorage {

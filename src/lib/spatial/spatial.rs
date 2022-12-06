@@ -11,8 +11,7 @@ use opencv::{
 
 use chrono::{
     DateTime,
-    Utc,
-    Duration
+    Utc
 };
 use crate::lib::spatial::haversine::haversine;
 
@@ -33,8 +32,8 @@ impl SpatialConverter {
     }
     // Constructor for SpatialConverter
     //
-    // src_points - OpenCV vector of source points in Euclidean space
-    // dest_points - OpenCV vector of destination points (for further transformation) in WGS84 projection
+    // src_points - OpenCV vector of source OpenCV points in Euclidean space
+    // dest_points - OpenCV vector of destination OpenCV points (for further transformation) in WGS84 projection
     //
     pub fn new(src_points: &Vector<Point2f>, dest_points: &Vector<Point2f>) -> Self {
         let transform_mat_f64 = get_perspective_transform(&src_points, &dest_points, DECOMP_LU).unwrap();
@@ -51,8 +50,8 @@ impl SpatialConverter {
     }
     // Constructor for SpatialConverter
     //
-    // src_points - built-in vector of source points in Euclidean space
-    // dest_points - built-in vector of destination points (for further transformation) in WGS84 projection
+    // src_points - built-in vector of source OpenCV points in Euclidean space
+    // dest_points - built-in vector of destination OpenCV points (for further transformation) in WGS84 projection
     //
     pub fn new_from(src_points: Vec<Point2f>, dest_points: Vec<Point2f>) -> Self {
         let src = Vector::<Point2f>::from(src_points);
@@ -108,6 +107,9 @@ impl SpatialConverter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{
+        Duration
+    };
     #[test]
     fn test_spatial_converter() {
         let mut src = Vector::<Point2f>::new();
