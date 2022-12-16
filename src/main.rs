@@ -75,11 +75,6 @@ fn run(config_file: &str) -> opencv::Result<()> {
 
     println!("Settings are:\n\t{}", app_settings);
 
-    let output_width: i32 = app_settings.output.width;
-    let output_height: i32 = app_settings.output.height;
-    let conf_threshold: f32 = app_settings.detection.conf_threshold;
-    let nms_threshold: f32 = app_settings.detection.nms_threshold;
-    let max_points_in_track: usize = app_settings.tracking.max_points_in_track;
     let default_scalar: Scalar = Scalar::new(0.0, 0.0, 0.0, 0.0);
 
     // Define default tracker for detected objects (blobs storage)
@@ -156,7 +151,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
                 panic!("Can't give a name to output window due the error: {:?}", err)
             }
         };
-        match resize_window(window, output_width, output_height) {
+        match resize_window(window, app_settings.output.width, app_settings.output.height) {
             Ok(_) => {},
             Err(err) =>{
                 panic!("Can't resize output window due the error: {:?}", err)
@@ -331,11 +326,11 @@ fn run(config_file: &str) -> opencv::Result<()> {
             Ok(_) => {
                 let mut tmp_blobs = process_yolo_detections(
                     &detections,
-                    conf_threshold,
-                    nms_threshold,
+                    app_settings.detection.conf_threshold,
+                    app_settings.detection.nms_threshold,
                     frame_cols,
                     frame_rows,
-                    max_points_in_track,
+                    app_settings.tracking.max_points_in_track,
                     &coco_classnames,
                     COCO_FILTERED_CLASSNAMES,
                     received.last_time,
@@ -402,7 +397,7 @@ fn run(config_file: &str) -> opencv::Result<()> {
                 drop(polygon);
             }
             drop(convex_polygons_read);
-            match resize(&mut frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
+            match resize(&mut frame, &mut resized_frame, Size::new(app_settings.output.width, app_settings.output.height), 1.0, 1.0, 1) {
                 Ok(_) => {},
                 Err(err) => {
                     panic!("Can't resize output frame due the error {:?}", err);
