@@ -15,7 +15,7 @@ use crate::lib::tracking::{
     KalmanBlobie
 };
 
-pub fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, nms_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &Vec<String>, filtered_classes: &'static [&'static str], last_time: DateTime<Utc>, sec_diff: f64) -> Vec<KalmanBlobie> {
+pub fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, nms_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &Vec<String>, filtered_classes: &'static [&'static str], relative_seconds: f64) -> Vec<KalmanBlobie> {
     let mut class_names = vec![];
     let mut confidences = Vector::<f32>::new();
     let mut bboxes = Vector::<Rect>::new();
@@ -118,7 +118,7 @@ pub fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, 
     for (i, bbox) in nms_bboxes.iter().enumerate() {
         let class_name = &nms_classes[i];
         let confidence = nms_confidences[i];
-        let mut kb = KalmanBlobie::new_with_time(&bbox, max_points_in_track, last_time, sec_diff);
+        let mut kb = KalmanBlobie::new_with_time(&bbox, max_points_in_track, relative_seconds);
         kb.set_class_name(class_name.to_string());
         kb.set_confidence(confidence);
         aggregated_data.push(kb);
@@ -127,7 +127,7 @@ pub fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, 
 }
 
 // process_mobilenet_detections will be removed
-pub fn process_mobilenet_detections(detections: &Vector::<Mat>, conf_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &Vec<String>, filtered_classes: &'static [&'static str], last_time: DateTime<Utc>, sec_diff: f64) -> Vec<KalmanBlobie> {
+pub fn process_mobilenet_detections(detections: &Vector::<Mat>, conf_threshold: f32, frame_cols: f32, frame_rows: f32, max_points_in_track: usize, classes: &Vec<String>, filtered_classes: &'static [&'static str], relative_seconds: f64) -> Vec<KalmanBlobie> {
     let mut nms_bboxes = vec![];
     let outs = detections.len();
     for o in 0..outs {
@@ -149,7 +149,7 @@ pub fn process_mobilenet_detections(detections: &Vector::<Mat>, conf_threshold: 
                         continue
                     }
                     let bbox = Rect::new(left, top, width, height);
-                    let mut kb = KalmanBlobie::new_with_time(&bbox, max_points_in_track, last_time, sec_diff);
+                    let mut kb = KalmanBlobie::new_with_time(&bbox, max_points_in_track, relative_seconds);
                     kb.set_class_name(class_name.to_string());
                     kb.set_confidence(confidence);
                     nms_bboxes.push(kb);

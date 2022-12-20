@@ -49,6 +49,7 @@ pub struct KalmanBlobie {
     track_time: Vec<DateTime<Utc>>,
     avg_speed: f32,
     speed: f32,
+    relative_seconds: f64,
 }
 
 const EMPTY_U: Matrix6x1f32 = Matrix6x1f32::new(
@@ -63,9 +64,9 @@ const EMPTY_U: Matrix6x1f32 = Matrix6x1f32::new(
 impl KalmanBlobie {
     pub fn new(rect: &Rect, max_points_in_track: usize) -> Self {
         let tm = Utc::now();
-        return KalmanBlobie::new_with_time(rect, max_points_in_track, tm, 0.0); 
+        return KalmanBlobie::new_with_time(rect, max_points_in_track, 0.0); 
     }
-    pub fn new_with_time(rect: &Rect, max_points_in_track: usize, tm: DateTime<Utc>, sec_diff: f64) -> Self {
+    pub fn new_with_time(rect: &Rect, max_points_in_track: usize, relative_seconds: f64) -> Self {
         let center_x = rect.x as f32 + 0.5 * rect.width as f32;
         let center_y = rect.y as f32 + 0.5 * rect.height as f32;
         // let center = Point::new(center_x.round() as i32, center_y.round() as i32);
@@ -88,11 +89,12 @@ impl KalmanBlobie {
             is_still_tracked: true,
             track: vec![center],
             custom_kf: custom_kf,
-            time: tm,
-            delta_time: sec_diff,
-            track_time: vec![tm],
+            time: Utc::now(),
+            delta_time: 0.0,
+            track_time: vec![Utc::now()],
             avg_speed: -1.0,
             speed: -1.0,
+            relative_seconds: relative_seconds
         };
         return kb 
     }
@@ -416,8 +418,8 @@ mod tests {
     }
     #[test]
     fn test_blob_euclidean_distance() {
-        let b1 = KalmanBlobie::new_with_time(&Rect::new(318, 242,  46,  44), 0, Utc::now(), 0.0);
-        let b2 = KalmanBlobie::new_with_time(&Rect::new(375, 376,  92, 102), 0, Utc::now(), 0.0);
+        let b1 = KalmanBlobie::new_with_time(&Rect::new(318, 242,  46,  44), 0, 0.0);
+        let b2 = KalmanBlobie::new_with_time(&Rect::new(375, 376,  92, 102), 0, 0.0);
         let ans = b1.distance_to(&b2);
         assert_eq!(181.57367651, ans);
     }

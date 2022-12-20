@@ -83,6 +83,16 @@ impl KalmanBlobiesTracker {
     }
 }
 
+use std::fmt;
+impl fmt::Display for KalmanBlobiesTracker {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Maximum no match: {}\n\tMinimum threshold distance: {}",
+            self.max_no_match,
+            self.min_threshold_distance
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use opencv::{
@@ -96,15 +106,15 @@ mod tests {
     fn test_match_to_existing() {
         let mut tracker = KalmanBlobiesTracker::default();
         let mut blobies = vec![];
-        blobies.push(KalmanBlobie::new_with_time(&Rect::new(318, 242,  46,  44), 0, Utc::now(), 0.0));
-        blobies.push(KalmanBlobie::new_with_time(&Rect::new(375, 376,  92, 102), 0, Utc::now(), 0.0));
-        blobies.push(KalmanBlobie::new_with_time(&Rect::new(375, 238,  45,  42), 0, Utc::now(), 0.0));
-        blobies.push(KalmanBlobie::new_with_time(&Rect::new(313, 312,  78,  82), 0, Utc::now(), 0.0));
-        blobies.push(KalmanBlobie::new_with_time(&Rect::new(233, 425, 146,  75), 0, Utc::now(), 0.0));
-        blobies.push(KalmanBlobie::new_with_time(&Rect::new(561, 283,  77,  71), 0, Utc::now(), 0.0));
-        blobies.push(KalmanBlobie::new_with_time(&Rect::new(181, 173, 112, 241), 0, Utc::now(), 0.0));
-        blobies.push(KalmanBlobie::new_with_time(&Rect::new(287, 196,  42,  34), 0, Utc::now(), 0.0));
-        blobies.push(KalmanBlobie::new_with_time(&Rect::new(418, 432, 166,  6), 0, Utc::now(), 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(318, 242,  46,  44), 0, 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(375, 376,  92, 102), 0, 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(375, 238,  45,  42), 0, 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(313, 312,  78,  82), 0, 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(233, 425, 146,  75), 0, 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(561, 283,  77,  71), 0, 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(181, 173, 112, 241), 0, 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(287, 196,  42,  34), 0, 0.0));
+        blobies.push(KalmanBlobie::new_with_time(&Rect::new(418, 432, 166,  6), 0, 0.0));
 
         for b in blobies.iter() {
             println!("{:?}", b.get_center());
