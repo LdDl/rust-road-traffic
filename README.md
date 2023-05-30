@@ -20,6 +20,25 @@ Vehicle detection/tracking and speed estimation via next instruments:
 4. YOLO v4 or v3 (its tiny version) - https://arxiv.org/abs/2004.10934 or https://arxiv.org/abs/1804.02767
 5. actix-web for web part - https://actix.rs/
 
+Notice:
+
+UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic-ui. Therefore there is '[static_old](src/lib/rest_api/static_old/)' for just legacy and history + [static](src/lib/rest_api/static/)' for new one.
+
+## Screenshots
+* imshow() output:
+
+    <img src="data/ui3.png" width="320">
+
+    <details>
+    <summary>Legacy screenshots</summary>
+    <img src="data/tiny-yolov4-example-output-1.jpeg" width="320"> | <img src="data/tiny-yolov4-example-output-2.jpeg" width="320">
+    </details>
+
+* Web-UI for configuration:
+
+    <img src="data/ui2.png" width="320"> | 
+
+
 ## Installation and usage
 1. You need installed Rust compiler obviously. Follow instruction of official site: https://www.rust-lang.org/tools/install
 2. You need installed OpenCV and its contributors modules. I'm using OpenCV 4.5.5. I'd highly recommend to use OpenCV with CUDA. Here is [Makefile](Makefile) adopted from [this one](https://github.com/hybridgroup/gocv/blob/release/Makefile) if you want build it from sources (it's targeted for Linux user obviously).
@@ -66,12 +85,6 @@ Vehicle detection/tracking and speed estimation via next instruments:
     If you enabled MJPEG streaming and you want to adjust parameters for velocity estimation you could open http://localhost:42001/ in your browser and adjust polygons as you need (this UI still needs to be debugged and polished):
 
     <img src="data/ui.png" width="640">
-
-
-## Screenshots
-* imshow() output:
-
-    <img src="data/tiny-yolov4-example-output-1.jpeg" width="320"> | <img src="data/tiny-yolov4-example-output-2.jpeg" width="320">
 
 # ROADMAP
 Please see [this](ROADMAP.md) file
