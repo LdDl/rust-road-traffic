@@ -5,146 +5,191 @@ use std::collections::{
 use std::sync::{
     Arc,
     Mutex,
-    RwLock
+    RwLock,
+    PoisonError
 };
 
 use std::{
     thread
 };
-use std::error::Error;
-
-use std::time::{
-    Duration as STDDuration
-};
 
 use chrono::{
     DateTime,
+    TimeZone,
     Utc,
-    Duration
 };
 
-use crate::lib::polygons::{
-    ConvexPolygon
+use crate::lib::zones::{
+    Zone
 };
+
+pub enum DataStorageError {
+    Poison
+}
+
+impl<T> From<PoisonError<T>> for DataStorageError {
+    fn from(err: PoisonError<T>) -> Self {
+        Self::Poison
+    }
+}
+impl std::fmt::Display for DataStorageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            DataStorageError::Poison => write!(f, "PoisonError")
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct DataStorage {
-    pub polygons: Arc<RwLock<HashMap<String, Mutex<ConvexPolygon>>>>,
+    pub zones: Arc<RwLock<HashMap<String, Mutex<Zone>>>>,
     pub period_start: DateTime<Utc>,
-    pub period_end: Option<DateTime<Utc>>,
+    pub period_end: DateTime<Utc>,
     pub id: String,
     pub verbose: bool
 }
 
 impl DataStorage {
     pub fn new_with_id(_id: String, _verbose: bool) -> Self {
-        let now = Utc::now();
         return DataStorage {
-            polygons: Arc::new(RwLock::new(HashMap::<String, Mutex<ConvexPolygon>>::new())),
-            period_start: now,
-            period_end: None,
+            zones: Arc::new(RwLock::new(HashMap::<String, Mutex<Zone>>::new())),
+            period_start: TimeZone::with_ymd_and_hms(&Utc, 1970, 1, 1, 0, 0, 0).unwrap(),
+            period_end: TimeZone::with_ymd_and_hms(&Utc, 1970, 1, 1, 0, 0, 0).unwrap(),
             id: _id,
             verbose: _verbose
         };
     }
-    pub fn new_arc_with_id(_id: String, _verbose: bool) -> Arc<RwLock<Self>> {
-        let now = Utc::now();
-        return Arc::new(RwLock::new(DataStorage {
-            polygons: Arc::new(RwLock::new(HashMap::<String, Mutex<ConvexPolygon>>::new())),
-            period_start: now,
-            period_end: None,
-            id: _id,
-            verbose: _verbose
-        }));
-    }
-    pub fn clone_polygons_arc(&self) -> Arc<RwLock<HashMap<String, Mutex<ConvexPolygon>>>> {
-        return Arc::clone(&self.polygons);
-    }
-    pub fn insert_polygon(&self, polygon: ConvexPolygon) {
-        let polygons = Arc::clone(&self.polygons);
-        match polygons.write() {
+    pub fn insert_zone(&self, zone: Zone) -> Result<(), DataStorageError> {
+        let zones = Arc::clone(&self.zones);
+        match zones.write() {
             Ok(mut mutex) => {
-                mutex.insert(polygon.get_id(), Mutex::new(polygon));
+                mutex.insert(zone.get_id(), Mutex::new(zone));
             },
-            Err(err) => {
-                println!("Can't insert polygon due PoisonErr: {}", err)
+            Err(_) => {
+                return Err(DataStorageError::Poison);
             }
         };
+        Ok(())
     }
-    pub fn get_arc_copy(self) -> Arc<RwLock<Self>> {
-        return Arc::new(RwLock::new(self));
-    }
-    pub fn start_data_worker_thread(self, millis: u64) {
-        let verbose = self.verbose;
-        let this = Arc::new(RwLock::new(self));
-        thread::spawn(move || {
-            DataStorage::start_data_worker(this, 2000, verbose);
-        });
-    }
-    pub fn start_data_worker(this: Arc<RwLock<DataStorage>>, millis: u64, verbose: bool) {
-        if verbose {
-            println!("Polygons data would be refreshed every {} ms", millis);
-        }
-        let millis_asi64 = millis as i64;
-        let mut write_mutex = this.write().expect("RwLock poisoned");
-        write_mutex.period_start = Utc::now();
-        drop(write_mutex);
-        thread::sleep(STDDuration::from_millis(millis));
-
-        // Next runs
-        let read_mutex = this.read().expect("RwLock poisoned");
-        let mut previous_tm = read_mutex.period_start;
-        let cloned = Arc::clone(&read_mutex.polygons);
-        drop(read_mutex);
-
-        loop {
-            let mut write_mutex = this.write().expect("RwLock poisoned");
-            previous_tm= write_mutex.update_periods(previous_tm, millis_asi64);
-            if verbose {
-                println!("\nPeriod start: {} | Period end: {}", write_mutex.period_start, previous_tm);
+    pub fn delete_zone(&self, zone_id: &String) -> Result<(), DataStorageError> {
+        let zones = Arc::clone(&self.zones);
+        match zones.write() {
+            Ok(mut mutex) => {
+                mutex.remove(zone_id);
+            },
+            Err(_) => {
+                return Err(DataStorageError::Poison);
             }
-            write_mutex.update_polygons_stats();
-            drop(write_mutex);
-            thread::sleep(STDDuration::from_millis(millis));
-        }
+        };
+        Ok(())
     }
-    pub fn update_periods(&mut self, last_tm: DateTime<Utc>, add_millis: i64) -> DateTime<Utc>{
-        self.period_start = last_tm;
-        self.period_end = Some(self.period_start + Duration::milliseconds(add_millis));
-        return self.period_end.unwrap();
-    }
-    pub fn update_polygons_stats(&mut self) {
-        let mutext = Arc::clone(&self.polygons);
-        match mutext.write() {
-            Ok(mut polygons) => {
-                for (_, v) in polygons.iter_mut() {
-                    let mut element = v.lock().expect("Mutex poisoned");
-                    // Summary
-                    element.period_start = self.period_start;
-                    element.period_end = self.period_end;
-                    element.estimated_avg_speed = element.avg_speed;
-                    element.estimated_sum_intensity = element.sum_intensity;
-                    element.avg_speed = -1.0;
-                    element.sum_intensity = 0;
-                    if self.verbose {
-                        println!("\tPolygon: {} | Intensity: {} | Speed: {}", element.get_id(), element.estimated_sum_intensity, element.estimated_avg_speed);
-                    }
-                    // Certain vehicle type
-                    for (vehicle_type, statistics) in element.statistics.iter_mut() {
-                        statistics.estimated_avg_speed = statistics.avg_speed;
-                        statistics.estimated_sum_intensity = statistics.sum_intensity;
-                        statistics.avg_speed = -1.0;
-                        statistics.sum_intensity = 0;
-                        if self.verbose {
-                            println!("\t\tVehicle type: {} | Intensity: {} | Speed: {}", vehicle_type, statistics.estimated_sum_intensity, statistics.estimated_avg_speed);
-                        }
-                    }
-                    drop(element);
+    pub fn update_statistics(&mut self) -> Result<(), DataStorageError> {
+        let zones = Arc::clone(&self.zones);
+        match zones.read() {
+            Ok(mutex) => {
+                for (_zone_id, zone) in mutex.iter() {
+                    let mut zone = zone.lock()?;
+                    zone.update_statistics(self.period_start, self.period_end);
                 }
             },
-            Err(err) => {
-                println!("Can't update polygon statistics due PoisonErr: {}", err)
+            Err(_) => {
+                return Err(DataStorageError::Poison);
             }
         };
+        Ok(())
     }
 }
+
+pub type ThreadedDataStorage = Arc<RwLock<DataStorage>>;
+
+pub fn new_datastorage(_id: String, _verbose: bool) -> ThreadedDataStorage {
+    let data_storage = DataStorage::new_with_id(_id, _verbose);
+    Arc::new(RwLock::new(data_storage))
+}
+
+pub fn start_analytics_thread(ds: ThreadedDataStorage, millis: u64, verbose: bool) {
+    if verbose {
+        println!("Analytics data would be refreshed every {} ms", millis);
+    }
+
+    thread::spawn(move || {
+        let millis_i64 = millis as i64;
+        let mut last_tm = Utc::now();
+        // Sleep to accumulate data for the first time
+        thread::sleep(std::time::Duration::from_millis(millis));
+        loop {
+            match ds.write() {
+                Ok(mut mutex) => {
+                    mutex.period_start = last_tm;
+                    mutex.period_end = last_tm + chrono::Duration::milliseconds(millis_i64);
+                    match mutex.update_statistics() {
+                        Ok(_) => {
+                            println!("Statistics updated: {}", last_tm);
+                        },
+                        Err(_) => {
+                            println!("Can't update statistics due PoisonErr [1]");
+                        }
+                    }
+                    last_tm = Utc::now();
+                },
+                Err(_) => {
+                    println!("Can't update statistics due PoisonErr [2]");
+                }
+            }
+            thread::sleep(std::time::Duration::from_millis(millis));
+        }
+    });
+}
+// trait DataStorageTrait {
+//     fn insert_zone(&self, polygon: Zone);
+// }
+
+// impl DataStorageTrait for ThreadedDataStorage {
+//     fn insert_zone(&self, polygon: Zone) {
+//         let mut write_mutex = self.write().expect("RwLock poisoned");
+//         write_mutex.insert_zone(polygon);
+//         drop(write_mutex);
+//     }
+// }
+
+// pub struct ThreadedDataStorage(Arc<RwLock<DataStorage>>);
+
+// trait DataStorageTrait {
+//     fn insert_zone(&self, polygon: Zone);
+// }
+
+// impl DataStorageTrait for DataStorage {
+//     fn insert_zone(&self, polygon: Zone) {
+//         let polygons = Arc::clone(&self.polygons);
+//         match polygons.write() {
+//             Ok(mut mutex) => {
+//                 mutex.insert(polygon.get_id(), Mutex::new(polygon));
+//             },
+//             Err(err) => {
+//                 println!("Can't insert polygon due PoisonErr: {}", err)
+//             }
+//         };
+//     }
+// }
+
+// #[derive(Clone)]
+// pub struct ThreadedDataStorage<T: ?Sized>(Arc<RwLock<T>>);
+
+// impl<T> ThreadedDataStorage<T> {
+//     /// Create new `Data` instance.
+//     pub fn new(_id: String, _verbose: bool) -> ThreadedDataStorage<DataStorage> {
+//         let data_storage = DataStorage::new_with_id(_id, _verbose);
+//         let r = RwLock::new(data_storage);
+//         let ar = Arc::new(r);
+//         ThreadedDataStorage(ar)
+//     }
+// }
+
+// impl<T: DataStorageTrait + ?Sized> ThreadedDataStorage<T> {
+//     /// Insert a polygon into the data storage.
+//     pub fn insert_zone(&self, polygon: Zone) {
+//         let mut write_mutex = self.0.write().expect("RwLock poisoned");
+//         write_mutex.insert_zone(polygon);
+//         drop(write_mutex);
+//     }
+// }

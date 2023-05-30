@@ -1,5 +1,6 @@
 use std::fs;
 
+use chrono::Utc;
 use serde::{ Deserialize, Serialize };
 use toml;
 use std::error::Error;
@@ -71,7 +72,7 @@ pub struct RoadLanesSettings {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WorkerSettings {
-    pub reset_data_milliseconds: u64,
+    pub reset_data_milliseconds: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -98,34 +99,46 @@ pub struct MJPEGStreamingSettings {
     pub enable: bool,
 }
 
-use crate::lib::polygons::ConvexPolygon;
+use crate::lib::zones::Zone;
+use crate::lib::spatial::epsg::lonlat_to_meters;
 use opencv::core::Point2f;
 use opencv::core::Scalar;
+use std::convert::From;
 
-impl RoadLanesSettings {
-    pub fn convert_to_convex_polygon(&self) -> ConvexPolygon{
-        let geom = self.geometry
+impl From<&RoadLanesSettings> for Zone {
+    fn from(setting: &RoadLanesSettings) -> Self {
+        let geom = setting.geometry
             .iter()
             .map(|pt| Point2f::new(pt[0] as f32, pt[1] as f32))
             .collect();
-        let geom_wgs84_std = self.geometry_wgs84
+
+        let geom_epsg4326 = setting.geometry_wgs84
             .iter()
             .map(|pt| Point2f::new(pt[0], pt[1]))
             .collect();
-    
-        ConvexPolygon::new(
-            format!("dir_{}_lane_{}", self.lane_direction, self.lane_number),
+
+        let geom_epsg3857 = setting.geometry_wgs84
+            .iter()
+            .map(|pt| {
+                let lonlat = lonlat_to_meters(pt[0], pt[1]);
+                Point2f::new(lonlat.0, lonlat.1)
+            })
+            .collect();
+
+        Zone::new(
+            format!("dir_{}_lane_{}", setting.lane_direction, setting.lane_number),
             geom,
-            geom_wgs84_std,
-            Scalar::from((self.color_rgb[2] as f64, self.color_rgb[1] as f64, self.color_rgb[0] as f64)),
-            self.lane_number,
-            self.lane_direction
+            geom_epsg4326,
+            geom_epsg3857,
+            Scalar::from((setting.color_rgb[2] as f64, setting.color_rgb[1] as f64, setting.color_rgb[0] as f64)),
+            setting.lane_number,
+            setting.lane_direction
         )
     }
 }
 
 impl AppSettings {
-    pub fn new_settings(filename: &str) -> Self {
+    pub fn new(filename: &str) -> Self {
         let toml_contents = fs::read_to_string(filename).expect("Something went wrong reading the file");
         let mut app_settings = match toml::from_str::<AppSettings>(&toml_contents) {
             Ok(result) => result,
@@ -156,7 +169,7 @@ impl AppSettings {
         return app_settings;
     }
     pub fn save(&self, filename: &str) -> Result<(), Box<dyn Error>>{
-        fs::copy(filename, filename.to_owned() + ".bak")?;
+        fs::copy(filename, filename.to_owned() + &format!(".{}.bak", Utc::now().format("%Y-%m-%dT%H-%M-%S-%f")))?;
         let docs = toml::to_string(self)?;
         fs::write(filename, docs.to_string())?;
         Ok(())

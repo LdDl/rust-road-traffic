@@ -2,7 +2,7 @@ use actix_web::{HttpResponse, web, Error};
 use serde::{
     Serialize
 };
-use crate::lib::rest_api::Storage;
+use crate::lib::rest_api::APIStorage;
 use crate::settings::RoadLanesSettings;
 
 #[derive(Debug, Serialize)]
@@ -14,23 +14,24 @@ pub struct ErrorResponse {
 pub struct SucccessResponse<'a> {
     pub message: &'a str,
 }
-pub async fn save_toml(data: web::Data<Storage>) -> Result<HttpResponse, Error> {
+pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Error> {
     println!("Saving TOML configuration");
-    let data_storage = data.data_storage.as_ref().clone();
-    let data_expected = data_storage.read().expect("expect: polygons_list");
-    let data_expected_polygons = data_expected.polygons.read().expect("expect: polygons_list");
+    let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
+    let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
     let mut setting_cloned = data.app_settings.get_copy_no_roads();
-    for (_, v) in data_expected_polygons.iter() {
-        let polygon = v.lock().expect("Mutex poisoned");
+    for (_, zone_guarded) in zones.iter() {
+        let zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
         setting_cloned.road_lanes.push(RoadLanesSettings{
-            color_rgb: [polygon.color[2] as i16, polygon.color[1] as i16, polygon.color[0] as i16], // BGR -> RGB
-            geometry: polygon.pixel_coordinates.iter().map(|pt| [pt.x as i32, pt.y as i32]).collect(),
-            geometry_wgs84: polygon.spatial_cooridnates.iter().map(|pt| [pt.x, pt.y]).collect(),
-            lane_direction: polygon.road_lane_direction,
-            lane_number: polygon.road_lane_num
+            color_rgb: [zone.color[2] as i16, zone.color[1] as i16, zone.color[0] as i16], // BGR -> RGB
+            geometry: zone.get_pixel_coordinates().iter().map(|pt| [pt.x as i32, pt.y as i32]).collect(),
+            geometry_wgs84: zone.get_spatial_coordinates_epsg4326().iter().map(|pt| [pt.x, pt.y]).collect(),
+            lane_direction: zone.road_lane_direction,
+            lane_number: zone.road_lane_num
         });
-        drop(polygon);
+        drop(zone);
     }
+    drop(zones);
+    drop(ds_guard);
     match setting_cloned.save(&data.settings_filename) {
         Ok(_) => {},
         Err(_err) => {

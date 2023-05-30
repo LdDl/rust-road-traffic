@@ -9,5 +9,5 @@ use chrono::{
 
 pub struct ThreadedFrame {
     pub frame: Mat,
-    pub current_second: f64
+    pub current_second: f32
 }

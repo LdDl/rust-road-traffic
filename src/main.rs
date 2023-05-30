@@ -1,3 +1,4 @@
+use chrono::Utc;
 use opencv::{
     prelude::*,
     core::Scalar,
@@ -21,21 +22,20 @@ use opencv::{
     dnn::blob_from_image,
 };
 
-use chrono::{
-    Utc,
-    Duration
-};
-
 mod lib;
-use lib::tracking::{
-    KalmanBlobiesTracker,
-};
 use lib::data_storage::{
-    DataStorage
+    new_datastorage,
+    start_analytics_thread
+};
+use lib::draw;
+use lib::tracker::{
+    Tracker,
+    SpatialInfo
 };
 use lib::detection::{
     process_yolo_detections
 };
+use lib::zones::Zone;
 
 mod settings;
 use settings::{
@@ -48,8 +48,7 @@ use video_capture::{
     ThreadedFrame
 };
 
-mod publisher;
-use publisher::{
+use lib::publisher::{
     RedisConnection
 };
 
@@ -66,6 +65,10 @@ use std::error::Error;
 use std::error;
 use std::fmt;
 use ctrlc;
+
+use crate::lib::spatial::meters_to_lonlat;
+use crate::lib::spatial::lonlat_to_meters;
+use crate::lib::{data_storage, zones};
 
 const VIDEOCAPTURE_POS_MSEC: i32 = 0;
 const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
@@ -112,8 +115,8 @@ impl From<opencv::Error> for AppError {
     }
 }
 
-fn probe_video(capture: &mut VideoCapture) ->  Result<(f32, f32, f64), AppError> {
-    let fps = capture.get(opencv::videoio::CAP_PROP_FPS)?;
+fn probe_video(capture: &mut VideoCapture) ->  Result<(f32, f32, f32), AppError> {
+    let fps = capture.get(opencv::videoio::CAP_PROP_FPS)? as f32;
     let frame_cols = capture.get(opencv::videoio::CAP_PROP_FRAME_WIDTH)? as f32;
     let frame_rows = capture.get(opencv::videoio::CAP_PROP_FRAME_HEIGHT)? as f32;
 
@@ -164,9 +167,10 @@ fn prepare_neural_net(weights: &str, configuration: &str) -> Result<(Net, Vector
     Ok((neural_net, out_layers_names))
 }
 
-fn run(settings_path: &str, settings: &AppSettings, tracker: &mut KalmanBlobiesTracker, neural_net: &mut Net, neural_net_out_layers: Vector<String>, verbose: bool) -> Result<(), AppError> {
+fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neural_net: &mut Net, neural_net_out_layers: Vector<String>, verbose: bool) -> Result<(), AppError> {
     println!("Verbose is '{}'", verbose);
     println!("REST API is '{}'", settings.rest_api.enable);
+    println!("Redis publisher is '{}'", settings.redis_publisher.enable);
 
     let enable_mjpeg = match &settings.rest_api.mjpeg_streaming {
         Some(v) => { v.enable }
@@ -175,7 +179,8 @@ fn run(settings_path: &str, settings: &AppSettings, tracker: &mut KalmanBlobiesT
     println!("MJPEG is '{}'", settings.rest_api.enable);
 
     /* Preprocess spatial data */
-    let data_storage = DataStorage::new_with_id(settings.equipment_info.id.clone(), verbose);
+    let data_storage = new_datastorage(settings.equipment_info.id.clone(), verbose);
+
     let scale_x = match settings.input.scale_x {
         Some(x) => { x },
         None => { 1.0 }
@@ -185,11 +190,13 @@ fn run(settings_path: &str, settings: &AppSettings, tracker: &mut KalmanBlobiesT
         None => { 1.0 }
     };
     for road_lane in settings.road_lanes.iter() {
-        let mut polygon = road_lane.convert_to_convex_polygon();
+        let mut polygon = Zone::from(road_lane);
         polygon.scale_geom(scale_x, scale_y);    
         polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
-        data_storage.insert_polygon(polygon);
+        data_storage.write().unwrap().insert_zone(polygon);
     }
+
+    // let data_storage_threaded = data_storage.clone();
 
     println!("Press `Ctrl-C` to stop main programm");
     ctrlc::set_handler(move || {
@@ -198,23 +205,47 @@ fn run(settings_path: &str, settings: &AppSettings, tracker: &mut KalmanBlobiesT
         process::exit(1);
     }).expect("Error setting `Ctrl-C` handler");
 
-    /* Start statistics thread */
-    let ds_threaded = data_storage.get_arc_copy();
-    {  
-        let ds_worker = ds_threaded.clone();
-        let reset_time = settings.worker.reset_data_milliseconds;
-        thread::spawn(move || {
-            DataStorage::start_data_worker(ds_worker, reset_time, verbose);
-        });
-    }
+    /* Start statistics ("threading" is obsolete because of business-logic error) */
+    let reset_time = settings.worker.reset_data_milliseconds;
+    let mut next_reset = reset_time as f32 / 1000.0;
+    let ds_worker = data_storage.clone();
     
+    /* Redis publisher */
+    let redis_enabled = settings.redis_publisher.enable;
+    let redis_worker = data_storage.clone();
+    let mut redis_conn = match redis_enabled {
+        true => {
+            let redis_host = settings.redis_publisher.host.to_owned();
+            let redis_port = settings.redis_publisher.port;
+            let redis_password = settings.redis_publisher.password.to_owned();
+            let redis_db_index = settings.redis_publisher.db_index;
+            let redis_channel = settings.redis_publisher.channel_name.to_owned();
+            let mut redis_conn = match redis_password.chars().count() {
+                0 => {
+                    RedisConnection::new(redis_host, redis_port, redis_db_index, redis_worker)
+                },
+                _ => {
+                    RedisConnection::new_with_password(redis_host, redis_port, redis_db_index, redis_password, redis_worker)
+                }
+            };
+            if redis_channel.chars().count() != 0 {
+                redis_conn.set_channel(redis_channel);
+            }
+            Some(redis_conn)
+        },
+        false => {
+            None
+        }
+    };
+
     /* Start REST API if needed */ 
+    let overwrite_file = path_to_config.to_string();
     let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(25);
     if settings.rest_api.enable {
         let settings_clone = settings.clone();
-        let ds_api = ds_threaded.clone();
+        let ds_api = data_storage.clone();
         thread::spawn(move || {
-            match rest_api::start_rest_api(settings_clone.rest_api.host.clone(), settings_clone.rest_api.back_end_port, ds_api, enable_mjpeg, rx_mjpeg, settings_clone, "") {
+            match rest_api::start_rest_api(settings_clone.rest_api.host.clone(), settings_clone.rest_api.back_end_port, ds_api, enable_mjpeg, rx_mjpeg, settings_clone, &overwrite_file) {
                 Ok(_) => {},
                 Err(err) => {
                     println!("Can't start API due the error: {:?}", err)
@@ -253,8 +284,8 @@ fn run(settings_path: &str, settings: &AppSettings, tracker: &mut KalmanBlobiesT
     /* Start capture loop */
     let (tx_capture, rx_capture): (mpsc::SyncSender<ThreadedFrame>, mpsc::Receiver<ThreadedFrame>) = mpsc::sync_channel(25);
     thread::spawn(move || {
-        let mut frames_counter = 0.0;
-        let mut total_seconds = 0.0;
+        let mut frames_counter: f32 = 0.0;
+        let mut total_seconds: f32 = 0.0;
         let mut empty_frames_countrer: u16 = 0;
         // @todo: remove hardcode
         // let fps = 18.0;
@@ -285,6 +316,8 @@ fn run(settings_path: &str, settings: &AppSettings, tracker: &mut KalmanBlobiesT
                 frames_counter = 0.0;
             }
 
+            // println!("Frame {frames_counter} | Second: {total_seconds} | Fraction: {second_fraction}");
+
             /* Re-stream input video as MJPEG */
             if enable_mjpeg {
                 let mut buffer = Vector::<u8>::new();
@@ -297,8 +330,7 @@ fn run(settings_path: &str, settings: &AppSettings, tracker: &mut KalmanBlobiesT
                 match tx_mjpeg.send(buffer) {
                     Ok(_)=>{},
                     Err(_err) => {
-                        // Closed channel?
-                        // println!("Error on send frame to MJPEG thread: {}", _err)
+                        println!("Error on send frame to MJPEG thread: {}", _err)
                     }
                 };
             }
@@ -308,6 +340,7 @@ fn run(settings_path: &str, settings: &AppSettings, tracker: &mut KalmanBlobiesT
                 frame: read_frame,
                 current_second: second_fraction,
             };
+
             match tx_capture.send(frame) {
                 Ok(_)=>{},
                 Err(_err) => {
@@ -316,8 +349,35 @@ fn run(settings_path: &str, settings: &AppSettings, tracker: &mut KalmanBlobiesT
                 }
             };
 
-            if total_seconds >= 2.0 {
-                // break
+            // println!("Total seconds: {}", total_seconds);
+            if total_seconds >= next_reset {
+                println!("Reset timer due analytics. Current local time is: {}", second_fraction);
+                // @TODO: Reset timer may be? To dodge overflow
+                total_seconds = 0.0;
+                // next_reset += reset_time as f32 / 1000.0;
+                let mut ds_writer = ds_worker.write().expect("Bad DS");
+                if ds_writer.period_end == ds_writer.period_start {
+                    // First iteration
+                    ds_writer.period_end = Utc::now();
+                    ds_writer.period_start = ds_writer.period_end - chrono::Duration::milliseconds(reset_time);
+                } else {
+                    // Next iterations
+                    ds_writer.period_start = ds_writer.period_end;
+                    ds_writer.period_end = ds_writer.period_end + chrono::Duration::milliseconds(reset_time);
+                }
+                
+                match ds_writer.update_statistics() {
+                    Ok(_) => {
+                        // Do not forget to drop mutex explicitly since we possible need to work with DS in REST API and Redis
+                        drop(ds_writer)
+                    },
+                    Err(err) => {
+                        println!("Can't update statistics due the error: {}", err);
+                    }
+                }
+                if redis_enabled {
+                    redis_conn.as_ref().unwrap().push_statistics();
+                }
             }
         }
         match video_capture.release() {
@@ -339,61 +399,130 @@ fn run(settings_path: &str, settings: &AppSettings, tracker: &mut KalmanBlobiesT
     let coco_classnames = &settings.detection.net_classes;
     let max_points_in_track: usize = settings.tracking.max_points_in_track;
     let mut resized_frame = Mat::default();
+
+    let ds_tracker = data_storage.clone();
+    
+    let tracker_dt = (1.0/fps) as f32;
+
+    /* Can't create colors as const/static currently */
+    let trajectory_scalar: Scalar = Scalar::from((0.0, 255.0, 0.0));
+    let trajectory_scalar_inverse: Scalar = draw::invert_color(&trajectory_scalar);
+    let bbox_scalar: Scalar = Scalar::from((0.0, 255.0, 0.0));
+    let bbox_scalar_inverse:Scalar = draw::invert_color(&bbox_scalar);
+    let id_scalar: Scalar = Scalar::from((0.0, 255.0, 0.0));
+    let id_scalar_inverse: Scalar = draw::invert_color(&id_scalar);
     for received in rx_capture {
+        // println!("Received frame from capture thread: {}", received.current_second);
         let mut frame = received.frame.clone();
         let blobimg = blob_from_image(&frame, BLOB_SCALE, net_size, blob_mean, true, false, CV_32F)?;
         match neural_net.set_input(&blobimg, BLOB_NAME, 1.0, blob_mean) {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't set input of neural network due the error {:?}", err);
+                continue;
             }
         };
-
-        println!("time to detect {}", received.current_second);
-
+        
         match neural_net.forward(&mut detections, &neural_net_out_layers) {
-            Ok(_) => {
-                let mut tmp_blobs = process_yolo_detections(
-                    &detections,
-                    conf_threshold,
-                    nms_threshold,
-                    width,
-                    height,
-                    max_points_in_track,
-                    &coco_classnames,
-                    COCO_FILTERED_CLASSNAMES,
-                    received.current_second,
-                );
-                for (b) in tmp_blobs.iter() {
-                    if settings.output.enable {
-                        b.draw_rectangle(&mut frame, Scalar::from((0.0, 255.0, 0.0)));
-                    }
-                }
-                if settings.output.enable {
-                    match resize(&mut frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
-                        Ok(_) => {},
-                        Err(err) => {
-                            panic!("Can't resize output frame due the error {:?}", err);
-                        }
-                    }
-                    if resized_frame.size()?.width > 0 {
-                        imshow(window, &mut resized_frame)?;
-                    }
-                    let key = wait_key(10)?;
-                    if key > 0 && key != 255 {
-                        break;
-                    }
-                }
-            },
+            Ok(_) => {},
             Err(err) => {
                 println!("Can't process input of neural network due the error {:?}", err);
+                continue;
             }
         }
         
+        /* Process detected objects and match them to existing ones */
+        let mut tmp_detections = process_yolo_detections(
+            &detections,
+            conf_threshold,
+            nms_threshold,
+            width,
+            height,
+            max_points_in_track,
+            &coco_classnames,
+            COCO_FILTERED_CLASSNAMES,
+            tracker_dt,
+        );
+
+        match tracker.match_objects(&mut tmp_detections, received.current_second) {
+            Ok(_) => {},
+            Err(err) => {
+                println!("Can't match objects due the error: {:?}", err);
+                continue;
+            }
+        };
+
+        let ds_guard = ds_tracker.read().expect("DataStorage is poisoned [RWLock]");
+        let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
+        for (object_id, object_extra) in tracker.objects_extra.iter_mut() {
+            let object = tracker.engine.objects.get(object_id).unwrap();
+            if object.get_no_match_times() > 1 {
+                // Skip, since object is lost for a while
+                // println!("Object {} is lost for a while", object_id);
+                continue;
+            }
+
+            let times = &object_extra.times;
+            let last_time = times[times.len() - 1];
+
+            let track: &Vec<mot_rs::utils::Point> = object.get_track();
+            let last_point = &track[track.len() - 1];
+
+            // Check if object is inside of any polygon
+            for (_, zone_guarded) in zones.iter() {
+                let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
+                if !zone.contains_point(last_point.x, last_point.y) {
+                    continue
+                }
+                let projected_pt = zone.project_to_skeleton(last_point.x, last_point.y);
+                let pixels_per_meters = zone.get_skeleton_ppm();
+                match object_extra.spatial_info {
+                    Some(ref mut spatial_info) => {
+                        spatial_info.update_avg(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1, pixels_per_meters);
+                        zone.register_or_update_object(object_id.clone(), spatial_info.speed, object_extra.get_classname());
+                    },
+                    None => {
+                        object_extra.spatial_info = Some(SpatialInfo::new(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1));
+                        zone.register_or_update_object(object_id.clone(), -1.0, object_extra.get_classname());
+                    }
+                }
+            }
+        }
+        for (_, v) in zones.iter() {
+            let polygon = v.lock().expect("Mutex poisoned");
+            if settings.output.enable {
+                polygon.draw_geom(&mut frame);
+                polygon.draw_skeleton(&mut frame);
+                polygon.draw_current_intensity(&mut frame);
+            }
+        }
+
+        // We need drop here explicitly, since we need to release lock on zones for MJPEG / REST API / Redis publisher and statistics threads
+        drop(zones);
+        drop(ds_guard);
+        
+        if settings.output.enable {
+            draw::draw_trajectories(&mut frame, &tracker, trajectory_scalar, trajectory_scalar_inverse);
+            draw::draw_bboxes(&mut frame, &tracker, bbox_scalar, bbox_scalar_inverse);
+            draw::draw_identifiers(&mut frame, &tracker, id_scalar, id_scalar_inverse);
+            draw::draw_speeds(&mut frame, &tracker, id_scalar, id_scalar_inverse);
+            draw::draw_projections(&mut frame, &tracker, id_scalar, id_scalar_inverse);
+
+            match resize(&mut frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
+                Ok(_) => {},
+                Err(err) => {
+                    panic!("Can't resize output frame due the error {:?}", err);
+                }
+            }
+            if resized_frame.size()?.width > 0 {
+                imshow(window, &mut resized_frame)?;
+            }
+            let key = wait_key(10)?;
+            if key > 0 && key != 255 {
+                break;
+            }
+        }
     }
-    
-
-
     Ok(())
 }
 
@@ -408,10 +537,10 @@ fn main() {
             "./data/conf.toml"
         }
     };
-    let app_settings = AppSettings::new_settings(path_to_config);
+    let app_settings = AppSettings::new(path_to_config);
     println!("Settings are:\n\t{}", app_settings);
 
-    let mut tracker = KalmanBlobiesTracker::default();
+    let mut tracker = Tracker::new(5, 30.0);
     println!("Tracker is:\n\t{}", tracker);
 
     let mut neural_net = match prepare_neural_net(&app_settings.detection.network_weights, &app_settings.detection.network_cfg) {
@@ -427,7 +556,7 @@ fn main() {
         None => { false }
     };
     
-    match run(path_to_config.clone(), &app_settings, &mut tracker, &mut neural_net.0, neural_net.1, verbose) {
+    match run(&app_settings, path_to_config, &mut tracker, &mut neural_net.0, neural_net.1, verbose) {
         Ok(_) => {},
         Err(_err) => {
             println!("Error in main thread: {}", _err);

@@ -4,7 +4,7 @@ use actix_cors::Cors;
 
 use crate::settings::AppSettings;
 use crate::lib::rest_api::services;
-use crate::lib::data_storage::DataStorage;
+use crate::lib::data_storage::ThreadedDataStorage;
 use crate::lib::mjpeg_streaming::Broadcaster;
 use std::sync::{
     Mutex,
@@ -16,18 +16,18 @@ use opencv::{
     core::Vector,
 };
 
-pub struct Storage {
-    pub data_storage: Arc<RwLock<DataStorage>>,
+pub struct APIStorage {
+    pub data_storage: ThreadedDataStorage,
     pub app_settings: AppSettings,
     pub settings_filename: String,
     pub mjpeg_broadcaster: web::Data<Mutex<Broadcaster>>
 }
 
 #[actix_web::main]
-pub async fn start_rest_api(server_host: String, server_port: i32, data_storage: Arc<RwLock<DataStorage>>, enable_mjpeg: bool, rx_frames_data: Receiver<Vector<u8>>, app_settings: AppSettings, settings_filename: &str) -> std::io::Result<()> {
+pub async fn start_rest_api(server_host: String, server_port: i32, data_storage: ThreadedDataStorage, enable_mjpeg: bool, rx_frames_data: Receiver<Vector<u8>>, app_settings: AppSettings, settings_filename: &str) -> std::io::Result<()> {
     let bind_address = format!("{}:{}", server_host, server_port);
     println!("REST API is starting on host:port {}:{}", server_host, server_port);
-    let storage = Storage{
+    let storage = APIStorage{
         data_storage: data_storage,
         app_settings: app_settings,
         settings_filename: settings_filename.to_string(),
