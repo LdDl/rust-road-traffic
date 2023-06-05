@@ -23,6 +23,7 @@ use crate::lib::zones::{
     Zone
 };
 
+#[derive(Debug)]
 pub enum DataStorageError {
     Poison
 }

@@ -193,7 +193,12 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
         let mut polygon = Zone::from(road_lane);
         polygon.scale_geom(scale_x, scale_y);    
         polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
-        data_storage.write().unwrap().insert_zone(polygon);
+        match data_storage.write().unwrap().insert_zone(polygon) {
+            Ok(_) => {},
+            Err(err) => {
+                panic!("Can't insert zone due the error {:?}", err);
+            }
+        };
     }
 
     // let data_storage_threaded = data_storage.clone();
@@ -207,13 +212,13 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
 
     /* Start statistics ("threading" is obsolete because of business-logic error) */
     let reset_time = settings.worker.reset_data_milliseconds;
-    let mut next_reset = reset_time as f32 / 1000.0;
+    let next_reset = reset_time as f32 / 1000.0;
     let ds_worker = data_storage.clone();
     
     /* Redis publisher */
     let redis_enabled = settings.redis_publisher.enable;
     let redis_worker = data_storage.clone();
-    let mut redis_conn = match redis_enabled {
+    let redis_conn = match redis_enabled {
         true => {
             let redis_host = settings.redis_publisher.host.to_owned();
             let redis_port = settings.redis_publisher.port;
@@ -240,7 +245,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
 
     /* Start REST API if needed */ 
     let overwrite_file = path_to_config.to_string();
-    let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(25);
+    let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(0);
     if settings.rest_api.enable {
         let settings_clone = settings.clone();
         let ds_api = data_storage.clone();
@@ -282,11 +287,13 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
     }
 
     /* Start capture loop */
-    let (tx_capture, rx_capture): (mpsc::SyncSender<ThreadedFrame>, mpsc::Receiver<ThreadedFrame>) = mpsc::sync_channel(25);
+    let (tx_capture, rx_capture): (mpsc::SyncSender<ThreadedFrame>, mpsc::Receiver<ThreadedFrame>) = mpsc::sync_channel(0);
     thread::spawn(move || {
         let mut frames_counter: f32 = 0.0;
         let mut total_seconds: f32 = 0.0;
         let mut empty_frames_countrer: u16 = 0;
+        // @experimental
+        let skip_every_n_frame = 2;
         // @todo: remove hardcode
         // let fps = 18.0;
         loop {
@@ -315,25 +322,11 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                 total_seconds += 1.0;
                 frames_counter = 0.0;
             }
-
+            if frames_counter as i32 % skip_every_n_frame != 0 {
+                continue;
+            }
             // println!("Frame {frames_counter} | Second: {total_seconds} | Fraction: {second_fraction}");
 
-            /* Re-stream input video as MJPEG */
-            if enable_mjpeg {
-                let mut buffer = Vector::<u8>::new();
-                let params = Vector::<i32>::new();
-                let encoded = imencode(".jpg", &read_frame, &mut buffer, &params).unwrap();
-                if !encoded {
-                    println!("image has not been encoded");
-                    continue;
-                }
-                match tx_mjpeg.send(buffer) {
-                    Ok(_)=>{},
-                    Err(_err) => {
-                        println!("Error on send frame to MJPEG thread: {}", _err)
-                    }
-                };
-            }
 
             /* Send frame and capture info */
             let frame = ThreadedFrame{
@@ -352,9 +345,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
             // println!("Total seconds: {}", total_seconds);
             if total_seconds >= next_reset {
                 println!("Reset timer due analytics. Current local time is: {}", second_fraction);
-                // @TODO: Reset timer may be? To dodge overflow
                 total_seconds = 0.0;
-                // next_reset += reset_time as f32 / 1000.0;
                 let mut ds_writer = ds_worker.write().expect("Bad DS");
                 if ds_writer.period_end == ds_writer.period_start {
                     // First iteration
@@ -490,7 +481,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
         }
         for (_, v) in zones.iter() {
             let polygon = v.lock().expect("Mutex poisoned");
-            if settings.output.enable {
+            if enable_mjpeg || settings.output.enable {
                 polygon.draw_geom(&mut frame);
                 polygon.draw_skeleton(&mut frame);
                 polygon.draw_current_intensity(&mut frame);
@@ -501,27 +492,46 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
         drop(zones);
         drop(ds_guard);
         
-        if settings.output.enable {
+        /* Imshow + re-stream input video as MJPEG */
+        if enable_mjpeg || settings.output.enable {
             draw::draw_trajectories(&mut frame, &tracker, trajectory_scalar, trajectory_scalar_inverse);
             draw::draw_bboxes(&mut frame, &tracker, bbox_scalar, bbox_scalar_inverse);
             draw::draw_identifiers(&mut frame, &tracker, id_scalar, id_scalar_inverse);
             draw::draw_speeds(&mut frame, &tracker, id_scalar, id_scalar_inverse);
             draw::draw_projections(&mut frame, &tracker, id_scalar, id_scalar_inverse);
-
-            match resize(&mut frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
-                Ok(_) => {},
-                Err(err) => {
-                    panic!("Can't resize output frame due the error {:?}", err);
+            
+            if settings.output.enable {
+                match resize(&mut frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
+                    Ok(_) => {},
+                    Err(err) => {
+                        panic!("Can't resize output frame due the error {:?}", err);
+                    }
+                }
+                if resized_frame.size()?.width > 0 {
+                    imshow(window, &mut resized_frame)?;
+                }
+                let key = wait_key(10)?;
+                if key > 0 && key != 255 {
+                    break;
                 }
             }
-            if resized_frame.size()?.width > 0 {
-                imshow(window, &mut resized_frame)?;
+
+            let mut buffer = Vector::<u8>::new();
+            let params = Vector::<i32>::new();
+            let encoded = imencode(".jpg", &frame, &mut buffer, &params).unwrap();
+            if !encoded {
+                println!("image has not been encoded");
+                continue;
             }
-            let key = wait_key(10)?;
-            if key > 0 && key != 255 {
-                break;
-            }
+            match tx_mjpeg.send(buffer) {
+                Ok(_)=>{},
+                Err(_err) => {
+                    println!("Error on send frame to MJPEG thread: {}", _err)
+                }
+            };
         }
+
+        
     }
     Ok(())
 }

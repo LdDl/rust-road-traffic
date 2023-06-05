@@ -470,7 +470,7 @@ impl Zone {
     }
     pub fn draw_current_intensity(&self, img: &mut Mat) {
         let current_intensity = self.objects.len();
-        let anchor = Point2i::new(self.pixel_coordinates[0].x as i32, self.pixel_coordinates[0].y as i32);
+        let anchor = Point2i::new(self.pixel_coordinates[0].x as i32 + 20, self.pixel_coordinates[0].y as i32 - 10);
         match put_text(img, &current_intensity.to_string(), anchor, FONT_HERSHEY_SIMPLEX, 0.5, Scalar::from((0.0, 0.0, 0.0)), 2, LINE_8, false) {
             Ok(_) => {},
             Err(err) => {
