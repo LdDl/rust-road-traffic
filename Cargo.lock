@@ -1041,9 +1041,9 @@ dependencies = [
 
 [[package]]
 name = "mot-rs"
-version = "0.0.10"
+version = "0.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01963d71e10737d7be835d173ad24ee819bcd0a0707fc56f2205e5f667f3c3fa"
+checksum = "1132b2ff5a100f580ba1bf1c21060e42bc8e812e6d959c63fe217bf77e167ee2"
 dependencies = [
  "chrono",
  "itertools",
@@ -1401,7 +1401,7 @@ checksum = "a3f87b73ce11b1619a3c6332f45341e0047173771e8b8b73f87bfeefb7b56244"
 
 [[package]]
 name = "rust-road-traffic"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "actix-cors",
  "actix-web",

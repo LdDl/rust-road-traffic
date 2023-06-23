@@ -1,6 +1,6 @@
 [package]
 name = "rust-road-traffic"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -26,7 +26,7 @@ ctrlc = { version = "3.0", features = ["termination"] }
 redis = "*"
 tokio = { version = "1.16.1", features = ["full"] }
 futures = "0.3.1"
-mot-rs = "0.0.10"
+mot-rs = "0.0.11"
 
 [build-dependencies]
 static-files = "0.2.1"
