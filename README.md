@@ -56,11 +56,11 @@ UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic
     
     If you want to change parameters of this utility then navigate to [configuration file](data/conf.toml)
 
-4. Download weights (optional)
+4. Download weights and configuration files (optional)
 
-    - YOLO v4 tiny - [yolov4-tiny-vehicles-rect_best.weights](yolov4-tiny-vehicles-rect_best.weights). It has been trained on filtered COCO dataset; classes are: "car", "motorbike", "bus", "train", "truck"
+    - YOLO v4 tiny - [yolov4-tiny-vehicles-rect_best.weights](https://github.com/LdDl/yolo_vehicles/releases/download/v0.0.1/yolov4-tiny-vehicles-rect_best.weights) + [yolov4-tiny-vehicles-rect.cfg](https://github.com/LdDl/yolo_vehicles/releases/download/v0.0.1/yolov4-tiny-vehicles-rect.cfg). It has been trained on filtered COCO dataset; classes are: "car", "motorbike", "bus", "train", "truck"
 
-    - YOLO v3 tiny - [yolov4-tiny-vehicles-rect_best.weights](tinyv3-vehicles_best.weights). It has been trained on AIC HCMC 2020 challenge data; classes are: "car", "motorbike", "bus", "truck". More information here: https://github.com/LdDl/yolo_vehicles . I like it more personally.
+    - YOLO v3 tiny - [tinyv3-vehicles_best.weights](https://github.com/LdDl/yolo_vehicles/releases/download/v0.0.1/tinyv3-vehicles_best.weights) + [tinyv3-vehicles.cfg](https://github.com/LdDl/yolo_vehicles/releases/download/v0.0.1/tinyv3-vehicles.cfg). It has been trained on AIC HCMC 2020 challenge data; classes are: "car", "motorbike", "bus", "truck". More information here: https://github.com/LdDl/yolo_vehicles . I like it more personally.
 
 5. Run
     ```shell
