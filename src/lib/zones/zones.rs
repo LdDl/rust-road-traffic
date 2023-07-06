@@ -332,16 +332,19 @@ impl Zone {
     pub fn update_statistics(&mut self, _period_start: DateTime<Utc>, _period_end: DateTime<Utc>) {
         self.reset_statistics(_period_start, _period_end);
         for (_, object_info) in self.objects.iter() {
-            let mut vehicle_type_parameters = match self.statistics.vehicles_data.get_mut(&object_info.classname) {
-                Some(vehicle_type_parameters) => vehicle_type_parameters,
-                None => {
+            let classname = object_info.classname.to_owned();
+            let speed = object_info.speed;
+            let mut vehicle_type_parameters = match self.statistics.vehicles_data.entry(classname) {
+                Occupied(o) => o.into_mut(),
+                Vacant(v) => {
+                    v.insert(VehicleTypeParameters{sum_intensity: 1, avg_speed: speed});
                     continue;
-                }
+                },
             };
             vehicle_type_parameters.sum_intensity += 1;
             // Iterative average calculation
             // https://math.stackexchange.com/questions/106700/incremental-averageing
-            vehicle_type_parameters.avg_speed = vehicle_type_parameters.avg_speed * ((vehicle_type_parameters.sum_intensity - 1) as f32 / vehicle_type_parameters.sum_intensity as f32) + object_info.speed / vehicle_type_parameters.sum_intensity as f32;
+            vehicle_type_parameters.avg_speed = vehicle_type_parameters.avg_speed * ((vehicle_type_parameters.sum_intensity - 1) as f32 / vehicle_type_parameters.sum_intensity as f32) + speed / vehicle_type_parameters.sum_intensity as f32;
         }
         self.reset_objects();
     }
