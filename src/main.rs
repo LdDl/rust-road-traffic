@@ -479,9 +479,9 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                 }
             }
         }
-        for (_, v) in zones.iter() {
-            let polygon = v.lock().expect("Mutex poisoned");
-            if enable_mjpeg || settings.output.enable {
+        if enable_mjpeg || settings.output.enable {
+            for (_, v) in zones.iter() {
+                let polygon = v.lock().expect("Mutex poisoned");
                 polygon.draw_geom(&mut frame);
                 polygon.draw_skeleton(&mut frame);
                 polygon.draw_current_intensity(&mut frame);
@@ -511,11 +511,12 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                     imshow(window, &mut resized_frame)?;
                 }
                 let key = wait_key(10)?;
-                if key > 0 && key != 255 {
+                if key == 27 /* esc */ || key == 115 /* s */ || key == 83 /* S */ {
                     break;
                 }
             }
-
+        }
+        if enable_mjpeg {
             let mut buffer = Vector::<u8>::new();
             let params = Vector::<i32>::new();
             let encoded = imencode(".jpg", &frame, &mut buffer, &params).unwrap();
