@@ -173,10 +173,11 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
     println!("Redis publisher is '{}'", settings.redis_publisher.enable);
 
     let enable_mjpeg = match &settings.rest_api.mjpeg_streaming {
-        Some(v) => { v.enable }
+        Some(v) => { v.enable & settings.rest_api.enable} // Logical 'And' to prevent MJPEG when API is disabled
         None => { false }
     };
-    println!("MJPEG is '{}'", settings.rest_api.enable);
+
+    println!("MJPEG is '{}'", enable_mjpeg);
 
     /* Preprocess spatial data */
     let data_storage = new_datastorage(settings.equipment_info.id.clone(), verbose);
