@@ -1041,9 +1041,9 @@ dependencies = [
 
 [[package]]
 name = "mot-rs"
-version = "0.0.11"
+version = "0.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1132b2ff5a100f580ba1bf1c21060e42bc8e812e6d959c63fe217bf77e167ee2"
+checksum = "4665f6c2e54417289621c20c7ff098256edc71872668d2a5f01d56a1dacfad7f"
 dependencies = [
  "chrono",
  "itertools",

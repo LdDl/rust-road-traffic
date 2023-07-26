@@ -12,7 +12,9 @@ use chrono::{
 };
 
 use mot_rs::mot::SimpleBlob;
-use mot_rs::utils::Rect;
+use mot_rs::utils::{
+    Rect, Point
+};
 
 #[derive(Debug)]
 pub struct Detections {
@@ -90,7 +92,11 @@ pub fn process_yolo_detections(detections: &Vector::<Mat>, conf_threshold: f32, 
     for (i, bbox) in nms_bboxes.iter().enumerate() {
         let class_name = &nms_classes[i];
         let confidence = nms_confidences[i];
-        let mut kb = SimpleBlob::new_with_dt(Rect::new(bbox.x as f32, bbox.y as f32, bbox.width as f32, bbox.height as f32), dt);
+        let center_x = (bbox.x as f32 + bbox.width as f32 / 2.0);
+        let center_y = (bbox.y as f32 + bbox.height as f32);
+        let mut kb = SimpleBlob::new_with_center_dt(Point::new(center_x, center_y), Rect::new(bbox.x as f32, bbox.y as f32, bbox.width as f32, bbox.height as f32), dt);
+        // let mut kb = SimpleBlob::new_with_dt(Rect::new(bbox.x as f32, bbox.y as f32, bbox.width as f32, bbox.height as f32), dt);
+
         aggregated_data.push(kb);
     }
     return Detections {
