@@ -6,15 +6,14 @@ use std::collections::hash_map::Entry::{
 };
 use uuid::Uuid;
 use mot_rs::mot::{
-    SimpleTracker,
-    SimpleBlob,
+    IoUTracker
 };
 
 use crate::lib::detection::Detections;
 use crate::lib::spatial::haversine;
 
 pub struct Tracker {
-    pub engine: SimpleTracker,
+    pub engine: IoUTracker,
     pub objects_extra: HashMap<Uuid, ObjectExtra>,
 }
 
@@ -87,10 +86,9 @@ impl SpatialInfo {
         // It is possible to calculate speed between two points (old and new)
         let distance_pixels = ((_x_projected - self.first_x_projected).powi(2) + (_y_projected - self.first_y_projected).powi(2)).sqrt();
         let distance_meters = distance_pixels / pixels_per_meter;
-        let time_diff = _time - self.first_time;
+        let time_diff = (_time - self.first_time).abs();
         let velocity = distance_meters / time_diff; // meters per second
         self.speed = velocity * 3.6; // convert m/s to km/h
-
         self.last_time = _time;
         self.last_x = _x;
         self.last_y = _y;
@@ -127,9 +125,9 @@ impl SpatialInfo {
     }
 }
 impl Tracker {
-    pub fn new(_max_no_match: usize, _min_dist_threshold: f32) -> Self {
+    pub fn new(_max_no_match: usize, _iou_threshold: f32) -> Self {
         Self {
-            engine: SimpleTracker::new(_max_no_match, _min_dist_threshold),
+            engine: IoUTracker::new(_max_no_match, _iou_threshold),
             objects_extra: HashMap::new(),
         }
     }

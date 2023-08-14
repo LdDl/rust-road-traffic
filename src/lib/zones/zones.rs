@@ -122,7 +122,7 @@ impl Skeleton {
         let APx = xP - x1;
         let APy = yP - y1;
 
-         // Calculate the dot product of AB and AP
+        // Calculate the dot product of AB and AP
         let dot_product = APx * ABx + APy * ABy;
 
         // Calculate the magnitude of AB squared
