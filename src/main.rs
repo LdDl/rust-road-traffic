@@ -552,7 +552,7 @@ fn main() {
     let app_settings = AppSettings::new(path_to_config);
     println!("Settings are:\n\t{}", app_settings);
 
-    let mut tracker = Tracker::new(45, 0.3);
+    let mut tracker = Tracker::new(15, 0.3);
     println!("Tracker is:\n\t{}", tracker);
 
     let mut neural_net = match prepare_neural_net(&app_settings.detection.network_weights, &app_settings.detection.network_cfg) {
