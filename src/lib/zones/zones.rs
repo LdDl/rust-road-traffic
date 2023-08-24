@@ -158,7 +158,7 @@ pub struct Zone {
     spatial_converter: SpatialConverter,
     pub statistics: Statistics,
     objects: Registered,
-    pub current_load: u16,
+    pub current_occupancy: u16,
     skeleton: Skeleton,
 }
 
@@ -175,7 +175,7 @@ impl Zone {
             spatial_converter: SpatialConverter::default(),
             statistics: Statistics::default(),
             objects: HashMap::new(),
-            current_load: 0,
+            current_occupancy: 0,
             skeleton: Skeleton::default(),
         }
     }
@@ -206,7 +206,7 @@ impl Zone {
             spatial_converter: converter,
             statistics: Statistics::default(),
             objects: HashMap::new(),
-            current_load: 0,
+            current_occupancy: 0,
             skeleton: skeleton,
         }
     }
@@ -223,7 +223,7 @@ impl Zone {
             spatial_converter: SpatialConverter::default(),
             statistics: Statistics::default(),
             objects: HashMap::new(),
-            current_load: 0,
+            current_occupancy: 0,
             skeleton: Skeleton::new(skeleton_line[0], skeleton_line[1])
         }
     }

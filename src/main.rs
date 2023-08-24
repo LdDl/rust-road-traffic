@@ -449,7 +449,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
         // Reset current load for zones 
         for (_, zone_guarded) in zones.iter() {
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
-            zone.current_load = 0;
+            zone.current_occupancy = 0;
             drop(zone);
         }
         for (object_id, object_extra) in tracker.objects_extra.iter_mut() {
@@ -472,7 +472,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                 if !zone.contains_point(last_point.x, last_point.y) {
                     continue
                 }
-                zone.current_load += 1; // Increment current load to match number of objects in zone
+                zone.current_occupancy += 1; // Increment current load to match number of objects in zone
                 let projected_pt = zone.project_to_skeleton(last_point.x, last_point.y);
                 let pixels_per_meters = zone.get_skeleton_ppm();
                 match object_extra.spatial_info {
