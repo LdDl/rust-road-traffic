@@ -446,6 +446,12 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
 
         let ds_guard = ds_tracker.read().expect("DataStorage is poisoned [RWLock]");
         let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
+        // Reset current load for zones 
+        for (_, zone_guarded) in zones.iter() {
+            let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
+            zone.current_load = 0;
+            drop(zone);
+        }
         for (object_id, object_extra) in tracker.objects_extra.iter_mut() {
             let object = tracker.engine.objects.get(object_id).unwrap();
             if object.get_no_match_times() > 1 {
@@ -466,6 +472,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                 if !zone.contains_point(last_point.x, last_point.y) {
                     continue
                 }
+                zone.current_load += 1; // Increment current load to match number of objects in zone
                 let projected_pt = zone.project_to_skeleton(last_point.x, last_point.y);
                 let pixels_per_meters = zone.get_skeleton_ppm();
                 match object_extra.spatial_info {
