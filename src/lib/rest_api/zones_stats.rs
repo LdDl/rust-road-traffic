@@ -54,3 +54,38 @@ pub async fn all_zones_stats(data: web::Data<APIStorage>) -> Result<HttpResponse
     drop(ds_guard);
     return Ok(HttpResponse::Ok().json(ans));
 }
+
+
+#[derive(Debug, Serialize)]
+pub struct AllZonesRealtimeStatistics {
+    pub equipment_id: String,
+    pub data: Vec<ZoneRealtime>
+}
+
+#[derive(Debug, Serialize)]
+pub struct ZoneRealtime {
+    pub lane_number: u16,
+    pub lane_direction: u8,
+    pub occupancy: u16
+}
+
+pub async fn all_zones_occupancy(data: web::Data<APIStorage>) -> Result<HttpResponse, Error> {
+    let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
+    let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
+    let mut ans: AllZonesRealtimeStatistics = AllZonesRealtimeStatistics{
+        equipment_id: ds_guard.id.clone(),
+        data: vec![]
+    };
+    for (_, zone_guarded) in zones.iter() {
+        let zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
+        let stats = ZoneRealtime{
+            lane_number: zone.road_lane_num,
+            lane_direction: zone.road_lane_direction,
+            occupancy: zone.current_occupancy
+        };
+        ans.data.push(stats);
+    }
+    drop(zones);
+    drop(ds_guard);
+    return Ok(HttpResponse::Ok().json(ans));
+}

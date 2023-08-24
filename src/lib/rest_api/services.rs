@@ -39,6 +39,10 @@ pub fn init_routes(enable_mjpeg: bool) -> impl Fn(&mut web::ServiceConfig) {
                     .route("/all", web::get().to(zones_stats::all_zones_stats))
                 )
                 .service(
+                    web::scope("/realtime")
+                    .route("/occupancy", web::get().to(zones_stats::all_zones_occupancy))
+                )
+                .service(
                     web::scope("/mutations")
                     .route("/create_polygon", web::post().to(zones_mutations::create_zone))
                     .route("/change_polygon", web::post().to(zones_mutations::update_zone))
