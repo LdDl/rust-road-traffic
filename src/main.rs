@@ -25,7 +25,6 @@ use opencv::{
 mod lib;
 use lib::data_storage::{
     new_datastorage,
-    start_analytics_thread
 };
 use lib::draw;
 use lib::tracker::{
@@ -56,6 +55,7 @@ use lib::rest_api;
 
 use std::env;
 use std::time::Duration as STDDuration;
+use std::time::{SystemTime};
 use std::process;
 use std::time::Instant;
 use std::io::Write;
@@ -75,6 +75,13 @@ const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", 
 const BLOB_SCALE: f64 = 1.0 / 255.0;
 const BLOB_NAME: &'static str = "";
 const EMPTY_FRAMES_LIMIT: u16 = 60;
+
+fn get_sys_time_in_secs() -> u64 {
+    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(n) => n.as_secs(),
+        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+    }
+}
 
 #[derive(Debug)]
 struct AppVideoError{typ: i16}
@@ -446,12 +453,16 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
 
         let ds_guard = ds_tracker.read().expect("DataStorage is poisoned [RWLock]");
         let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
-        // Reset current load for zones 
+        
+        // Reset current occupancy for zones 
+        let current_ut = get_sys_time_in_secs();
         for (_, zone_guarded) in zones.iter() {
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
-            zone.current_occupancy = 0;
+            zone.current_statistics.occupancy = 0;
+            zone.current_statistics.last_time = current_ut;
             drop(zone);
         }
+
         for (object_id, object_extra) in tracker.objects_extra.iter_mut() {
             let object = tracker.engine.objects.get(object_id).unwrap();
             if object.get_no_match_times() > 1 {
@@ -472,7 +483,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                 if !zone.contains_point(last_point.x, last_point.y) {
                     continue
                 }
-                zone.current_occupancy += 1; // Increment current load to match number of objects in zone
+                zone.current_statistics.occupancy += 1; // Increment current load to match number of objects in zone
                 let projected_pt = zone.project_to_skeleton(last_point.x, last_point.y);
                 let pixels_per_meters = zone.get_skeleton_ppm();
                 match object_extra.spatial_info {

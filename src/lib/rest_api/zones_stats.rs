@@ -66,6 +66,7 @@ pub struct AllZonesRealtimeStatistics {
 pub struct ZoneRealtime {
     pub lane_number: u16,
     pub lane_direction: u8,
+    pub last_time: u64,
     pub occupancy: u16
 }
 
@@ -81,7 +82,8 @@ pub async fn all_zones_occupancy(data: web::Data<APIStorage>) -> Result<HttpResp
         let stats = ZoneRealtime{
             lane_number: zone.road_lane_num,
             lane_direction: zone.road_lane_direction,
-            occupancy: zone.current_occupancy
+            last_time: zone.current_statistics.last_time,
+            occupancy: zone.current_statistics.occupancy
         };
         ans.data.push(stats);
     }
