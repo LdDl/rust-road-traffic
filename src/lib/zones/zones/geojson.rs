@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct ZonesFeatureCollection {
     #[serde(rename(serialize = "type"))]
     pub typ: String,
@@ -16,7 +17,7 @@ impl ZonesFeatureCollection {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct ZoneFeature {
     #[serde(rename(serialize = "type"))]
     pub typ: String,
@@ -25,7 +26,7 @@ pub struct ZoneFeature {
     pub geometry: GeoPolygon,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct ZonePropertiesGeoJSON {
     pub road_lane_num: u16,
     pub road_lane_direction: u8,
@@ -33,7 +34,7 @@ pub struct ZonePropertiesGeoJSON {
     pub color_rgb: [i16; 3]
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, ToSchema)]
 pub struct GeoPolygon {
     #[serde(rename(serialize = "type", deserialize = "type"))]
     pub geometry_type: String,

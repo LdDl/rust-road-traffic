@@ -1,17 +1,18 @@
 use actix_web::{HttpResponse, web, Error};
-use serde::{Serialize};
+use serde::Serialize;
+use utoipa::ToSchema;
 use chrono::{DateTime, Utc};
 
 use std::collections::HashMap;
 use crate::lib::rest_api::APIStorage;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct AllZonesStats {
     pub equipment_id: String,
     pub data: Vec<ZoneStats>
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ZoneStats {
     pub lane_number: u16,
     pub lane_direction: u8,
@@ -20,12 +21,20 @@ pub struct ZoneStats {
     pub statistics: HashMap<String, VehicleTypeParameters>
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct VehicleTypeParameters {
     pub estimated_avg_speed: f32,
     pub estimated_sum_intensity: u32
 }
 
+#[utoipa::path(
+    get,
+    tag = "Statistics",
+    path = "/api/stats/all",
+    responses(
+        (status = 200, description = "List of detections zones", body = AllZonesStats)
+    )
+)]
 pub async fn all_zones_stats(data: web::Data<APIStorage>) -> Result<HttpResponse, Error> {
     let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
     let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
@@ -56,13 +65,13 @@ pub async fn all_zones_stats(data: web::Data<APIStorage>) -> Result<HttpResponse
 }
 
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct AllZonesRealtimeStatistics {
     pub equipment_id: String,
     pub data: Vec<ZoneRealtime>
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ZoneRealtime {
     pub lane_number: u16,
     pub lane_direction: u8,
@@ -70,6 +79,14 @@ pub struct ZoneRealtime {
     pub occupancy: u16
 }
 
+#[utoipa::path(
+    get,
+    tag = "Statistics",
+    path = "/api/realtime/occupancy",
+    responses(
+        (status = 200, description = "List of detections zones", body = AllZonesRealtimeStatistics)
+    )
+)]
 pub async fn all_zones_occupancy(data: web::Data<APIStorage>) -> Result<HttpResponse, Error> {
     let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
     let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
