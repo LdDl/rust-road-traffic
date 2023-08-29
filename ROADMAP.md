@@ -12,8 +12,8 @@
 * Additional functionality
     * ~~Usage of custom implementation (via [nalgebra](https://github.com/dimforge/nalgebra)) of Kalman filter~~
     * ~~Tracking via custom implementation of Kalman filter~~
-    * Usage of OpenCV-based Kalman filter *Need help to figure it out. PR's are welcome* 
-    * Tracking via OpenCV-based Kalman filter *PR's are welcome: for both constant velocity model and acceleration model*
+    * ~~Usage of OpenCV-based Kalman filter~~ *Not needed*
+    * ~~Tracking via OpenCV-based Kalman filter~~ *Not needed*
     * ~~Spatial converter~~
         * ~~Tranform matrix~~
         * ~~Convert function~~
@@ -34,11 +34,11 @@
         * ~~Check if point is in polygon~~
         * ~~Check if point has entered into polygon~~
         * ~~Check if point has left polygon~~
-    * Hashmap and timer for estimating average values of traffic (speed, intensity) __W.I.P.__
+    * ~~Hashmap and timer for estimating average values of traffic (speed, intensity)~~
         * ~~ Hashmap and thread ~~
         * ~~ Reset values ~~
         * ~~ Time intervals (threads) ~~
-        * Refactor
+        * ~~Refactor~~
     * ~~Optional choice between Tiny YOLO and MobilenetSSD(Caffe)~~[removed]
     * ~~Fill Jetson Nano instructions~~
     * ~~Estimate speed and intensity for each vehicle type~~

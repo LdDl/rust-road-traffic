@@ -1,15 +1,15 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PolygonsGeoJSON {
+pub struct ZonesFeatureCollection {
     #[serde(rename(serialize = "type"))]
     pub typ: String,
-    pub features: Vec<PolygonFeatureGeoJSON>
+    pub features: Vec<ZoneFeature>
 }
 
-impl PolygonsGeoJSON {
+impl ZonesFeatureCollection {
     pub fn new() -> Self {
-        return PolygonsGeoJSON {
+        return ZonesFeatureCollection {
             typ: "FeatureCollection".to_string(),
             features: vec![]
         }
@@ -17,16 +17,16 @@ impl PolygonsGeoJSON {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PolygonFeatureGeoJSON {
+pub struct ZoneFeature {
     #[serde(rename(serialize = "type"))]
     pub typ: String,
     pub id: String,
-    pub properties: PolygonFeaturePropertiesGeoJSON,
+    pub properties: ZonePropertiesGeoJSON,
     pub geometry: GeoPolygon,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PolygonFeaturePropertiesGeoJSON {
+pub struct ZonePropertiesGeoJSON {
     pub road_lane_num: u16,
     pub road_lane_direction: u8,
     pub coordinates: Vec<Vec<i32>>,

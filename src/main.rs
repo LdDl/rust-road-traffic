@@ -1,3 +1,4 @@
+use chrono::Utc;
 use opencv::{
     prelude::*,
     core::Scalar,
@@ -16,25 +17,24 @@ use opencv::{
     imgcodecs::imencode,
     dnn::DNN_BACKEND_CUDA,
     dnn::DNN_TARGET_CUDA,
+    dnn::Net,
     dnn::read_net,
-    dnn::blob_from_image
-};
-
-use chrono::{
-    Utc,
-    Duration
+    dnn::blob_from_image,
 };
 
 mod lib;
-use lib::tracking::{
-    KalmanBlobiesTracker,
-};
 use lib::data_storage::{
-    DataStorage
+    new_datastorage,
+};
+use lib::draw;
+use lib::tracker::{
+    Tracker,
+    SpatialInfo
 };
 use lib::detection::{
     process_yolo_detections
 };
+use lib::zones::Zone;
 
 mod settings;
 use settings::{
@@ -47,8 +47,7 @@ use video_capture::{
     ThreadedFrame
 };
 
-mod publisher;
-use publisher::{
+use lib::publisher::{
     RedisConnection
 };
 
@@ -56,146 +55,105 @@ use lib::rest_api;
 
 use std::env;
 use std::time::Duration as STDDuration;
+use std::time::{SystemTime};
 use std::process;
 use std::time::Instant;
 use std::io::Write;
 use std::thread;
 use std::sync::{Arc, RwLock, mpsc};
-
+use std::error::Error;
+use std::error;
+use std::fmt;
 use ctrlc;
+
+use crate::lib::spatial::meters_to_lonlat;
+use crate::lib::spatial::lonlat_to_meters;
+use crate::lib::{data_storage, zones};
 
 const VIDEOCAPTURE_POS_MSEC: i32 = 0;
 const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
+const BLOB_SCALE: f64 = 1.0 / 255.0;
+const BLOB_NAME: &'static str = "";
+const EMPTY_FRAMES_LIMIT: u16 = 60;
 
-fn run(config_file: &str) -> opencv::Result<()> {
-
-    let app_settings = AppSettings::new_settings(config_file);
-    let settings_cloned = app_settings.clone();
-    let path_clone = config_file.to_owned();
-
-    println!("Settings are:\n\t{}", app_settings);
-
-    let output_width: i32 = app_settings.output.width;
-    let output_height: i32 = app_settings.output.height;
-    let conf_threshold: f32 = app_settings.detection.conf_threshold;
-    let nms_threshold: f32 = app_settings.detection.nms_threshold;
-    let max_points_in_track: usize = app_settings.tracking.max_points_in_track;
-    let default_scalar: Scalar = Scalar::new(0.0, 0.0, 0.0, 0.0);
-
-    // Define default tracker for detected objects (blobs storage)
-    let mut tracker = KalmanBlobiesTracker::default();
-
-    let video_src = &app_settings.input.video_src;
-    let weights_src = &app_settings.detection.network_weights;
-    let cfg_src = &app_settings.detection.network_cfg;
-    let window = &app_settings.output.window_name;
-    let verbose_dbg = match app_settings.debug {
-        Some(x) => { x.enable },
-        None => { false }
-    };
-
-    let convex_polygons = DataStorage::new_with_id(app_settings.equipment_info.id);
-    let convex_polygons_arc = Arc::new(RwLock::new(convex_polygons));
-
-    let convex_polygons_populate = convex_polygons_arc.clone();
-    let scale_x = match app_settings.input.scale_x {
-        Some(x) => { x },
-        None => { 1.0 }
-    };
-    let scale_y = match app_settings.input.scale_y {
-        Some(y) => { y },
-        None => { 1.0 }
-    };
-    for road_lane in app_settings.road_lanes.iter() {
-        let mut polygon = road_lane.convert_to_convex_polygon();
-        polygon.scale_geom(scale_x, scale_y);    
-        polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
-        let guarded = convex_polygons_populate.write().unwrap();
-        guarded.insert_polygon(polygon);
-        drop(guarded);
+fn get_sys_time_in_secs() -> u64 {
+    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(n) => n.as_secs(),
+        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
     }
-    let worker_reset_millis = app_settings.worker.reset_data_milliseconds;
-    let convex_polygons_analytics = convex_polygons_arc.clone();
-    thread::spawn(move || {
-        DataStorage::start_data_worker_thread(convex_polygons_analytics, worker_reset_millis, verbose_dbg);
-    });
+}
 
-    if app_settings.redis_publisher.enable {
-        let convex_polygons_redis = convex_polygons_arc.clone();
-        let redis_host = app_settings.redis_publisher.host;
-        let redis_port = app_settings.redis_publisher.port;
-        let redis_password = app_settings.redis_publisher.password;
-        let redis_db_index = app_settings.redis_publisher.db_index;
-        let redis_channel = app_settings.redis_publisher.channel_name;
-        thread::spawn(move || {
-            let mut redis_conn = match redis_password.chars().count() {
-                0 => {
-                    RedisConnection::new(redis_host, redis_port, redis_db_index)
-                },
-                _ => {
-                    RedisConnection::new_with_password(redis_host, redis_port, redis_db_index, redis_password)
-                }
-            };
-            if redis_channel.chars().count() != 0 {
-                redis_conn.set_channel(redis_channel);
-            }
-            redis_conn.start_worker(convex_polygons_redis, worker_reset_millis);
-        });
-    }
-
-    let convex_polygons_cv = convex_polygons_arc.clone();
-    let convex_polygons_cv_read = convex_polygons_cv.read().unwrap();
-    let convex_polygons_cloned = convex_polygons_cv_read.clone_polygons_arc();
-    drop(convex_polygons_cv_read);
-
-    // Prepare output window
-    if app_settings.output.enable {
-        match named_window(window, 1) {
-            Ok(_) => {},
-            Err(err) =>{
-                panic!("Can't give a name to output window due the error: {:?}", err)
-            }
-        };
-        match resize_window(window, output_width, output_height) {
-            Ok(_) => {},
-            Err(err) =>{
-                panic!("Can't resize output window due the error: {:?}", err)
-            }
+#[derive(Debug)]
+struct AppVideoError{typ: i16}
+impl fmt::Display for AppVideoError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.typ {
+            1 => write!(f, "Can't open video"),
+            2 => write!(f, "Can't make probe for video"),
+            _ => write!(f, "Undefined application video error")
         }
     }
-    println!("Available <videoio> backends: {:?}", get_backends()?);
+}
 
-    // Check if CUDA is an option at all
+#[derive(Debug)]
+enum AppError {
+    VideoError(AppVideoError),
+    OpenCVError(opencv::Error),
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AppError::VideoError(e) => write!(f, "{}", e),
+            AppError::OpenCVError(e) => write!(f, "{}", e),
+        }
+    }
+}
+
+impl From<AppVideoError> for AppError {
+    fn from(e: AppVideoError) -> Self {
+        AppError::VideoError(e)
+    }
+}
+
+impl From<opencv::Error> for AppError {
+    fn from(e: opencv::Error) -> Self {
+        AppError::OpenCVError(e)
+    }
+}
+
+fn probe_video(capture: &mut VideoCapture) ->  Result<(f32, f32, f32), AppError> {
+    let fps = capture.get(opencv::videoio::CAP_PROP_FPS)? as f32;
+    let frame_cols = capture.get(opencv::videoio::CAP_PROP_FRAME_WIDTH)? as f32;
+    let frame_rows = capture.get(opencv::videoio::CAP_PROP_FRAME_HEIGHT)? as f32;
+
+    // Is it better to get width/height from frame information?
+    // let mut frame = Mat::default();
+    // match capture.read(&mut frame) {
+    //     Ok(_) => {},
+    //     Err(_) => {
+    //         return Err(AppError::VideoError(AppVideoError{typ: 2}));
+    //     }
+    // };
+    // let frame_cols = frame.cols() as f32;
+    // let frame_rows = frame.rows() as f32;
+    return Ok((frame_cols, frame_rows, fps));
+}
+
+fn prepare_neural_net(weights: &str, configuration: &str) -> Result<(Net, Vector<String>), AppError> {
+    let mut neural_net = match read_net(weights, configuration, "Darknet"){
+        Ok(result) => result,
+        Err(err) => {
+            panic!("Can't read network '{}' (with cfg '{}') due the error: {:?}", weights, configuration, err);
+        }
+    };
+
+    let out_layers_names = neural_net.get_unconnected_out_layers_names()?;
+
+    /* Check if CUDA is an option at all */
     let cuda_count = get_cuda_enabled_device_count()?;
     let cuda_available = cuda_count > 0;
-    println!("CUDA is {}", if cuda_available { "available" } else { "not available" });
-    
-    // Prepare video
-    let mut video_capture = get_video_capture(video_src, app_settings.input.typ);
-    let opened = VideoCapture::is_opened(&video_capture)?;
-    if !opened {
-        panic!("Unable to open video '{}'", video_src);
-    }
-
-    // Prepare neural network
-    let mut neural_net = match read_net(weights_src, cfg_src, "Darknet"){
-        Ok(result) => result,
-        Err(err) => {
-            panic!("Can't read network '{}' (with cfg '{}') due the error: {:?}", weights_src, cfg_src, err);
-        }
-    };
-    let blob_scale = 1.0/255.0;
-    let net_size = Size::new(app_settings.detection.net_width, app_settings.detection.net_height);
-    let blob_mean = default_scalar;
-    let blob_name = "";
-    let coco_classnames = app_settings.detection.net_classes;
-
-    let out_layers_names = match neural_net.get_unconnected_out_layers_names() {
-        Ok(result) => result,
-        Err(err) => {
-            panic!("Can't get output layers names of neural network due the error: {:?}", err);
-        }
-    };
+    println!("CUDA is {}", if cuda_available { "'available'" } else { "'not available'" });
 
     // Initialize CUDA back-end if possible
     if cuda_available {
@@ -212,57 +170,141 @@ fn run(config_file: &str) -> opencv::Result<()> {
             }
         }
     }
-    
-    let mut frame = Mat::default();
-    let mut resized_frame = Mat::default();
-    let mut detections = Vector::<Mat>::new();
 
-    /* Read first frame to determine image width/height */
-    match video_capture.read(&mut frame) {
-        Ok(_) => {},
-        Err(_) => {
-            panic!("Can't read first frame");
-        }
+    Ok((neural_net, out_layers_names))
+}
+
+fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neural_net: &mut Net, neural_net_out_layers: Vector<String>, verbose: bool) -> Result<(), AppError> {
+    println!("Verbose is '{}'", verbose);
+    println!("REST API is '{}'", settings.rest_api.enable);
+    println!("Redis publisher is '{}'", settings.redis_publisher.enable);
+
+    let enable_mjpeg = match &settings.rest_api.mjpeg_streaming {
+        Some(v) => { v.enable & settings.rest_api.enable} // Logical 'And' to prevent MJPEG when API is disabled
+        None => { false }
     };
-    let frame_cols = frame.cols() as f32;
-    let frame_rows = frame.rows() as f32;
-    let mut last_ms: f64 = 0.0;
-	let mut last_time = Utc::now();
-    
-    println!("Waiting for Ctrl-C...");
+
+    println!("MJPEG is '{}'", enable_mjpeg);
+
+    /* Preprocess spatial data */
+    let data_storage = new_datastorage(settings.equipment_info.id.clone(), verbose);
+
+    let scale_x = match settings.input.scale_x {
+        Some(x) => { x },
+        None => { 1.0 }
+    };
+    let scale_y = match settings.input.scale_y {
+        Some(y) => { y },
+        None => { 1.0 }
+    };
+    for road_lane in settings.road_lanes.iter() {
+        let mut polygon = Zone::from(road_lane);
+        polygon.scale_geom(scale_x, scale_y);    
+        polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
+        match data_storage.write().unwrap().insert_zone(polygon) {
+            Ok(_) => {},
+            Err(err) => {
+                panic!("Can't insert zone due the error {:?}", err);
+            }
+        };
+    }
+
+    // let data_storage_threaded = data_storage.clone();
+
+    println!("Press `Ctrl-C` to stop main programm");
     ctrlc::set_handler(move || {
-        println!("\nCtrl+C has been pressed! Exit in 2 seconds");
+        println!("Ctrl+C has been pressed! Exit in 2 seconds");
         thread::sleep(STDDuration::from_secs(2));
         process::exit(1);
-    }).expect("\nError setting Ctrl-C handler");
+    }).expect("Error setting `Ctrl-C` handler");
 
-    let (tx, rx) = mpsc::sync_channel(25);
-    let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(25);
-    // Enable REST (and MJPEG optionally) if needed
-    let mut enable_mjpeg = false;
-    match app_settings.rest_api.mjpeg_streaming {
-        Some(v) => {
-            enable_mjpeg = v.enable;
+    /* Start statistics ("threading" is obsolete because of business-logic error) */
+    let reset_time = settings.worker.reset_data_milliseconds;
+    let next_reset = reset_time as f32 / 1000.0;
+    let ds_worker = data_storage.clone();
+    
+    /* Redis publisher */
+    let redis_enabled = settings.redis_publisher.enable;
+    let redis_worker = data_storage.clone();
+    let redis_conn = match redis_enabled {
+        true => {
+            let redis_host = settings.redis_publisher.host.to_owned();
+            let redis_port = settings.redis_publisher.port;
+            let redis_password = settings.redis_publisher.password.to_owned();
+            let redis_db_index = settings.redis_publisher.db_index;
+            let redis_channel = settings.redis_publisher.channel_name.to_owned();
+            let mut redis_conn = match redis_password.chars().count() {
+                0 => {
+                    RedisConnection::new(redis_host, redis_port, redis_db_index, redis_worker)
+                },
+                _ => {
+                    RedisConnection::new_with_password(redis_host, redis_port, redis_db_index, redis_password, redis_worker)
+                }
+            };
+            if redis_channel.chars().count() != 0 {
+                redis_conn.set_channel(redis_channel);
+            }
+            Some(redis_conn)
         },
-        None => { }
-    }
-    if app_settings.rest_api.enable {
-        let server_host = app_settings.rest_api.host;
-        let server_port = app_settings.rest_api.back_end_port;
-        let convex_polygons_rest = convex_polygons_arc.clone();
+        false => {
+            None
+        }
+    };
+
+    /* Start REST API if needed */ 
+    let overwrite_file = path_to_config.to_string();
+    let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(0);
+    if settings.rest_api.enable {
+        let settings_clone = settings.clone();
+        let ds_api = data_storage.clone();
         thread::spawn(move || {
-            match rest_api::start_rest_api(server_host, server_port, convex_polygons_rest, enable_mjpeg, rx_mjpeg, settings_cloned, &path_clone) {
+            match rest_api::start_rest_api(settings_clone.rest_api.host.clone(), settings_clone.rest_api.back_end_port, ds_api, enable_mjpeg, rx_mjpeg, settings_clone, &overwrite_file) {
                 Ok(_) => {},
                 Err(err) => {
-                    panic!("Can't start API due the error: {:?}", err)
+                    println!("Can't start API due the error: {:?}", err)
                 }
             }
         });
     }
 
+    /* Probe video */
+    let mut video_capture = get_video_capture(&settings.input.video_src, settings.input.typ.clone());
+    let opened = VideoCapture::is_opened(&video_capture).map_err(|err| AppError::from(err))?;
+    if !opened {
+        return Err(AppError::VideoError(AppVideoError{typ: 1}))
+    }
+    let (width, height, fps) = probe_video(&mut video_capture)?;
+    println!("Video probe: {{Width: {width}px | Height: {height}px | FPS: {fps}}}");
+    // Create imshow() if needed
+    let window = &settings.output.window_name;
+    let output_width: i32 = settings.output.width;
+    let output_height: i32 = settings.output.height;
+    if settings.output.enable {
+        match named_window(window, 1) {
+            Ok(_) => {},
+            Err(err) =>{
+                panic!("Can't give a name to output window due the error: {:?}", err)
+            }
+        };
+        match resize_window(window, output_width, output_height) {
+            Ok(_) => {},
+            Err(err) =>{
+                panic!("Can't resize output window due the error: {:?}", err)
+            }
+        }
+    }
+
+    /* Start capture loop */
+    let (tx_capture, rx_capture): (mpsc::SyncSender<ThreadedFrame>, mpsc::Receiver<ThreadedFrame>) = mpsc::sync_channel(0);
     thread::spawn(move || {
+        let mut frames_counter: f32 = 0.0;
+        let mut total_seconds: f32 = 0.0;
+        let mut empty_frames_countrer: u16 = 0;
+        // @experimental
+        let skip_every_n_frame = 2;
+        // @todo: remove hardcode
+        // let fps = 18.0;
         loop {
-            let capture_now = Instant::now();
             let mut read_frame = Mat::default();
             match video_capture.read(&mut read_frame) {
                 Ok(_) => {},
@@ -272,160 +314,244 @@ fn run(config_file: &str) -> opencv::Result<()> {
                 }
             };
             if read_frame.empty() {
+                if verbose {
+                    println!("[WARNING]: Empty frame");
+                }
+                empty_frames_countrer += 1;
+                if empty_frames_countrer >= EMPTY_FRAMES_LIMIT {
+                    println!("Too many empty frames");
+                    break
+                }
                 continue;
             }
-            /* Evaluate time difference */
-            let current_ms = video_capture.get(VIDEOCAPTURE_POS_MSEC).unwrap();
-            let ms_diff = current_ms - last_ms;
-            let sec_diff = ms_diff / 1000.0;
-            let prev_time = last_time;
-            last_time = prev_time + Duration::milliseconds(ms_diff as i64);
-            last_ms = current_ms;
-            let elapsed_capture = capture_now.elapsed().as_millis() as f32;
+            frames_counter += 1.0;
+            let second_fraction = total_seconds + (frames_counter / fps);
+            if frames_counter >= fps {
+                total_seconds += 1.0;
+                frames_counter = 0.0;
+            }
+            if frames_counter as i32 % skip_every_n_frame != 0 {
+                continue;
+            }
+            // println!("Frame {frames_counter} | Second: {total_seconds} | Fraction: {second_fraction}");
+
 
             /* Send frame and capture info */
-            if enable_mjpeg {
-                let mut buffer = Vector::<u8>::new();
-                let params = Vector::<i32>::new();
-                let encoded = imencode(".jpg", &read_frame, &mut buffer, &params).unwrap();
-                if !encoded {
-                    println!("image has not been encoded");
-                    continue;
-                }
-                match tx_mjpeg.send(buffer) {
-                    Ok(_)=>{},
-                    Err(_err) => {
-                        // Closed channel?
-                        // println!("Error on send frame to MJPEG thread: {}", _err)
-                    }
-                };
-            }
-            match tx.send(ThreadedFrame{
+            let frame = ThreadedFrame{
                 frame: read_frame,
-                sec_diff: sec_diff,
-                last_time: last_time,
-                capture_millis: elapsed_capture,
-            }) {
+                current_second: second_fraction,
+            };
+
+            match tx_capture.send(frame) {
                 Ok(_)=>{},
                 Err(_err) => {
                     // Closed channel?
                     // println!("Error on send frame to detection thread: {}", _err)
                 }
             };
+
+            // println!("Total seconds: {}", total_seconds);
+            if total_seconds >= next_reset {
+                println!("Reset timer due analytics. Current local time is: {}", second_fraction);
+                total_seconds = 0.0;
+                let mut ds_writer = ds_worker.write().expect("Bad DS");
+                if ds_writer.period_end == ds_writer.period_start {
+                    // First iteration
+                    ds_writer.period_end = Utc::now();
+                    ds_writer.period_start = ds_writer.period_end - chrono::Duration::milliseconds(reset_time);
+                } else {
+                    // Next iterations
+                    ds_writer.period_start = ds_writer.period_end;
+                    ds_writer.period_end = ds_writer.period_end + chrono::Duration::milliseconds(reset_time);
+                }
+                
+                match ds_writer.update_statistics() {
+                    Ok(_) => {
+                        // Do not forget to drop mutex explicitly since we possible need to work with DS in REST API and Redis
+                        drop(ds_writer)
+                    },
+                    Err(err) => {
+                        println!("Can't update statistics due the error: {}", err);
+                    }
+                }
+                if redis_enabled {
+                    redis_conn.as_ref().unwrap().push_statistics();
+                }
+            }
         }
+        match video_capture.release() {
+            Ok(_) => {
+                println!("Video capture has been closed successfully");
+            },
+            Err(err) => {
+                println!("Can't release video capturer due the error: {}", err);
+            }
+        };
     });
 
-    for received in rx {
-        let mut frame = received.frame.clone();
+    /* Detection thread */
+    let net_size = Size::new(settings.detection.net_width, settings.detection.net_height);
+    let blob_mean: Scalar = Scalar::new(0.0, 0.0, 0.0, 0.0);
+    let mut detections = Vector::<Mat>::new();
+    let conf_threshold: f32 = settings.detection.conf_threshold;
+    let nms_threshold: f32 = settings.detection.nms_threshold;
+    let coco_classnames = &settings.detection.net_classes;
+    let max_points_in_track: usize = settings.tracking.max_points_in_track;
+    let mut resized_frame = Mat::default();
 
-        let blobimg = blob_from_image(&frame, blob_scale, net_size, blob_mean, true, false, CV_32F)?;
-        match neural_net.set_input(&blobimg, blob_name, 1.0, default_scalar) {
+    let ds_tracker = data_storage.clone();
+    
+    let tracker_dt = (1.0/fps) as f32;
+
+    /* Can't create colors as const/static currently */
+    let trajectory_scalar: Scalar = Scalar::from((0.0, 255.0, 0.0));
+    let trajectory_scalar_inverse: Scalar = draw::invert_color(&trajectory_scalar);
+    let bbox_scalar: Scalar = Scalar::from((0.0, 255.0, 0.0));
+    let bbox_scalar_inverse:Scalar = draw::invert_color(&bbox_scalar);
+    let id_scalar: Scalar = Scalar::from((0.0, 255.0, 0.0));
+    let id_scalar_inverse: Scalar = draw::invert_color(&id_scalar);
+    for received in rx_capture {
+        // println!("Received frame from capture thread: {}", received.current_second);
+        let mut frame = received.frame.clone();
+        let blobimg = blob_from_image(&frame, BLOB_SCALE, net_size, blob_mean, true, false, CV_32F)?;
+        match neural_net.set_input(&blobimg, BLOB_NAME, 1.0, blob_mean) {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't set input of neural network due the error {:?}", err);
+                continue;
+            }
+        };
+        
+        match neural_net.forward(&mut detections, &neural_net_out_layers) {
+            Ok(_) => {},
+            Err(err) => {
+                println!("Can't process input of neural network due the error {:?}", err);
+                continue;
+            }
+        }
+        
+        /* Process detected objects and match them to existing ones */
+        let mut tmp_detections = process_yolo_detections(
+            &detections,
+            conf_threshold,
+            nms_threshold,
+            width,
+            height,
+            max_points_in_track,
+            &coco_classnames,
+            COCO_FILTERED_CLASSNAMES,
+            tracker_dt,
+        );
+
+        match tracker.match_objects(&mut tmp_detections, received.current_second) {
+            Ok(_) => {},
+            Err(err) => {
+                println!("Can't match objects due the error: {:?}", err);
+                continue;
             }
         };
 
-        let detection_now = Instant::now();
-        match neural_net.forward(&mut detections, &out_layers_names) {
-            Ok(_) => {
-                let mut tmp_blobs = process_yolo_detections(
-                    &detections,
-                    conf_threshold,
-                    nms_threshold,
-                    frame_cols,
-                    frame_rows,
-                    max_points_in_track,
-                    &coco_classnames,
-                    COCO_FILTERED_CLASSNAMES,
-                    received.last_time,
-                    received.sec_diff,
-                );
+        let ds_guard = ds_tracker.read().expect("DataStorage is poisoned [RWLock]");
+        let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
+        
+        // Reset current occupancy for zones 
+        let current_ut = get_sys_time_in_secs();
+        for (_, zone_guarded) in zones.iter() {
+            let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
+            zone.current_statistics.occupancy = 0;
+            zone.current_statistics.last_time = current_ut;
+            drop(zone);
+        }
 
-                // Match blobs
-                tracker.match_to_existing(&mut tmp_blobs);
+        for (object_id, object_extra) in tracker.objects_extra.iter_mut() {
+            let object = tracker.engine.objects.get(object_id).unwrap();
+            if object.get_no_match_times() > 1 {
+                // Skip, since object is lost for a while
+                // println!("Object {} is lost for a while", object_id);
+                continue;
+            }
 
-                // Run through the blobs and check if some of them either entered or left road lanes polygons
-                for (_, b) in tracker.objects.iter_mut() {
-                    let n = b.get_track().len();
-                    let blob_center = b.get_center();
-                    if n > 2 {
-                        let blob_id = b.get_id();
-                        let mut convex_polygons_write = convex_polygons_cloned.write().expect("RwLock poisoned");
-                        for (_, v) in convex_polygons_write.iter_mut() {
-                            let mut polygon = v.lock().expect("Mutex poisoned");
-                            let contains_blob = polygon.contains_cv_point(&blob_center);
-                            if contains_blob {
-                                b.estimate_speed_mut(&polygon.spatial_converter);
-                                // If blob is not registered in polygon
-                                if !polygon.blob_registered(&blob_id) {
-                                    // Register it
-                                    polygon.register_blob(blob_id);
-                                }
-                                b.estimate_speed_mut(&polygon.spatial_converter);
-                            } else {
-                                // Otherwise
-                                // If blob is registered in polygon and left it (since contains_blob == false)
-                                if polygon.blob_registered(&blob_id) {
-                                    polygon.deregister_blob(&blob_id);
-                                    polygon.increment_intensity(b.get_class_name());
-                                    polygon.consider_speed(b.get_class_name(), b.get_avg_speed());
-                                }
-                            }
-                            drop(polygon);
-                        }
-                        drop(convex_polygons_write);
-                    }
-                    if app_settings.output.enable {
-                        b.draw_track(&mut frame, Scalar::from((0.0, 255.0, 0.0)));
-                        b.draw_center(&mut frame, Scalar::from((255.0, 0.0, 0.0)));
-                        // b.draw_predicted(&mut frame);
-                        b.draw_rectangle(&mut frame, Scalar::from((0.0, 255.0, 0.0)));
-                        b.draw_class_name(&mut frame, Scalar::from((0.0, 255.0, 255.0)));
-                        b.draw_speed(&mut frame, Scalar::from((255.0, 0.0, 255.0)));
-                        b.draw_id(&mut frame, Scalar::from((255.0, 255.0, 0.0)));
+            let times = &object_extra.times;
+            let last_time = times[times.len() - 1];
+
+            let track: &Vec<mot_rs::utils::Point> = object.get_track();
+            let last_point = &track[track.len() - 1];
+
+            // Check if object is inside of any polygon
+            for (_, zone_guarded) in zones.iter() {
+                let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
+                if !zone.contains_point(last_point.x, last_point.y) {
+                    continue
+                }
+                zone.current_statistics.occupancy += 1; // Increment current load to match number of objects in zone
+                let projected_pt = zone.project_to_skeleton(last_point.x, last_point.y);
+                let pixels_per_meters = zone.get_skeleton_ppm();
+                match object_extra.spatial_info {
+                    Some(ref mut spatial_info) => {
+                        spatial_info.update_avg(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1, pixels_per_meters);
+                        zone.register_or_update_object(object_id.clone(), spatial_info.speed, object_extra.get_classname());
+                    },
+                    None => {
+                        object_extra.spatial_info = Some(SpatialInfo::new(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1));
+                        zone.register_or_update_object(object_id.clone(), -1.0, object_extra.get_classname());
                     }
                 }
             }
-            Err(err) => {
-                println!("Can't process input of neural network due the error {:?}", err);
-            }
         }
-        let elapsed_detection = detection_now.elapsed().as_millis();
-
-        if app_settings.output.enable {
-            let convex_polygons_read = convex_polygons_cloned.read().expect("RwLock poisoned");
-            for (_, v) in convex_polygons_read.iter() {
+        if enable_mjpeg || settings.output.enable {
+            for (_, v) in zones.iter() {
                 let polygon = v.lock().expect("Mutex poisoned");
                 polygon.draw_geom(&mut frame);
-                polygon.draw_params(&mut frame);
-                drop(polygon);
-            }
-            drop(convex_polygons_read);
-            match resize(&mut frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
-                Ok(_) => {},
-                Err(err) => {
-                    panic!("Can't resize output frame due the error {:?}", err);
-                }
-            }
-            if resized_frame.size()?.width > 0 {
-                imshow(window, &mut resized_frame)?;
-            }
-            let key = wait_key(10)?;
-            if key > 0 && key != 255 {
-                break;
+                polygon.draw_skeleton(&mut frame);
+                polygon.draw_current_intensity(&mut frame);
             }
         }
 
-        if verbose_dbg {
-            print!("\rСapturing process millis: {} | Detection process millis: {} | Average FPS of detection process: {}", received.capture_millis, elapsed_detection, 1000.0 / elapsed_detection as f32);
-            match std::io::stdout().flush() {
-                Ok(_) => {},
-                Err(err) => {
-                    panic!("There is a problem with stdout().flush(): {}", err);
+        // We need drop here explicitly, since we need to release lock on zones for MJPEG / REST API / Redis publisher and statistics threads
+        drop(zones);
+        drop(ds_guard);
+        
+        /* Imshow + re-stream input video as MJPEG */
+        if enable_mjpeg || settings.output.enable {
+            draw::draw_trajectories(&mut frame, &tracker, trajectory_scalar, trajectory_scalar_inverse);
+            draw::draw_bboxes(&mut frame, &tracker, bbox_scalar, bbox_scalar_inverse);
+            draw::draw_identifiers(&mut frame, &tracker, id_scalar, id_scalar_inverse);
+            draw::draw_speeds(&mut frame, &tracker, id_scalar, id_scalar_inverse);
+            draw::draw_projections(&mut frame, &tracker, id_scalar, id_scalar_inverse);
+            
+            if settings.output.enable {
+                match resize(&mut frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
+                    Ok(_) => {},
+                    Err(err) => {
+                        panic!("Can't resize output frame due the error {:?}", err);
+                    }
+                }
+                if resized_frame.size()?.width > 0 {
+                    imshow(window, &mut resized_frame)?;
+                }
+                let key = wait_key(10)?;
+                if key == 27 /* esc */ || key == 115 /* s */ || key == 83 /* S */ {
+                    break;
+                }
+            }
+        }
+        if enable_mjpeg {
+            let mut buffer = Vector::<u8>::new();
+            let params = Vector::<i32>::new();
+            let encoded = imencode(".jpg", &frame, &mut buffer, &params).unwrap();
+            if !encoded {
+                println!("image has not been encoded");
+                continue;
+            }
+            match tx_mjpeg.send(buffer) {
+                Ok(_)=>{},
+                Err(_err) => {
+                    println!("Error on send frame to MJPEG thread: {}", _err)
                 }
             };
-        }  
+        }
+
+        
     }
     Ok(())
 }
@@ -441,10 +567,29 @@ fn main() {
             "./data/conf.toml"
         }
     };
-    match run(path_to_config) {
+    let app_settings = AppSettings::new(path_to_config);
+    println!("Settings are:\n\t{}", app_settings);
+
+    let mut tracker = Tracker::new(15, 0.3);
+    println!("Tracker is:\n\t{}", tracker);
+
+    let mut neural_net = match prepare_neural_net(&app_settings.detection.network_weights, &app_settings.detection.network_cfg) {
+        Ok(nn) => nn,
+        Err(err) => {
+            println!("Can't prepare neural network due the error: {}", err);
+            return
+        }
+    };
+
+    let verbose = match &app_settings.debug {
+        Some(x) => { x.enable },
+        None => { false }
+    };
+    
+    match run(&app_settings, path_to_config, &mut tracker, &mut neural_net.0, neural_net.1, verbose) {
         Ok(_) => {},
         Err(_err) => {
-            println!("Error: {}", _err);
+            println!("Error in main thread: {}", _err);
         }
     };
 }
