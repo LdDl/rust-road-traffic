@@ -33,7 +33,7 @@ pub fn init_routes(enable_mjpeg: bool) -> impl Fn(&mut web::ServiceConfig) {
                 .route("/ping", web::get().to(say_ping))
                 .service(
                     web::scope("/polygons")
-                    .route("/geojson", web::get().to(zones_list::polygons_list))
+                    .route("/geojson", web::get().to(zones_list::all_zones_list))
                 )
                 .service(
                     web::scope("/stats")
