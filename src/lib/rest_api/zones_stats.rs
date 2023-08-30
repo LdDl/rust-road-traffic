@@ -65,17 +65,17 @@ pub async fn all_zones_stats(data: web::Data<APIStorage>) -> Result<HttpResponse
 }
 
 
-/// Information about road traffic parameters in real-time for each detection zone
+/// Information about occupancy in real-time for each detection zone
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AllZonesRealtimeStatistics {
     /// Equipment identifier. Should match software configuration
     #[schema(example = "1e23985f-1fa3-45d0-a365-2d8525a23ddd")]
     pub equipment_id: String,
-    /// Set of detection zones and its realtime statistics
+    /// Set of detection zones and its realtime occupancy information
     pub data: Vec<ZoneRealtime>
 }
 
-/// Information about realtime statistics for the specific detection zone
+/// Information about realtime occupancy for the specific detection zone
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ZoneRealtime {
     /// Corresponding road lane number
