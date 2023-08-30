@@ -63,7 +63,7 @@ use utoipa_rapidoc::RapiDoc;
 #[derive(OpenApi)]
 #[openapi(
     paths(
-        zones_list::polygons_list,
+        zones_list::all_zones_list,
         zones_stats::all_zones_stats,
         zones_stats::all_zones_occupancy,
     ),
