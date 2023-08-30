@@ -6,24 +6,44 @@ use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use crate::lib::rest_api::APIStorage;
 
+/// Information about aggregated road traffic flow parameters for the equipment
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AllZonesStats {
+    /// Equipment identifier. Should match software configuration
+    #[schema(example = "1e23985f-1fa3-45d0-a365-2d8525a23ddd")]
     pub equipment_id: String,
+    /// Set of data with summary information about road traffic parameters for each detection zone
     pub data: Vec<ZoneStats>
 }
 
+/// Summary information for each detection zone
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ZoneStats {
+    /// Corresponding road lane number
+    #[schema(example = 2)]
     pub lane_number: u16,
+    /// Corresponding road lane direction
+    #[schema(example = 1)]
     pub lane_direction: u8,
+    /// Start time for the statistics aggeration
+    #[schema(value_type = String, example = "2023-01-02T15:00:00Z")]
     pub period_start: DateTime<Utc>,
+    /// End time for the statistics aggeration
+    #[schema(value_type = String, example = "2023-01-02T15:05:00Z")]
     pub period_end: DateTime<Utc>,
+    /// Statistic for every vehicle type. Key: vehicle type; Value - road traffic flow parameters
+    #[schema(example = json!({"train":{"estimated_avg_speed":-1,"estimated_sum_intensity":0},"bus":{"estimated_avg_speed":15.2,"estimated_sum_intensity":2},"truck":{"estimated_avg_speed":20.965343,"estimated_sum_intensity":3},"car":{"estimated_avg_speed":23.004976,"estimated_sum_intensity":4},"motorbike":{"estimated_avg_speed":-1,"estimated_sum_intensity":0}  }))]
     pub statistics: HashMap<String, VehicleTypeParameters>
 }
 
+/// Road traffic parameters for specific vehicle type
 #[derive(Debug, Serialize, ToSchema)]
 pub struct VehicleTypeParameters {
+    /// Average speed of road traffic flow. Value "-1" indicates not vehicles detected at all.
+    #[schema(example = 32.1)]
     pub estimated_avg_speed: f32,
+    /// Summary road traffic flow (if it is needed could be extrapolated to the intensity: vehicles/hour)
+    #[schema(example = 15)]
     pub estimated_sum_intensity: u32
 }
 
