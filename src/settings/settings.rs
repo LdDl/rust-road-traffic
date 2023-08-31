@@ -68,11 +68,13 @@ pub struct RoadLanesSettings {
     pub geometry: Vec<[i32; 2]>,
     pub geometry_wgs84: Vec<[f32; 2]>,
     pub color_rgb: [i16; 3],
+    pub virtual_line: Option<VirtualLineSettings>
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct VirtualLineSettings {
     pub geometry: Vec<[i32; 2]>,
+    pub color_rgb: [i16; 3],
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -105,6 +107,7 @@ pub struct MJPEGStreamingSettings {
 }
 
 use crate::lib::zones::Zone;
+use crate::lib::zones::VirtualLine;
 use crate::lib::spatial::epsg::lonlat_to_meters;
 use opencv::core::Point2f;
 use opencv::core::Scalar;
@@ -130,6 +133,21 @@ impl From<&RoadLanesSettings> for Zone {
             })
             .collect();
 
+        let virtual_line = match setting.virtual_line {
+            Some(vl) => {
+                if vl.geometry.len() != 2{
+                    None
+                } else {
+                    let a = Point2f::new(vl.geometry[0][0] as f32, vl.geometry[0][1] as f32);
+                    let b = Point2f::new(vl.geometry[1][0] as f32, vl.geometry[1][0] as f32);
+                    Some(VirtualLine::new(a, b))
+                }
+            },
+            None => {
+                None
+            }
+        };
+
         Zone::new(
             format!("dir_{}_lane_{}", setting.lane_direction, setting.lane_number),
             geom,
@@ -137,7 +155,8 @@ impl From<&RoadLanesSettings> for Zone {
             geom_epsg3857,
             Scalar::from((setting.color_rgb[2] as f64, setting.color_rgb[1] as f64, setting.color_rgb[0] as f64)),
             setting.lane_number,
-            setting.lane_direction
+            setting.lane_direction,
+            virtual_line
         )
     }
 }

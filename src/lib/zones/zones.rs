@@ -147,6 +147,33 @@ impl Skeleton {
 }
 
 #[derive(Debug)]
+pub struct VirtualLine {
+    line: [Point2f; 2],
+    color: Scalar,
+}
+
+impl VirtualLine {
+    pub fn new(a: Point2f, b: Point2f) -> Self {
+        VirtualLine {
+            line: [a, b],
+            color: Scalar::from((0.0, 0.0, 0.0)),
+        }
+    }
+    pub fn default() -> Self {
+        VirtualLine {
+            line: [Point2f::default(), Point2f::default()],
+            color: Scalar::from((0.0, 0.0, 0.0)),
+        }
+    }
+    // is_left returns true if the given point is to the left side of the vertical AB or if the given point is above of the horizontal AB
+    pub fn is_left(&self, cx: f32, cy: f32) -> bool {
+        let a = self.line[0];
+        let b = self.line[1];
+        (b.x - a.x)*(cy - a.y) - (b.y - a.y)*(cx - a.x) > 0.0
+    }
+}
+
+#[derive(Debug)]
 pub struct Zone {
     pub id: String,
     pixel_coordinates: Vec<Point2f>,
@@ -160,6 +187,7 @@ pub struct Zone {
     objects_registered: Registered,
     pub current_statistics: RealTimeStatistics,
     skeleton: Skeleton,
+    virtual_line: Option<VirtualLine>
 }
 
 
@@ -187,9 +215,10 @@ impl Zone {
                 occupancy: 0
             },
             skeleton: Skeleton::default(),
+            virtual_line: None,
         }
     }
-    pub fn new(id: String, coordinates: Vec<Point2f>, spatial_coordinates_epsg4326: Vec<Point2f>, spatial_coordinates_epsg3857: Vec<Point2f>, color: Scalar, road_lane_num: u16, road_lane_direction: u8) -> Self {
+    pub fn new(id: String, coordinates: Vec<Point2f>, spatial_coordinates_epsg4326: Vec<Point2f>, spatial_coordinates_epsg3857: Vec<Point2f>, color: Scalar, road_lane_num: u16, road_lane_direction: u8, _virtual_line: Option<VirtualLine>) -> Self {
         let converter = SpatialConverter::new_from(coordinates.clone(), spatial_coordinates_epsg3857.clone());
         /* Eval distance between sides */
         let a = spatial_coordinates_epsg4326[0];
@@ -221,9 +250,10 @@ impl Zone {
                 occupancy: 0
             },
             skeleton: skeleton,
+            virtual_line: _virtual_line
         }
     }
-    pub fn new_from_cv_with_id(points: Vec<Point2f>, id: String) -> Self {
+    pub fn new_from_cv_with_id(points: Vec<Point2f>, id: String, _virtual_line: Option<VirtualLine>) -> Self {
         let skeleton_line = find_skeleton_line(&points, 0, 2); // 0-1 is first segment of polygon, 2-3 is second segment
         return Zone{
             id: id,
@@ -240,11 +270,12 @@ impl Zone {
                 last_time: 0,
                 occupancy: 0
             },
-            skeleton: Skeleton::new(skeleton_line[0], skeleton_line[1])
+            skeleton: Skeleton::new(skeleton_line[0], skeleton_line[1]),
+            virtual_line: _virtual_line
         }
     }
     pub fn default_from_cv(points: Vec<Point2f>) -> Self{
-        Zone::new_from_cv_with_id(points,"dir_0_lane_0".to_owned())
+        Zone::new_from_cv_with_id(points,"dir_0_lane_0".to_owned(), None)
     }
     pub fn get_id(&self) -> String {
         self.id.clone()
@@ -542,33 +573,6 @@ fn find_skeleton_line(coordinates: &Vec<Point2f>, first_line_idx: usize, second_
     [a_b_center, c_d_center]
 }
 
-#[derive(Debug)]
-struct VirtualLine {
-    line: [Point2f; 2],
-    color: Scalar,
-}
-
-impl VirtualLine {
-    fn new(a: Point2f, b: Point2f) -> Self {
-        VirtualLine {
-            line: [a, b],
-            color: Scalar::from((0.0, 0.0, 0.0)),
-        }
-    }
-    fn default() -> Self {
-        VirtualLine {
-            line: [Point2f::default(), Point2f::default()],
-            color: Scalar::from((0.0, 0.0, 0.0)),
-        }
-    }
-    // isLeft returns true if the given point is to the left side of the vertical AB or if the given point is above of the horizontal AB
-    pub fn isLeft(&self, cx: f32, cy: f32) -> bool {
-        let a = self.line[0];
-        let b = self.line[1];
-        (b.x - a.x)*(cy - a.y) - (b.y - a.y)*(cx - a.x) > 0.0
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -647,78 +651,78 @@ mod tests {
     fn test_vertical_line() {
         let vertical_line = VirtualLine::new(Point2f::new(4.0, 3.0), Point2f::new(5.0, 10.0));
         let c = Point2f::new(3.0, 8.0);
-        let is_left = vertical_line.isLeft(c.x, c.y);
+        let is_left = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_left);
 
         let c = Point2f::new(5.0, 10.0);
-        let is_left = vertical_line.isLeft(c.x, c.y);
+        let is_left = vertical_line.is_left(c.x, c.y);
         assert_eq!(false, is_left);
 
         let c = Point2f::new(4.0, 3.0);
-        let is_left = vertical_line.isLeft(c.x, c.y);
+        let is_left = vertical_line.is_left(c.x, c.y);
         assert_eq!(false, is_left);
 
         let c = Point2f::new(3.9, 3.0);
-        let is_left = vertical_line.isLeft(c.x, c.y);
+        let is_left = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_left);
 
         let c = Point2f::new(5.1, 4.0);
-        let is_left = vertical_line.isLeft(c.x, c.y);
+        let is_left = vertical_line.is_left(c.x, c.y);
         assert_eq!(false, is_left);
 
         let c = Point2f::new(35.1, 19.2);
-        let is_left = vertical_line.isLeft(c.x, c.y);
+        let is_left = vertical_line.is_left(c.x, c.y);
         assert_eq!(false, is_left);
 
         let c = Point2f::new(-5.0, 8.0);
-        let is_left = vertical_line.isLeft(c.x, c.y);
+        let is_left = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_left);
 
         let c = Point2f::new(6.0, -4.0);
-        let is_left = vertical_line.isLeft(c.x, c.y);
+        let is_left = vertical_line.is_left(c.x, c.y);
         assert_eq!(false, is_left);
 
         let c = Point2f::new(-2.0, -3.0);
-        let is_left = vertical_line.isLeft(c.x, c.y);
+        let is_left = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_left);
     }
     #[test]
     fn test_horizontal_line() {
         let vertical_line = VirtualLine::new(Point2f::new(4.0, 6.0), Point2f::new(9.0, 6.4));
         let c = Point2f::new(3.0, 8.0);
-        let is_above = vertical_line.isLeft(c.x, c.y);
+        let is_above = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_above);
 
         let c = Point2f::new(5.0, 3.0);
-        let is_above = vertical_line.isLeft(c.x, c.y);
+        let is_above = vertical_line.is_left(c.x, c.y);
         assert_eq!(false, is_above);
 
         let c = Point2f::new(0.0, 5.5);
-        let is_above = vertical_line.isLeft(c.x, c.y);
+        let is_above = vertical_line.is_left(c.x, c.y);
         assert_eq!(false, is_above);
 
         let c = Point2f::new(0.0, 6.5);
-        let is_above = vertical_line.isLeft(c.x, c.y);
+        let is_above = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_above);
 
         let c = Point2f::new(10.0, 5.5);
-        let is_above = vertical_line.isLeft(c.x, c.y);
+        let is_above = vertical_line.is_left(c.x, c.y);
         assert_eq!(false, is_above);
 
         let c = Point2f::new(35.1, 8.0);
-        let is_above = vertical_line.isLeft(c.x, c.y);
+        let is_above = vertical_line.is_left(c.x, c.y);
         assert_eq!(false, is_above);
 
         let c = Point2f::new(2.0, 6.5);
-        let is_above = vertical_line.isLeft(c.x, c.y);
+        let is_above = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_above);
 
         let c = Point2f::new(-2.0, 3.0);
-        let is_above = vertical_line.isLeft(c.x, c.y);
+        let is_above = vertical_line.is_left(c.x, c.y);
         assert_eq!(false, is_above);
 
         let c = Point2f::new(75.0, 15.0);
-        let is_above = vertical_line.isLeft(c.x, c.y);
+        let is_above = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_above);
     }
     #[test]
