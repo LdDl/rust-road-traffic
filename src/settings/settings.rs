@@ -71,6 +71,11 @@ pub struct RoadLanesSettings {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct VirtualLineSettings {
+    pub geometry: Vec<[i32; 2]>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WorkerSettings {
     pub reset_data_milliseconds: i64,
 }

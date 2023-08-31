@@ -542,6 +542,33 @@ fn find_skeleton_line(coordinates: &Vec<Point2f>, first_line_idx: usize, second_
     [a_b_center, c_d_center]
 }
 
+#[derive(Debug)]
+struct VirtualLine {
+    line: [Point2f; 2],
+    color: Scalar,
+}
+
+impl VirtualLine {
+    fn new(a: Point2f, b: Point2f) -> Self {
+        VirtualLine {
+            line: [a, b],
+            color: Scalar::from((0.0, 0.0, 0.0)),
+        }
+    }
+    fn default() -> Self {
+        VirtualLine {
+            line: [Point2f::default(), Point2f::default()],
+            color: Scalar::from((0.0, 0.0, 0.0)),
+        }
+    }
+    // isLeft returns true if the given point is to the left side of the vertical AB or if the given point is above of the horizontal AB
+    pub fn isLeft(&self, cx: f32, cy: f32) -> bool {
+        let a = self.line[0];
+        let b = self.line[1];
+        (b.x - a.x)*(cy - a.y) - (b.y - a.y)*(cx - a.x) > 0.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -614,6 +641,85 @@ mod tests {
             let answer = convex_polygon.contains_point(points[i].x, points[i].y);
             assert_eq!(answer, correct_answers[i]);
         }
+    }
+    
+    #[test]
+    fn test_vertical_line() {
+        let vertical_line = VirtualLine::new(Point2f::new(4.0, 3.0), Point2f::new(5.0, 10.0));
+        let c = Point2f::new(3.0, 8.0);
+        let is_left = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(true, is_left);
+
+        let c = Point2f::new(5.0, 10.0);
+        let is_left = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(false, is_left);
+
+        let c = Point2f::new(4.0, 3.0);
+        let is_left = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(false, is_left);
+
+        let c = Point2f::new(3.9, 3.0);
+        let is_left = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(true, is_left);
+
+        let c = Point2f::new(5.1, 4.0);
+        let is_left = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(false, is_left);
+
+        let c = Point2f::new(35.1, 19.2);
+        let is_left = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(false, is_left);
+
+        let c = Point2f::new(-5.0, 8.0);
+        let is_left = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(true, is_left);
+
+        let c = Point2f::new(6.0, -4.0);
+        let is_left = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(false, is_left);
+
+        let c = Point2f::new(-2.0, -3.0);
+        let is_left = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(true, is_left);
+    }
+    #[test]
+    fn test_horizontal_line() {
+        let vertical_line = VirtualLine::new(Point2f::new(4.0, 6.0), Point2f::new(9.0, 6.4));
+        let c = Point2f::new(3.0, 8.0);
+        let is_above = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(true, is_above);
+
+        let c = Point2f::new(5.0, 3.0);
+        let is_above = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(false, is_above);
+
+        let c = Point2f::new(0.0, 5.5);
+        let is_above = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(false, is_above);
+
+        let c = Point2f::new(0.0, 6.5);
+        let is_above = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(true, is_above);
+
+        let c = Point2f::new(10.0, 5.5);
+        let is_above = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(false, is_above);
+
+        let c = Point2f::new(35.1, 8.0);
+        let is_above = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(false, is_above);
+
+        let c = Point2f::new(2.0, 6.5);
+        let is_above = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(true, is_above);
+
+        let c = Point2f::new(-2.0, 3.0);
+        let is_above = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(false, is_above);
+
+        let c = Point2f::new(75.0, 15.0);
+        let is_above = vertical_line.isLeft(c.x, c.y);
+        assert_eq!(true, is_above);
     }
     #[test]
     fn test_object_entered_cv() {
