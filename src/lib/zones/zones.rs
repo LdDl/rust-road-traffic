@@ -157,7 +157,7 @@ pub struct Zone {
     pub road_lane_direction: u8,
     spatial_converter: SpatialConverter,
     pub statistics: Statistics,
-    objects: Registered,
+    objects_registered: Registered,
     pub current_statistics: RealTimeStatistics,
     skeleton: Skeleton,
 }
@@ -181,7 +181,7 @@ impl Zone {
             road_lane_direction: 0,
             spatial_converter: SpatialConverter::default(),
             statistics: Statistics::default(),
-            objects: HashMap::new(),
+            objects_registered: HashMap::new(),
             current_statistics: RealTimeStatistics{
                 last_time: 0,
                 occupancy: 0
@@ -215,7 +215,7 @@ impl Zone {
             road_lane_direction: road_lane_direction,
             spatial_converter: converter,
             statistics: Statistics::default(),
-            objects: HashMap::new(),
+            objects_registered: HashMap::new(),
             current_statistics: RealTimeStatistics{
                 last_time: 0,
                 occupancy: 0
@@ -235,7 +235,7 @@ impl Zone {
             road_lane_direction: 0,
             spatial_converter: SpatialConverter::default(),
             statistics: Statistics::default(),
-            objects: HashMap::new(),
+            objects_registered: HashMap::new(),
             current_statistics: RealTimeStatistics{
                 last_time: 0,
                 occupancy: 0
@@ -328,7 +328,7 @@ impl Zone {
         }
     }
     pub fn register_or_update_object(&mut self, object_id: Uuid, _speed: f32, _classname: String) {
-        match self.objects.entry(object_id) {
+        match self.objects_registered.entry(object_id) {
             Occupied(mut entry) => {
                 entry.get_mut().classname = _classname;
                 entry.get_mut().speed = _speed;
@@ -338,8 +338,8 @@ impl Zone {
             },
         }
     }
-    pub fn reset_objects(&mut self) {
-        self.objects.clear();
+    pub fn reset_objects_registered(&mut self) {
+        self.objects_registered.clear();
     }
     pub fn reset_statistics(&mut self, _period_start: DateTime<Utc>, _period_end: DateTime<Utc>) {
         self.statistics.period_start = _period_start;
@@ -351,7 +351,7 @@ impl Zone {
     }
     pub fn update_statistics(&mut self, _period_start: DateTime<Utc>, _period_end: DateTime<Utc>) {
         self.reset_statistics(_period_start, _period_end);
-        for (_, object_info) in self.objects.iter() {
+        for (_, object_info) in self.objects_registered.iter() {
             let classname = object_info.classname.to_owned();
             let speed = object_info.speed;
             let mut vehicle_type_parameters = match self.statistics.vehicles_data.entry(classname) {
@@ -366,7 +366,7 @@ impl Zone {
             // https://math.stackexchange.com/questions/106700/incremental-averageing
             vehicle_type_parameters.avg_speed = vehicle_type_parameters.avg_speed * ((vehicle_type_parameters.sum_intensity - 1) as f32 / vehicle_type_parameters.sum_intensity as f32) + speed / vehicle_type_parameters.sum_intensity as f32;
         }
-        self.reset_objects();
+        self.reset_objects_registered();
     }
     // Checks if given polygon contains a point
     // Code has been taken from: https://github.com/LdDl/odam/blob/master/virtual_polygons.go#L180
@@ -492,7 +492,7 @@ impl Zone {
         };
     }
     pub fn draw_current_intensity(&self, img: &mut Mat) {
-        let current_intensity = self.objects.len();
+        let current_intensity = self.objects_registered.len();
         let anchor = Point2i::new(self.pixel_coordinates[0].x as i32 + 20, self.pixel_coordinates[0].y as i32 - 10);
         match put_text(img, &current_intensity.to_string(), anchor, FONT_HERSHEY_SIMPLEX, 0.5, Scalar::from((0.0, 0.0, 0.0)), 2, LINE_8, false) {
             Ok(_) => {},
