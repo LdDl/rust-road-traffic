@@ -198,10 +198,10 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
         None => { 1.0 }
     };
     for road_lane in settings.road_lanes.iter() {
-        let mut polygon = Zone::from(road_lane);
-        polygon.scale_geom(scale_x, scale_y);    
-        polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
-        match data_storage.write().unwrap().insert_zone(polygon) {
+        let mut zone = Zone::from(road_lane);
+        zone.scale_geom(scale_x, scale_y);    
+        zone.set_target_classes(COCO_FILTERED_CLASSNAMES);
+        match data_storage.write().unwrap().insert_zone(zone) {
             Ok(_) => {},
             Err(err) => {
                 panic!("Can't insert zone due the error {:?}", err);
@@ -477,7 +477,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
             let track: &Vec<mot_rs::utils::Point> = object.get_track();
             let last_point = &track[track.len() - 1];
 
-            // Check if object is inside of any polygon
+            // Check if object is inside of any zone
             for (_, zone_guarded) in zones.iter() {
                 let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
                 if !zone.contains_point(last_point.x, last_point.y) {
@@ -500,10 +500,10 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
         }
         if enable_mjpeg || settings.output.enable {
             for (_, v) in zones.iter() {
-                let polygon = v.lock().expect("Mutex poisoned");
-                polygon.draw_geom(&mut frame);
-                polygon.draw_skeleton(&mut frame);
-                polygon.draw_current_intensity(&mut frame);
+                let zone = v.lock().expect("Mutex poisoned");
+                zone.draw_geom(&mut frame);
+                zone.draw_skeleton(&mut frame);
+                zone.draw_current_intensity(&mut frame);
             }
         }
 
