@@ -16,7 +16,6 @@ async fn say_ping() -> impl Responder {
 }
 
 pub fn init_routes(enable_mjpeg: bool) -> impl Fn(&mut web::ServiceConfig) {
-
     move |cfg| {
         let generated = generate();
 
@@ -29,10 +28,12 @@ pub fn init_routes(enable_mjpeg: bool) -> impl Fn(&mut web::ServiceConfig) {
         cfg
             .service(
                 web::scope("/api")
+                .service(RapiDoc::with_openapi("/docs.json", ApiDoc::openapi()))
+                .service(RapiDoc::new("/api/docs.json").path("/docs"))
                 .route("/ping", web::get().to(say_ping))
                 .service(
                     web::scope("/polygons")
-                    .route("/geojson", web::get().to(zones_list::polygons_list))
+                    .route("/geojson", web::get().to(zones_list::all_zones_list))
                 )
                 .service(
                     web::scope("/stats")
@@ -54,3 +55,35 @@ pub fn init_routes(enable_mjpeg: bool) -> impl Fn(&mut web::ServiceConfig) {
         cfg.service(ResourceFiles::new("/", generated));
     }
 }
+
+/* Swagger section */
+use utoipa::OpenApi;
+use utoipa_rapidoc::RapiDoc;
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        zones_list::all_zones_list,
+        zones_stats::all_zones_stats,
+        zones_stats::all_zones_occupancy,
+    ),
+    tags(
+        (name = "Zones", description = "Main information about detection zones"),
+        (name = "Statistics", description = "Aggregated and real-time statistics in the detections zones"),
+    ),
+    components(
+        // We need to import all possible schemas since `utopia` can't discover recursive schemas (yet?)
+        schemas(
+            crate::lib::zones::geojson::ZonesFeatureCollection,
+            crate::lib::zones::geojson::ZoneFeature,
+            crate::lib::zones::geojson::ZonePropertiesGeoJSON,
+            crate::lib::zones::geojson::GeoPolygon,
+            crate::lib::rest_api::zones_stats::AllZonesStats,
+            crate::lib::rest_api::zones_stats::ZoneStats,
+            crate::lib::rest_api::zones_stats::VehicleTypeParameters,
+            crate::lib::rest_api::zones_stats::AllZonesRealtimeStatistics,
+            crate::lib::rest_api::zones_stats::ZoneRealtime,
+        ),
+    )
+)]
+struct ApiDoc;
