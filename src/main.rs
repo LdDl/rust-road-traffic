@@ -477,7 +477,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
             let track: &Vec<mot_rs::utils::Point> = object.get_track();
             let last_point = &track[track.len() - 1];
 
-            // Check if object is inside of any zone
+            // Check if object is inside of any zone (optionally: check if it crossed the virtual line inside of it)
             for (_, zone_guarded) in zones.iter() {
                 let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
                 if !zone.contains_point(last_point.x, last_point.y) {
@@ -493,10 +493,6 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                 } else {
                     false
                 };
-                if crossed {
-                    println!("Object {} is inside of zone {} (crossed: {})", object_id, zone.id, crossed);
-                }
-
                 match object_extra.spatial_info {
                     Some(ref mut spatial_info) => {
                         spatial_info.update_avg(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1, pixels_per_meters);
