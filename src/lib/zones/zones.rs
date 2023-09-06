@@ -150,19 +150,24 @@ impl Skeleton {
 pub struct VirtualLine {
     pub line: [Point2f; 2],
     pub color: Scalar,
+    // 0 - left->right, top->bottom
+    // 1 - right->left, bottom->top
+    pub direction: u8,
 }
 
 impl VirtualLine {
-    pub fn new(a: Point2f, b: Point2f) -> Self {
+    pub fn new(a: Point2f, b: Point2f, _direction: u8) -> Self {
         VirtualLine {
             line: [a, b],
             color: Scalar::from((0.0, 0.0, 0.0)),
+            direction: _direction,
         }
     }
     pub fn default() -> Self {
         VirtualLine {
             line: [Point2f::default(), Point2f::default()],
             color: Scalar::from((0.0, 0.0, 0.0)),
+            direction: 0,
         }
     }
     // is_left returns true if the given point is to the left side of the vertical AB or if the given point is above of the horizontal AB
@@ -489,7 +494,7 @@ impl Zone {
     }
     pub fn get_virtual_line(&self) -> Option<VirtualLine> {
         match &self.virtual_line {
-            Some(vl) => Some(VirtualLine::new(vl.line[0], vl.line[1])),
+            Some(vl) => Some(VirtualLine::new(vl.line[0], vl.line[1], vl.direction)),
             None => None
         }
     }
@@ -655,7 +660,7 @@ mod tests {
     
     #[test]
     fn test_vertical_line() {
-        let vertical_line = VirtualLine::new(Point2f::new(4.0, 3.0), Point2f::new(5.0, 10.0));
+        let vertical_line = VirtualLine::new(Point2f::new(4.0, 3.0), Point2f::new(5.0, 10.0), 0);
         let c = Point2f::new(3.0, 8.0);
         let is_left = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_left);
@@ -694,7 +699,7 @@ mod tests {
     }
     #[test]
     fn test_horizontal_line() {
-        let vertical_line = VirtualLine::new(Point2f::new(4.0, 6.0), Point2f::new(9.0, 6.4));
+        let vertical_line = VirtualLine::new(Point2f::new(4.0, 6.0), Point2f::new(9.0, 6.4), 0);
         let c = Point2f::new(3.0, 8.0);
         let is_above = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_above);

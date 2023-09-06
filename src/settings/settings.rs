@@ -75,6 +75,9 @@ pub struct RoadLanesSettings {
 pub struct VirtualLineSettings {
     pub geometry: Vec<[i32; 2]>,
     pub color_rgb: [i16; 3],
+    // 0 - left->right, top->bottom
+    // 1 - right->left, bottom->top
+    pub direction: u8,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -140,7 +143,7 @@ impl From<&RoadLanesSettings> for Zone {
                 } else {
                     let a = Point2f::new(vl.geometry[0][0] as f32, vl.geometry[0][1] as f32);
                     let b = Point2f::new(vl.geometry[1][0] as f32, vl.geometry[1][0] as f32);
-                    Some(VirtualLine::new(a, b))
+                    Some(VirtualLine::new(a, b, vl.direction))
                 }
             },
             None => {
