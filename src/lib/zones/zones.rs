@@ -74,6 +74,7 @@ impl VehicleTypeParameters {
 struct ObjectInfo {
     classname: String,
     speed: f32,
+    crossed_virtual_line: bool
 }
 
 type Registered = HashMap<Uuid, ObjectInfo>;
@@ -380,7 +381,7 @@ impl Zone {
                 entry.get_mut().speed = _speed;
             },
             Vacant(entry) => {
-                entry.insert(ObjectInfo{classname: _classname, speed: _speed});
+                entry.insert(ObjectInfo{classname: _classname, speed: _speed, crossed_virtual_line: false});
             },
         }
     }
@@ -397,6 +398,10 @@ impl Zone {
     }
     pub fn update_statistics(&mut self, _period_start: DateTime<Utc>, _period_end: DateTime<Utc>) {
         self.reset_statistics(_period_start, _period_end);
+        let register_via_virtual_line = match &self.virtual_line {
+            Some(_) => true,
+            None => false
+        };
         for (_, object_info) in self.objects_registered.iter() {
             let classname = object_info.classname.to_owned();
             let speed = object_info.speed;
@@ -407,7 +412,13 @@ impl Zone {
                     continue;
                 },
             };
-            vehicle_type_parameters.sum_intensity += 1;
+            if register_via_virtual_line {
+                if object_info.crossed_virtual_line {
+                    vehicle_type_parameters.sum_intensity += 1;
+                }
+            } else {
+                vehicle_type_parameters.sum_intensity += 1;
+            }
             // Iterative average calculation
             // https://math.stackexchange.com/questions/106700/incremental-averageing
             vehicle_type_parameters.avg_speed = vehicle_type_parameters.avg_speed * ((vehicle_type_parameters.sum_intensity - 1) as f32 / vehicle_type_parameters.sum_intensity as f32) + speed / vehicle_type_parameters.sum_intensity as f32;
