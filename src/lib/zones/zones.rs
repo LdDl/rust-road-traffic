@@ -2,7 +2,7 @@
 pub(crate) mod geometry;
 pub(crate) mod geojson;
 
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::collections::hash_map::Entry::{
     Occupied,
     Vacant
@@ -148,8 +148,8 @@ impl Skeleton {
 
 #[derive(Debug)]
 pub struct VirtualLine {
-    line: [Point2f; 2],
-    color: Scalar,
+    pub line: [Point2f; 2],
+    pub color: Scalar,
 }
 
 impl VirtualLine {
@@ -486,6 +486,9 @@ impl Zone {
     }
     pub fn get_skeleton_ppm(&self) -> f32 {
         self.skeleton.pixels_per_meter
+    }
+    pub fn get_virtual_line(&self) -> Option<VirtualLine> {
+        self.virtual_line
     }
     pub fn project_to_skeleton_cv(&self, pt: &Point2f) -> Point2f {
         let pt = self.project_to_skeleton(pt.x , pt.y);

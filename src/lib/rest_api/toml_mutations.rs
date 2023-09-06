@@ -4,6 +4,7 @@ use serde::{
 };
 use crate::lib::rest_api::APIStorage;
 use crate::settings::RoadLanesSettings;
+use crate::settings::VirtualLineSettings;
 
 #[derive(Debug, Serialize)]
 pub struct ErrorResponse {
@@ -26,7 +27,21 @@ pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Erro
             geometry: zone.get_pixel_coordinates().iter().map(|pt| [pt.x as i32, pt.y as i32]).collect(),
             geometry_wgs84: zone.get_spatial_coordinates_epsg4326().iter().map(|pt| [pt.x, pt.y]).collect(),
             lane_direction: zone.road_lane_direction,
-            lane_number: zone.road_lane_num
+            lane_number: zone.road_lane_num,
+            virtual_line: match &zone.get_virtual_line() {
+                Some(vl) => {
+                    Some(VirtualLineSettings{
+                        geometry: vec![
+                            [vl.line[0].x as i32, vl.line[0].y as i32],
+                            [vl.line[1].x as i32, vl.line[1].y as i32],
+                        ],
+                        color_rgb: [vl.color[2] as i16, vl.color[1] as i16, vl.color[0] as i16], // BGR -> RGB
+                    })
+                },
+                None => {
+                    None
+                }
+            },
         });
         drop(zone);
     }
