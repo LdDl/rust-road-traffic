@@ -160,7 +160,7 @@ pub struct VirtualLine {
 }
 
 impl VirtualLine {
-    pub fn new(a: Point2f, b: Point2f, _direction: u8) -> Self {
+    pub fn new_from_cv(a: Point2f, b: Point2f, _direction: u8) -> Self {
         VirtualLine {
             line: [[a.x as i32, a.y as i32], [b.x as i32, b.y as i32]],
             line_cv: [a, b],
@@ -169,7 +169,16 @@ impl VirtualLine {
             direction: _direction,
         }
     }
-    pub fn new_from(a: [i32; 2], b:  [i32; 2], _direction: u8) -> Self {
+    pub fn new_from(ab: [[i32; 2]; 2], _direction: u8) -> Self {
+        VirtualLine {
+            line: ab,
+            line_cv: [Point2f::new(ab[0][0] as f32, ab[0][1] as f32), Point2f::new(ab[1][0] as f32, ab[1][1] as f32)],
+            color_cv: Scalar::from((0.0, 0.0, 0.0)),
+            color: [0, 0, 0],
+            direction: _direction,
+        }
+    }
+    pub fn new_from_ab(a: [i32; 2], b:  [i32; 2], _direction: u8) -> Self {
         VirtualLine {
             line: [a, b],
             line_cv: [Point2f::new(a[0] as f32, a[1] as f32), Point2f::new(b[0] as f32, b[1] as f32)],
@@ -528,7 +537,7 @@ impl Zone {
     }
     pub fn get_virtual_line(&self) -> Option<VirtualLine> {
         match &self.virtual_line {
-            Some(vl) => Some(VirtualLine::new(vl.line_cv[0], vl.line_cv[1], vl.direction)),
+            Some(vl) => Some(VirtualLine::new_from_cv(vl.line_cv[0], vl.line_cv[1], vl.direction)),
             None => None
         }
     }
@@ -727,7 +736,7 @@ mod tests {
     
     #[test]
     fn test_vertical_line() {
-        let vertical_line = VirtualLine::new(Point2f::new(4.0, 3.0), Point2f::new(5.0, 10.0), 0);
+        let vertical_line = VirtualLine::new_from_cv(Point2f::new(4.0, 3.0), Point2f::new(5.0, 10.0), 0);
         let c = Point2f::new(3.0, 8.0);
         let is_left = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_left);
@@ -766,7 +775,7 @@ mod tests {
     }
     #[test]
     fn test_horizontal_line() {
-        let vertical_line = VirtualLine::new(Point2f::new(4.0, 6.0), Point2f::new(9.0, 6.4), 0);
+        let vertical_line = VirtualLine::new_from_cv(Point2f::new(4.0, 6.0), Point2f::new(9.0, 6.4), 0);
         let c = Point2f::new(3.0, 8.0);
         let is_above = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_above);

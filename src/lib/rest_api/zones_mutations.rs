@@ -100,7 +100,7 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Po
     match &_update_zone.virtual_line {
         Some(val) => {
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
-            let mut new_line = VirtualLine::new_from(val.geometry[0], val.geometry[1], val.direction);
+            let mut new_line = VirtualLine::new_from(val.geometry, val.direction);
             new_line.set_color(val.color_rgb[2], val.color_rgb[1], val.color_rgb[0]);
             zone.set_virtual_line(new_line);
             drop(zone)
@@ -157,7 +157,7 @@ pub struct PolygonCreateRequest {
 
 #[derive(Deserialize, Debug)]
 pub struct VirtualLineData {
-    pub geometry: Vec<[i32; 2]>,
+    pub geometry: [[i32; 2]; 2],
     pub color_rgb: [i16; 3],
     // 0 - left->right, top->bottom
     // 1 - right->left, bottom->top
@@ -216,7 +216,7 @@ pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<Polyg
 
     match &_new_zone.virtual_line {
         Some(val) => {
-            let mut new_line = VirtualLine::new_from(val.geometry[0], val.geometry[1], val.direction);
+            let mut new_line = VirtualLine::new_from(val.geometry, val.direction);
             new_line.set_color(val.color_rgb[2], val.color_rgb[1], val.color_rgb[0]);
             zone.set_virtual_line(new_line);
         },
@@ -313,7 +313,7 @@ pub async fn replace_all(data: web::Data<APIStorage>, _new_zones: web::Json<Poly
 
         match &new_zone.virtual_line {
             Some(val) => {
-                let mut new_line = VirtualLine::new_from(val.geometry[0], val.geometry[1], val.direction);
+                let mut new_line = VirtualLine::new_from(val.geometry, val.direction);
                 new_line.set_color(val.color_rgb[2], val.color_rgb[1], val.color_rgb[0]);
                 zone.set_virtual_line(new_line);
             },
