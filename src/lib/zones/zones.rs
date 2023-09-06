@@ -114,24 +114,24 @@ impl Skeleton {
         let b = self.line[1];
         let (x1, y1) = (a.x, a.y);
         let (x2, y2) = (b.x, b.y);
-        let (xP, yP) = (x, y);
+        let (x_p, y_p) = (x, y);
 
         // Calculate vector components of AB
-        let ABx = x2 - x1;
-        let ABy = y2 - y1;
+        let ab_x = x2 - x1;
+        let ab_y = y2 - y1;
 
         // Calculate vector components of AP
-        let APx = xP - x1;
-        let APy = yP - y1;
+        let ap_x = x_p - x1;
+        let ap_y = y_p - y1;
 
         // Calculate the dot product of AB and AP
-        let dot_product = APx * ABx + APy * ABy;
+        let dot_product = ap_x * ab_x + ap_y * ab_y;
 
         // Calculate the magnitude of AB squared
-        let AB_squared = ABx.powi(2) + ABy.powi(2);
+        let ab_squared = ab_x.powi(2) + ab_y.powi(2);
 
         // Calculate the scalar projection of P onto AB
-        let scalar_projection = dot_product / AB_squared;
+        let scalar_projection = dot_product / ab_squared;
         
         if scalar_projection < 0.0 {
             // P is closest to point A, so use A as the projection point
@@ -141,9 +141,9 @@ impl Skeleton {
             (b.x, b.y)
         } else {
             // Calculate the coordinates of the projected point P' on AB
-            let xP_prime = x1 + scalar_projection * ABx;
-            let yP_prime = y1 + scalar_projection * ABy;
-            (xP_prime, yP_prime)
+            let x_p_prime = x1 + scalar_projection * ab_x;
+            let y_p_prime = y1 + scalar_projection * ab_y;
+            (x_p_prime, y_p_prime)
         }
     }
 }
