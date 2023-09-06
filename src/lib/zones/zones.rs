@@ -488,7 +488,10 @@ impl Zone {
         self.skeleton.pixels_per_meter
     }
     pub fn get_virtual_line(&self) -> Option<VirtualLine> {
-        self.virtual_line
+        match &self.virtual_line {
+            Some(vl) => Some(VirtualLine::new(vl.line[0], vl.line[1])),
+            None => None
+        }
     }
     pub fn project_to_skeleton_cv(&self, pt: &Point2f) -> Point2f {
         let pt = self.project_to_skeleton(pt.x , pt.y);

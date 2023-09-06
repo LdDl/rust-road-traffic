@@ -133,7 +133,7 @@ impl From<&RoadLanesSettings> for Zone {
             })
             .collect();
 
-        let virtual_line = match setting.virtual_line {
+        let virtual_line = match &setting.virtual_line {
             Some(vl) => {
                 if vl.geometry.len() != 2{
                     None
