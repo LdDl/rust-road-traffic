@@ -21,7 +21,8 @@ pub struct PolygonUpdateRequest {
     pub spatial_points: Option<[[f32; 2]; 4]>,
     pub lane_number: Option<u16>,
     pub lane_direction: Option<u8>,
-    pub color_rgb: Option<[i16; 3]>
+    pub color_rgb: Option<[i16; 3]>,
+    pub virtual_line: Option<VirtualLineData>
 }
 
 #[derive(Debug, Serialize)]
@@ -55,6 +56,7 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Po
         Some(data) => {
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             zone.update_pixel_map(data);
+            drop(zone)
         },
         _ => {}
     }
@@ -63,6 +65,7 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Po
         Some(data) => {
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             zone.update_spatial_map(data);
+            drop(zone)
         },
         _ => {}
     }
@@ -71,6 +74,7 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Po
         Some(val) => {
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             zone.set_road_lane_direction(val);
+            drop(zone)
         },
         _ => {}
     }
@@ -79,6 +83,7 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Po
         Some(val) => {
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             zone.set_road_lane_num(val);
+            drop(zone)
         },
         _ => {}
     }
@@ -87,9 +92,21 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Po
         Some(val) => {
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             zone.set_color(val);
+            drop(zone)
         },
         _ => {}
     }
+
+    match &_update_zone.virtual_line {
+        Some(val) => {
+            let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
+            zone.set_virtual_line(VirtualLine::new_from(val.geometry[0], val.geometry[1], val.direction));
+            drop(zone)
+        },
+        _ => {}
+    }
+
+    drop(zone_guarded);
 
     return Ok(HttpResponse::Ok().json(PolygonUpdateResponse{
         message: "ok"
@@ -120,6 +137,7 @@ pub async fn delete_zone(data: web::Data<APIStorage>, _delete_zone: web::Json<Po
             }));
         }
     }
+    drop(ds_guard);
     return Ok(HttpResponse::Ok().json(PolygonDeleteResponse{
         message: "ok"
     }));
@@ -200,7 +218,7 @@ pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<Polyg
         },
         _ => {}
     }
-    
+
     let new_id = zone.get_id().clone();
 
     let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
@@ -212,6 +230,8 @@ pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<Polyg
             }));
         }
     }
+
+    drop(ds_guard);
 
     return Ok(HttpResponse::Ok().json(PolygonCreateResponse{
         polygon_id: new_id
