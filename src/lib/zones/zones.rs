@@ -163,6 +163,13 @@ impl VirtualLine {
             direction: _direction,
         }
     }
+    pub fn new_from(a: [i32; 2], b:  [i32; 2], _direction: u8) -> Self {
+        VirtualLine {
+            line: [Point2f::new(a[0] as f32, a[1] as f32), Point2f::new(b[0] as f32, b[1] as f32)],
+            color: Scalar::from((0.0, 0.0, 0.0)),
+            direction: _direction,
+        }
+    }
     pub fn default() -> Self {
         VirtualLine {
             line: [Point2f::default(), Point2f::default()],
@@ -497,6 +504,9 @@ impl Zone {
             Some(vl) => Some(VirtualLine::new(vl.line[0], vl.line[1], vl.direction)),
             None => None
         }
+    }
+    pub fn set_virtual_line(&mut self, _virtual_line: VirtualLine) {
+        self.virtual_line = Some(_virtual_line);
     }
     pub fn project_to_skeleton_cv(&self, pt: &Point2f) -> Point2f {
         let pt = self.project_to_skeleton(pt.x , pt.y);

@@ -3,7 +3,10 @@ use serde::{
     Deserialize,
     Serialize
 };
-use crate::lib::zones::Zone;
+use crate::lib::zones::{
+    Zone,
+    VirtualLine
+};
 use crate::lib::rest_api::APIStorage;
 
 #[derive(Debug, Serialize)]
@@ -128,7 +131,17 @@ pub struct PolygonCreateRequest {
     pub spatial_points: Option<[[f32; 2]; 4]>,
     pub lane_number: Option<u16>,
     pub lane_direction: Option<u8>,
-    pub color_rgb: Option<[i16; 3]>
+    pub color_rgb: Option<[i16; 3]>,
+    pub virtual_line: Option<VirtualLineData>
+}
+
+#[derive(Deserialize, Debug)]
+pub struct VirtualLineData {
+    pub geometry: Vec<[i32; 2]>,
+    pub color_rgb: [i16; 3],
+    // 0 - left->right, top->bottom
+    // 1 - right->left, bottom->top
+    pub direction: u8,
 }
 
 #[derive(Debug, Serialize)]
@@ -181,6 +194,13 @@ pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<Polyg
         _ => {}
     }
 
+    match &_new_zone.virtual_line {
+        Some(val) => {
+            zone.set_virtual_line(VirtualLine::new_from(val.geometry[0], val.geometry[1], val.direction));
+        },
+        _ => {}
+    }
+    
     let new_id = zone.get_id().clone();
 
     let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
