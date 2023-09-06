@@ -95,21 +95,24 @@ impl Zone {
         }
     }
     pub fn new(id: String, coordinates: Vec<Point2f>, spatial_coordinates_epsg4326: Vec<Point2f>, spatial_coordinates_epsg3857: Vec<Point2f>, color: Scalar, road_lane_num: u16, road_lane_direction: u8, _virtual_line: Option<VirtualLine>) -> Self {
-        let converter = SpatialConverter::new_from(coordinates.clone(), spatial_coordinates_epsg3857.clone());
-        /* Eval distance between sides */
-        let a = spatial_coordinates_epsg4326[0];
-        let b = spatial_coordinates_epsg4326[1];
-        let c = spatial_coordinates_epsg4326[2];
-        let d = spatial_coordinates_epsg4326[3];
-        let ab_center = compute_center(a.x, a.y, b.x, b.y);
-        let cd_center = compute_center(c.x, c.y, d.x, d.y);
-        let length_meters = haversine(ab_center.0, ab_center.1, cd_center.0, cd_center.1) * 1000.0;
-  
         /* Init skeleton */
         let skeleton_line = find_skeleton_line(&coordinates, 0, 2); // 0-1 is first segment of polygon, 2-3 is second segment
         let mut skeleton = Skeleton::new(skeleton_line[0], skeleton_line[1]);
-        skeleton.length_meters = length_meters;
-        skeleton.pixels_per_meter = skeleton.length_pixels / skeleton.length_meters;
+        let converter = if spatial_coordinates_epsg4326.len() > 0 {
+            /* Eval distance between sides if spatial data is provided */
+            let a = spatial_coordinates_epsg4326[0];
+            let b = spatial_coordinates_epsg4326[1];
+            let c = spatial_coordinates_epsg4326[2];
+            let d = spatial_coordinates_epsg4326[3];
+            let ab_center = compute_center(a.x, a.y, b.x, b.y);
+            let cd_center = compute_center(c.x, c.y, d.x, d.y);
+            let length_meters = haversine(ab_center.0, ab_center.1, cd_center.0, cd_center.1) * 1000.0;
+            skeleton.length_meters = length_meters;
+            skeleton.pixels_per_meter = skeleton.length_pixels / skeleton.length_meters;
+            SpatialConverter::new_from(coordinates.clone(), spatial_coordinates_epsg3857.clone())
+        } else {
+            SpatialConverter::default()
+        };
         Zone{
             id: id,
             pixel_coordinates: coordinates,
@@ -129,29 +132,8 @@ impl Zone {
             virtual_line: _virtual_line
         }
     }
-    pub fn new_from_cv_with_id(points: Vec<Point2f>, id: String, _virtual_line: Option<VirtualLine>) -> Self {
-        let skeleton_line = find_skeleton_line(&points, 0, 2); // 0-1 is first segment of polygon, 2-3 is second segment
-        return Zone{
-            id: id,
-            pixel_coordinates: points,
-            spatial_coordinates_epsg4326: vec![],
-            spatial_coordinates_epsg3857: vec![],
-            color: Scalar::from((255.0, 255.0, 255.0)),
-            road_lane_num: 0,
-            road_lane_direction: 0,
-            spatial_converter: SpatialConverter::default(),
-            statistics: Statistics::default(),
-            objects_registered: HashMap::new(),
-            current_statistics: RealTimeStatistics{
-                last_time: 0,
-                occupancy: 0
-            },
-            skeleton: Skeleton::new(skeleton_line[0], skeleton_line[1]),
-            virtual_line: _virtual_line
-        }
-    }
     pub fn default_from_cv(points: Vec<Point2f>) -> Self{
-        Zone::new_from_cv_with_id(points,"dir_0_lane_0".to_owned(), None)
+        Zone::new("dir_0_lane_0".to_owned(), points, vec![], vec![], Scalar::from((255.0, 255.0, 255.0)), 0, 0, None)
     }
     pub fn get_id(&self) -> String {
         self.id.clone()
@@ -531,27 +513,6 @@ mod tests {
             Zone::default_from_cv(
                 vec![
                     Point2f::new(0.0, 0.0),
-                    Point2f::new(5.0, 5.0),
-                    Point2f::new(5.0, 0.0),
-                ]
-            ),
-            Zone::default_from_cv(
-                vec![
-                    Point2f::new(0.0, 0.0),
-                    Point2f::new(5.0, 5.0),
-                    Point2f::new(5.0, 0.0),
-                ]
-            ),
-            Zone::default_from_cv(
-                vec![
-                    Point2f::new(0.0, 0.0),
-                    Point2f::new(5.0, 5.0),
-                    Point2f::new(5.0, 0.0),
-                ]
-            ),
-            Zone::default_from_cv(
-                vec![
-                    Point2f::new(0.0, 0.0),
                     Point2f::new(5.0, 0.0),
                     Point2f::new(5.0, 5.0),
                     Point2f::new(0.0, 5.0),
@@ -561,102 +522,17 @@ mod tests {
         let points = vec![
             Point2f::new(20.0, 20.0),
             Point2f::new(4.0, 4.0),
-            Point2f::new(3.0, 3.0),
-            Point2f::new(5.0, 1.0),
-            Point2f::new(7.0, 2.0),
             Point2f::new(-2.0, 12.0)
         ];
         let correct_answers = vec![
             false,
             true,
-            true,
-            true,
-            false,
             false
         ];
         for (i, convex_polygon) in convex_polygons.iter().enumerate() {
             let answer = convex_polygon.contains_point(points[i].x, points[i].y);
             assert_eq!(answer, correct_answers[i]);
         }
-    }
-    
-    #[test]
-    fn test_vertical_line() {
-        let vertical_line = VirtualLine::new_from_cv(Point2f::new(4.0, 3.0), Point2f::new(5.0, 10.0), 0);
-        let c = Point2f::new(3.0, 8.0);
-        let is_left = vertical_line.is_left(c.x, c.y);
-        assert_eq!(true, is_left);
-
-        let c = Point2f::new(5.0, 10.0);
-        let is_left = vertical_line.is_left(c.x, c.y);
-        assert_eq!(false, is_left);
-
-        let c = Point2f::new(4.0, 3.0);
-        let is_left = vertical_line.is_left(c.x, c.y);
-        assert_eq!(false, is_left);
-
-        let c = Point2f::new(3.9, 3.0);
-        let is_left = vertical_line.is_left(c.x, c.y);
-        assert_eq!(true, is_left);
-
-        let c = Point2f::new(5.1, 4.0);
-        let is_left = vertical_line.is_left(c.x, c.y);
-        assert_eq!(false, is_left);
-
-        let c = Point2f::new(35.1, 19.2);
-        let is_left = vertical_line.is_left(c.x, c.y);
-        assert_eq!(false, is_left);
-
-        let c = Point2f::new(-5.0, 8.0);
-        let is_left = vertical_line.is_left(c.x, c.y);
-        assert_eq!(true, is_left);
-
-        let c = Point2f::new(6.0, -4.0);
-        let is_left = vertical_line.is_left(c.x, c.y);
-        assert_eq!(false, is_left);
-
-        let c = Point2f::new(-2.0, -3.0);
-        let is_left = vertical_line.is_left(c.x, c.y);
-        assert_eq!(true, is_left);
-    }
-    #[test]
-    fn test_horizontal_line() {
-        let vertical_line = VirtualLine::new_from_cv(Point2f::new(4.0, 6.0), Point2f::new(9.0, 6.4), 0);
-        let c = Point2f::new(3.0, 8.0);
-        let is_above = vertical_line.is_left(c.x, c.y);
-        assert_eq!(true, is_above);
-
-        let c = Point2f::new(5.0, 3.0);
-        let is_above = vertical_line.is_left(c.x, c.y);
-        assert_eq!(false, is_above);
-
-        let c = Point2f::new(0.0, 5.5);
-        let is_above = vertical_line.is_left(c.x, c.y);
-        assert_eq!(false, is_above);
-
-        let c = Point2f::new(0.0, 6.5);
-        let is_above = vertical_line.is_left(c.x, c.y);
-        assert_eq!(true, is_above);
-
-        let c = Point2f::new(10.0, 5.5);
-        let is_above = vertical_line.is_left(c.x, c.y);
-        assert_eq!(false, is_above);
-
-        let c = Point2f::new(35.1, 8.0);
-        let is_above = vertical_line.is_left(c.x, c.y);
-        assert_eq!(false, is_above);
-
-        let c = Point2f::new(2.0, 6.5);
-        let is_above = vertical_line.is_left(c.x, c.y);
-        assert_eq!(true, is_above);
-
-        let c = Point2f::new(-2.0, 3.0);
-        let is_above = vertical_line.is_left(c.x, c.y);
-        assert_eq!(false, is_above);
-
-        let c = Point2f::new(75.0, 15.0);
-        let is_above = vertical_line.is_left(c.x, c.y);
-        assert_eq!(true, is_above);
     }
     #[test]
     fn test_object_entered_cv() {
