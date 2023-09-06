@@ -375,14 +375,22 @@ impl Zone {
             self.statistics.vehicles_data.insert(class.to_string(), VehicleTypeParameters::default());
         }
     }
-    pub fn register_or_update_object(&mut self, object_id: Uuid, _speed: f32, _classname: String) {
+    pub fn register_or_update_object(&mut self, object_id: Uuid, _speed: f32, _classname: String, _crossed_virtual_line: bool) {
+        let register_as_crossed = match &self.virtual_line {
+            Some(_) => _crossed_virtual_line,
+            None => false
+        };
         match self.objects_registered.entry(object_id) {
             Occupied(mut entry) => {
                 entry.get_mut().classname = _classname;
                 entry.get_mut().speed = _speed;
+                // If object crossed virtual line then we should not reset this flag
+                if !entry.get().crossed_virtual_line {
+                    entry.get_mut().crossed_virtual_line = register_as_crossed;
+                }
             },
             Vacant(entry) => {
-                entry.insert(ObjectInfo{classname: _classname, speed: _speed, crossed_virtual_line: false});
+                entry.insert(ObjectInfo{classname: _classname, speed: _speed, crossed_virtual_line: register_as_crossed});
             },
         }
     }
@@ -517,6 +525,27 @@ impl Zone {
     pub fn get_skeleton_ppm(&self) -> f32 {
         self.skeleton.pixels_per_meter
     }
+    pub fn crossed_virtual_line(&self, x1: f32, y1: f32, x2: f32, y2: f32) -> bool {
+        match &self.virtual_line {
+            Some(vl) => {
+                let is_left_before = vl.is_left(x1, y1);
+                let is_left_after = vl.is_left(x2, y2);
+                if vl.direction == 0 {
+                    if is_left_before && !is_left_after {
+                        return true;
+                    }
+                } else {
+                    if !is_left_before && is_left_after {
+                        return true;
+                    }
+                }
+                return false;
+            },
+            None => {
+                return false;
+            }
+        }
+    }
     pub fn get_virtual_line(&self) -> Option<VirtualLine> {
         match &self.virtual_line {
             Some(vl) => Some(VirtualLine::new_from_cv(vl.line_cv[0], vl.line_cv[1], vl.direction)),
@@ -525,10 +554,6 @@ impl Zone {
     }
     pub fn set_virtual_line(&mut self, _virtual_line: VirtualLine) {
         self.virtual_line = Some(_virtual_line);
-    }
-    pub fn project_to_skeleton_cv(&self, pt: &Point2f) -> Point2f {
-        let pt = self.project_to_skeleton(pt.x , pt.y);
-        Point2f::new(pt.0, pt.1)
     }
     pub fn draw_geom(&self, img: &mut Mat) {
         // @todo: proper error handling

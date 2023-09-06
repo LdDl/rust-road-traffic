@@ -486,14 +486,25 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                 zone.current_statistics.occupancy += 1; // Increment current load to match number of objects in zone
                 let projected_pt = zone.project_to_skeleton(last_point.x, last_point.y);
                 let pixels_per_meters = zone.get_skeleton_ppm();
+
+                let crossed = if track.len() >= 2 {
+                    let last_before_point = &track[track.len() - 2];
+                    zone.crossed_virtual_line(last_point.x, last_point.y, last_before_point.x, last_before_point.y)
+                } else {
+                    false
+                };
+                if crossed {
+                    println!("Object {} is inside of zone {} (crossed: {})", object_id, zone.id, crossed);
+                }
+
                 match object_extra.spatial_info {
                     Some(ref mut spatial_info) => {
                         spatial_info.update_avg(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1, pixels_per_meters);
-                        zone.register_or_update_object(object_id.clone(), spatial_info.speed, object_extra.get_classname());
+                        zone.register_or_update_object(object_id.clone(), spatial_info.speed, object_extra.get_classname(), crossed);
                     },
                     None => {
                         object_extra.spatial_info = Some(SpatialInfo::new(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1));
-                        zone.register_or_update_object(object_id.clone(), -1.0, object_extra.get_classname());
+                        zone.register_or_update_object(object_id.clone(), -1.0, object_extra.get_classname(), crossed);
                     }
                 }
                 drop(zone);
