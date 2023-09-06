@@ -188,6 +188,15 @@ impl VirtualLine {
         let b = self.line_cv[1];
         (b.x - a.x)*(cy - a.y) - (b.y - a.y)*(cx - a.x) > 0.0
     }
+    pub fn clone(&self) -> Self {
+        VirtualLine {
+            line: self.line,
+            line_cv: self.line_cv,
+            color_cv: self.color_cv,
+            color: self.color,
+            direction: self.direction,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -487,12 +496,6 @@ impl Zone {
     pub fn contains_point_cv(&self, pt: &Point2f) -> bool {
         self.contains_point(pt.x, pt.y)
     }
-    pub fn transform_to_epsg_cv(&self, pt: &Point2f) -> Point2f {
-        self.spatial_converter.transform_to_epsg_cv(pt)
-    }
-    pub fn transform_to_epsg(&self, x: f32, y: f32) -> (f32, f32) {
-        self.spatial_converter.transform_to_epsg(x, y)
-    }
     // Checks if an object has entered the polygon
     // Let's clarify for future questions: we are assuming the object is represented by a center, not a bounding box
     // So object has entered polygon when its center had entered polygon too
@@ -548,7 +551,7 @@ impl Zone {
     }
     pub fn get_virtual_line(&self) -> Option<VirtualLine> {
         match &self.virtual_line {
-            Some(vl) => Some(VirtualLine::new_from_cv(vl.line_cv[0], vl.line_cv[1], vl.direction)),
+            Some(vl) => Some(vl.clone()),
             None => None
         }
     }
