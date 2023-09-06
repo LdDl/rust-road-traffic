@@ -31,10 +31,7 @@ pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Erro
             virtual_line: match &zone.get_virtual_line() {
                 Some(vl) => {
                     Some(VirtualLineSettings{
-                        geometry: vec![
-                            [vl.line[0].x as i32, vl.line[0].y as i32],
-                            [vl.line[1].x as i32, vl.line[1].y as i32],
-                        ],
+                        geometry: vl.line,
                         color_rgb: [vl.color[2] as i16, vl.color[1] as i16, vl.color[0] as i16], // BGR -> RGB
                         direction: vl.direction,
                     })

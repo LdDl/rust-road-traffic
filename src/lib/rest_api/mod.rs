@@ -7,4 +7,4 @@ mod toml_mutations;
 mod rest_api;
 mod services;
 
-pub use self::{rest_api::*, services::*};
+pub use self::{rest_api::*, services::*, zones_mutations::VirtualLineData};

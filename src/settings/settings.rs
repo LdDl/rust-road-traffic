@@ -73,7 +73,7 @@ pub struct RoadLanesSettings {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct VirtualLineSettings {
-    pub geometry: Vec<[i32; 2]>,
+    pub geometry: [[i32; 2]; 2],
     pub color_rgb: [i16; 3],
     // 0 - left->right, top->bottom
     // 1 - right->left, bottom->top

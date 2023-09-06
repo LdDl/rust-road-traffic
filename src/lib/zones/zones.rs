@@ -19,6 +19,7 @@ use geometry::{
 
 use geojson::{
     ZoneFeature,
+    VirtualLineFeature,
     ZonePropertiesGeoJSON,
     GeoPolygon
 };
@@ -149,8 +150,10 @@ impl Skeleton {
 
 #[derive(Debug)]
 pub struct VirtualLine {
-    pub line: [Point2f; 2],
-    pub color: Scalar,
+    pub line: [[i32; 2]; 2],
+    pub line_cv: [Point2f; 2],
+    pub color_cv: Scalar,
+    pub color: [i16; 3],
     // 0 - left->right, top->bottom
     // 1 - right->left, bottom->top
     pub direction: u8,
@@ -159,32 +162,39 @@ pub struct VirtualLine {
 impl VirtualLine {
     pub fn new(a: Point2f, b: Point2f, _direction: u8) -> Self {
         VirtualLine {
-            line: [a, b],
-            color: Scalar::from((0.0, 0.0, 0.0)),
+            line: [[a.x as i32, a.y as i32], [b.x as i32, b.y as i32]],
+            line_cv: [a, b],
+            color_cv: Scalar::from((0.0, 0.0, 0.0)),
+            color: [0, 0, 0],
             direction: _direction,
         }
     }
     pub fn new_from(a: [i32; 2], b:  [i32; 2], _direction: u8) -> Self {
         VirtualLine {
-            line: [Point2f::new(a[0] as f32, a[1] as f32), Point2f::new(b[0] as f32, b[1] as f32)],
-            color: Scalar::from((0.0, 0.0, 0.0)),
+            line: [a, b],
+            line_cv: [Point2f::new(a[0] as f32, a[1] as f32), Point2f::new(b[0] as f32, b[1] as f32)],
+            color_cv: Scalar::from((0.0, 0.0, 0.0)),
+            color: [0, 0, 0],
             direction: _direction,
         }
     }
     pub fn default() -> Self {
         VirtualLine {
-            line: [Point2f::default(), Point2f::default()],
-            color: Scalar::from((0.0, 0.0, 0.0)),
+            line: [[0, 0], [0, 0]],
+            line_cv: [Point2f::default(), Point2f::default()],
+            color_cv: Scalar::from((0.0, 0.0, 0.0)),
+            color: [0, 0, 0],
             direction: 0,
         }
     }
     pub fn set_color(&mut self, r: i16, g: i16, b: i16) {
-        self.color = Scalar::from((r as f64, g as f64, b as f64));
+        self.color_cv = Scalar::from((r as f64, g as f64, b as f64));
+        self.color = [r, g, b];
     }
     // is_left returns true if the given point is to the left side of the vertical AB or if the given point is above of the horizontal AB
     pub fn is_left(&self, cx: f32, cy: f32) -> bool {
-        let a = self.line[0];
-        let b = self.line[1];
+        let a = self.line_cv[0];
+        let b = self.line_cv[1];
         (b.x - a.x)*(cy - a.y) - (b.y - a.y)*(cx - a.x) > 0.0
     }
 }
@@ -515,7 +525,7 @@ impl Zone {
     }
     pub fn get_virtual_line(&self) -> Option<VirtualLine> {
         match &self.virtual_line {
-            Some(vl) => Some(VirtualLine::new(vl.line[0], vl.line[1], vl.direction)),
+            Some(vl) => Some(VirtualLine::new(vl.line_cv[0], vl.line_cv[1], vl.direction)),
             None => None
         }
     }
@@ -560,9 +570,9 @@ impl Zone {
     pub fn draw_virtual_line(&self, img: &mut Mat) {
         match &self.virtual_line {
             Some(vl) => {
-                let a = Point2i::new(vl.line[0].x as i32, vl.line[0].y as i32);
-                let b = Point2i::new(vl.line[1].x as i32, vl.line[1].y as i32);
-                match line(img, a, b, vl.color, 2, LINE_8, 0) {
+                let a = Point2i::new(vl.line_cv[0].x as i32, vl.line_cv[0].y as i32);
+                let b = Point2i::new(vl.line_cv[1].x as i32, vl.line_cv[1].y as i32);
+                match line(img, a, b, vl.color_cv, 2, LINE_8, 0) {
                     Ok(_) => {},
                     Err(err) => {
                         panic!("Can't draw virtual line for polygon due the error: {:?}", err)
@@ -608,7 +618,15 @@ impl Zone {
                 road_lane_num: self.road_lane_num,
                 road_lane_direction: self.road_lane_direction,
                 coordinates: euclidean,
-                color_rgb: [self.color[2] as i16, self.color[1] as i16, self.color[0] as i16]
+                color_rgb: [self.color[2] as i16, self.color[1] as i16, self.color[0] as i16],
+                virtual_line: match &self.virtual_line {
+                    Some(vl) => Some(VirtualLineFeature{
+                        geometry: vl.line,
+                        color_rgb: vl.color,
+                        direction: vl.direction
+                    }),
+                    None => None
+                }
             },
             geometry: GeoPolygon{
                 geometry_type: "Polygon".to_string(),

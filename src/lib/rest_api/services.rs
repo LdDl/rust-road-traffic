@@ -76,6 +76,7 @@ use utoipa_rapidoc::RapiDoc;
         schemas(
             crate::lib::zones::geojson::ZonesFeatureCollection,
             crate::lib::zones::geojson::ZoneFeature,
+            crate::lib::zones::geojson::VirtualLineFeature,
             crate::lib::zones::geojson::ZonePropertiesGeoJSON,
             crate::lib::zones::geojson::GeoPolygon,
             crate::lib::rest_api::zones_stats::AllZonesStats,
