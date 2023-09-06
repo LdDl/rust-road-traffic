@@ -10,7 +10,8 @@ use opencv::{
 #[derive(Debug)]
 pub struct VirtualLine {
     pub line: [[i32; 2]; 2],
-    pub line_cv: [Point2f; 2],
+    pub line_cvf: [Point2f; 2],
+    pub line_cvi: [Point2i; 2],
     pub color_cv: Scalar,
     pub color: [i16; 3],
     // 0 - left->right, top->bottom
@@ -22,7 +23,8 @@ impl VirtualLine {
     pub fn new_from_cv(a: Point2f, b: Point2f, _direction: u8) -> Self {
         VirtualLine {
             line: [[a.x as i32, a.y as i32], [b.x as i32, b.y as i32]],
-            line_cv: [a, b],
+            line_cvf: [a, b],
+            line_cvi: [Point2i::new(a.x as i32, a.y as i32), Point2i::new(b.x as i32, b.y as i32)],
             color_cv: Scalar::from((0.0, 0.0, 0.0)),
             color: [0, 0, 0],
             direction: _direction,
@@ -31,7 +33,8 @@ impl VirtualLine {
     pub fn new_from(ab: [[i32; 2]; 2], _direction: u8) -> Self {
         VirtualLine {
             line: ab,
-            line_cv: [Point2f::new(ab[0][0] as f32, ab[0][1] as f32), Point2f::new(ab[1][0] as f32, ab[1][1] as f32)],
+            line_cvf: [Point2f::new(ab[0][0] as f32, ab[0][1] as f32), Point2f::new(ab[1][0] as f32, ab[1][1] as f32)],
+            line_cvi: [Point2i::new(ab[0][0], ab[0][1]), Point2i::new(ab[1][0], ab[1][1])],
             color_cv: Scalar::from((0.0, 0.0, 0.0)),
             color: [0, 0, 0],
             direction: _direction,
@@ -43,23 +46,22 @@ impl VirtualLine {
     }
     // is_left returns true if the given point is to the left side of the vertical AB or if the given point is above of the horizontal AB
     pub fn is_left(&self, cx: f32, cy: f32) -> bool {
-        let a = self.line_cv[0];
-        let b = self.line_cv[1];
+        let a = self.line_cvf[0];
+        let b = self.line_cvf[1];
         (b.x - a.x)*(cy - a.y) - (b.y - a.y)*(cx - a.x) > 0.0
     }
     pub fn clone(&self) -> Self {
         VirtualLine {
             line: self.line,
-            line_cv: self.line_cv,
+            line_cvf: self.line_cvf,
+            line_cvi: self.line_cvi,
             color_cv: self.color_cv,
             color: self.color,
             direction: self.direction,
         }
     }
     pub fn draw_on_mat(&self, img: &mut Mat) {
-        let a = Point2i::new(self.line[0][0], self.line[0][1]);
-        let b = Point2i::new(self.line[1][0], self.line[1][1]);
-        match line(img, a, b, self.color_cv, 2, LINE_8, 0) {
+        match line(img, self.line_cvi[0], self.line_cvi[1], self.color_cv, 2, LINE_8, 0) {
             Ok(_) => {},
             Err(err) => {
                 panic!("Can't draw virtual line for polygon due the error: {:?}", err)
