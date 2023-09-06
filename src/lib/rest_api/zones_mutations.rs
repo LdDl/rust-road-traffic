@@ -311,6 +311,15 @@ pub async fn replace_all(data: web::Data<APIStorage>, _new_zones: web::Json<Poly
             _ => {}
         }
 
+        match &new_zone.virtual_line {
+            Some(val) => {
+                let mut new_line = VirtualLine::new_from(val.geometry[0], val.geometry[1], val.direction);
+                new_line.set_color(val.color_rgb[2], val.color_rgb[1], val.color_rgb[0]);
+                zone.set_virtual_line(new_line);
+            },
+            _ => {}
+        }
+
         let new_id = zone.get_id().clone();
 
 
@@ -323,6 +332,8 @@ pub async fn replace_all(data: web::Data<APIStorage>, _new_zones: web::Json<Poly
                 }));
             }
         }
+        drop(ds_guard);
+
         response.push(new_id);
     }
 
