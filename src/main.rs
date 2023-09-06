@@ -496,6 +496,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                         zone.register_or_update_object(object_id.clone(), -1.0, object_extra.get_classname());
                     }
                 }
+                drop(zone);
             }
         }
         if enable_mjpeg || settings.output.enable {
@@ -504,6 +505,8 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                 zone.draw_geom(&mut frame);
                 zone.draw_skeleton(&mut frame);
                 zone.draw_current_intensity(&mut frame);
+                zone.draw_virtual_line(&mut frame);
+                drop(zone);
             }
         }
 

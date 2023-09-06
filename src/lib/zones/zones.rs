@@ -539,9 +539,24 @@ impl Zone {
         match line(img, a, b, self.skeleton.color, 2, LINE_8, 0) {
             Ok(_) => {},
             Err(err) => {
-                panic!("Can't draw line for polygon due the error: {:?}", err)
+                panic!("Can't draw skeleton line for polygon due the error: {:?}", err)
             }
         };
+    }
+    pub fn draw_virtual_line(&self, img: &mut Mat) {
+        match &self.virtual_line {
+            Some(vl) => {
+                let a = Point2i::new(vl.line[0].x as i32, vl.line[0].y as i32);
+                let b = Point2i::new(vl.line[1].x as i32, vl.line[1].y as i32);
+                match line(img, a, b, vl.color, 2, LINE_8, 0) {
+                    Ok(_) => {},
+                    Err(err) => {
+                        panic!("Can't draw virtual line for polygon due the error: {:?}", err)
+                    }
+                };
+            },
+            None => {}
+        }
     }
     pub fn draw_current_intensity(&self, img: &mut Mat) {
         let current_intensity = self.objects_registered.len();
