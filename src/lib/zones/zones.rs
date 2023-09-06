@@ -38,6 +38,7 @@ use crate::lib::spatial::SpatialConverter;
 use crate::lib::spatial::epsg::lonlat_to_meters;
 use crate::lib::spatial::compute_center;
 use crate::lib::spatial::haversine;
+use crate::lib::zones::VirtualLine;
 
 #[derive(Debug)]
 pub struct Statistics {
@@ -148,56 +149,6 @@ impl Skeleton {
     }
 }
 
-#[derive(Debug)]
-pub struct VirtualLine {
-    pub line: [[i32; 2]; 2],
-    pub line_cv: [Point2f; 2],
-    pub color_cv: Scalar,
-    pub color: [i16; 3],
-    // 0 - left->right, top->bottom
-    // 1 - right->left, bottom->top
-    pub direction: u8,
-}
-
-impl VirtualLine {
-    pub fn new_from_cv(a: Point2f, b: Point2f, _direction: u8) -> Self {
-        VirtualLine {
-            line: [[a.x as i32, a.y as i32], [b.x as i32, b.y as i32]],
-            line_cv: [a, b],
-            color_cv: Scalar::from((0.0, 0.0, 0.0)),
-            color: [0, 0, 0],
-            direction: _direction,
-        }
-    }
-    pub fn new_from(ab: [[i32; 2]; 2], _direction: u8) -> Self {
-        VirtualLine {
-            line: ab,
-            line_cv: [Point2f::new(ab[0][0] as f32, ab[0][1] as f32), Point2f::new(ab[1][0] as f32, ab[1][1] as f32)],
-            color_cv: Scalar::from((0.0, 0.0, 0.0)),
-            color: [0, 0, 0],
-            direction: _direction,
-        }
-    }
-    pub fn set_color(&mut self, r: i16, g: i16, b: i16) {
-        self.color_cv = Scalar::from((r as f64, g as f64, b as f64));
-        self.color = [r, g, b];
-    }
-    // is_left returns true if the given point is to the left side of the vertical AB or if the given point is above of the horizontal AB
-    pub fn is_left(&self, cx: f32, cy: f32) -> bool {
-        let a = self.line_cv[0];
-        let b = self.line_cv[1];
-        (b.x - a.x)*(cy - a.y) - (b.y - a.y)*(cx - a.x) > 0.0
-    }
-    pub fn clone(&self) -> Self {
-        VirtualLine {
-            line: self.line,
-            line_cv: self.line_cv,
-            color_cv: self.color_cv,
-            color: self.color,
-            direction: self.direction,
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct Zone {
@@ -215,7 +166,6 @@ pub struct Zone {
     skeleton: Skeleton,
     virtual_line: Option<VirtualLine>
 }
-
 
 #[derive(Debug)]
 pub struct RealTimeStatistics {
@@ -592,14 +542,7 @@ impl Zone {
     pub fn draw_virtual_line(&self, img: &mut Mat) {
         match &self.virtual_line {
             Some(vl) => {
-                let a = Point2i::new(vl.line_cv[0].x as i32, vl.line_cv[0].y as i32);
-                let b = Point2i::new(vl.line_cv[1].x as i32, vl.line_cv[1].y as i32);
-                match line(img, a, b, vl.color_cv, 2, LINE_8, 0) {
-                    Ok(_) => {},
-                    Err(err) => {
-                        panic!("Can't draw virtual line for polygon due the error: {:?}", err)
-                    }
-                };
+                vl.draw_on_mat(img);
             },
             None => {}
         }
