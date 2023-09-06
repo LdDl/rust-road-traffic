@@ -142,8 +142,10 @@ impl From<&RoadLanesSettings> for Zone {
                     None
                 } else {
                     let a = Point2f::new(vl.geometry[0][0] as f32, vl.geometry[0][1] as f32);
-                    let b = Point2f::new(vl.geometry[1][0] as f32, vl.geometry[1][0] as f32);
-                    Some(VirtualLine::new(a, b, vl.direction))
+                    let b = Point2f::new(vl.geometry[1][0] as f32, vl.geometry[1][1] as f32);
+                    let mut line = VirtualLine::new(a, b, vl.direction);
+                    line.set_color(vl.color_rgb[2], vl.color_rgb[1], vl.color_rgb[0]);
+                    Some(line)
                 }
             },
             None => {

@@ -177,6 +177,9 @@ impl VirtualLine {
             direction: 0,
         }
     }
+    pub fn set_color(&mut self, r: i16, g: i16, b: i16) {
+        self.color = Scalar::from((r as f64, g as f64, b as f64));
+    }
     // is_left returns true if the given point is to the left side of the vertical AB or if the given point is above of the horizontal AB
     pub fn is_left(&self, cx: f32, cy: f32) -> bool {
         let a = self.line[0];
