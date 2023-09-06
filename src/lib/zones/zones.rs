@@ -178,24 +178,6 @@ impl VirtualLine {
             direction: _direction,
         }
     }
-    pub fn new_from_ab(a: [i32; 2], b:  [i32; 2], _direction: u8) -> Self {
-        VirtualLine {
-            line: [a, b],
-            line_cv: [Point2f::new(a[0] as f32, a[1] as f32), Point2f::new(b[0] as f32, b[1] as f32)],
-            color_cv: Scalar::from((0.0, 0.0, 0.0)),
-            color: [0, 0, 0],
-            direction: _direction,
-        }
-    }
-    pub fn default() -> Self {
-        VirtualLine {
-            line: [[0, 0], [0, 0]],
-            line_cv: [Point2f::default(), Point2f::default()],
-            color_cv: Scalar::from((0.0, 0.0, 0.0)),
-            color: [0, 0, 0],
-            direction: 0,
-        }
-    }
     pub fn set_color(&mut self, r: i16, g: i16, b: i16) {
         self.color_cv = Scalar::from((r as f64, g as f64, b as f64));
         self.color = [r, g, b];
