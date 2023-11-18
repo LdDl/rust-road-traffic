@@ -6,20 +6,22 @@ use opencv::{
     core::Mat,
     core::Vector,
     core::get_cuda_enabled_device_count,
-    core::CV_32F,
     highgui::named_window,
     highgui::resize_window,
     highgui::imshow,
     highgui::wait_key,
     videoio::VideoCapture,
-    videoio::get_backends,
     imgproc::resize,
     imgcodecs::imencode,
     dnn::DNN_BACKEND_CUDA,
     dnn::DNN_TARGET_CUDA,
-    dnn::Net,
-    dnn::read_net,
-    dnn::blob_from_image,
+    dnn::DNN_BACKEND_OPENCV,
+    dnn::DNN_TARGET_CPU,
+};
+
+use od_opencv::{
+    model_format::ModelFormat,
+    model_classic::ModelYOLOClassic
 };
 
 mod lib;
@@ -140,41 +142,31 @@ fn probe_video(capture: &mut VideoCapture) ->  Result<(f32, f32, f32), AppError>
     return Ok((frame_cols, frame_rows, fps));
 }
 
-fn prepare_neural_net(weights: &str, configuration: &str) -> Result<(Net, Vector<String>), AppError> {
-    let mut neural_net = match read_net(weights, configuration, "Darknet"){
+fn prepare_neural_net(weights: &str, configuration: &str, net_size: (i32, i32)) -> Result<ModelYOLOClassic, AppError> {
+
+     /* Check if CUDA is an option at all */
+     let cuda_count = get_cuda_enabled_device_count()?;
+     let cuda_available = cuda_count > 0;
+     println!("CUDA is {}", if cuda_available { "'available'" } else { "'not available'" });
+
+    let mf = ModelFormat::Darknet;
+    let mut neural_net = match ModelYOLOClassic::new_from_file(
+    &weights,
+    Some(configuration),
+    (net_size.0, net_size.1),
+    mf,
+    if cuda_available { DNN_BACKEND_CUDA } else { DNN_BACKEND_OPENCV },
+    if cuda_available { DNN_TARGET_CUDA } else { DNN_TARGET_CPU },
+    vec![]) {
         Ok(result) => result,
         Err(err) => {
             panic!("Can't read network '{}' (with cfg '{}') due the error: {:?}", weights, configuration, err);
         }
     };
-
-    let out_layers_names = neural_net.get_unconnected_out_layers_names()?;
-
-    /* Check if CUDA is an option at all */
-    let cuda_count = get_cuda_enabled_device_count()?;
-    let cuda_available = cuda_count > 0;
-    println!("CUDA is {}", if cuda_available { "'available'" } else { "'not available'" });
-
-    // Initialize CUDA back-end if possible
-    if cuda_available {
-        match neural_net.set_preferable_backend(DNN_BACKEND_CUDA){
-            Ok(_) => {},
-            Err(err) => {
-                panic!("Can't set DNN_BACKEND_CUDA for neural network due the error {:?}", err);
-            }
-        }
-        match neural_net.set_preferable_target(DNN_TARGET_CUDA){
-            Ok(_) => {},
-            Err(err) => {
-                panic!("Can't set DNN_TARGET_CUDA for neural network due the error {:?}", err);
-            }
-        }
-    }
-
-    Ok((neural_net, out_layers_names))
+    Ok(neural_net)
 }
 
-fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neural_net: &mut Net, neural_net_out_layers: Vector<String>, verbose: bool) -> Result<(), AppError> {
+fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neural_net: &mut ModelYOLOClassic, verbose: bool) -> Result<(), AppError> {
     println!("Verbose is '{}'", verbose);
     println!("REST API is '{}'", settings.rest_api.enable);
     println!("Redis publisher is '{}'", settings.redis_publisher.enable);
@@ -413,28 +405,20 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
     for received in rx_capture {
         // println!("Received frame from capture thread: {}", received.current_second);
         let mut frame = received.frame.clone();
-        let blobimg = blob_from_image(&frame, BLOB_SCALE, net_size, blob_mean, true, false, CV_32F)?;
-        match neural_net.set_input(&blobimg, BLOB_NAME, 1.0, blob_mean) {
-            Ok(_) => {},
-            Err(err) => {
-                println!("Can't set input of neural network due the error {:?}", err);
-                continue;
-            }
-        };
-        
-        match neural_net.forward(&mut detections, &neural_net_out_layers) {
-            Ok(_) => {},
+
+        let (nms_bboxes, nms_classes_ids, nms_confidences) = match neural_net.forward(&frame, conf_threshold, nms_threshold) {
+            Ok((a, b, c)) => { (a, b, c) },
             Err(err) => {
                 println!("Can't process input of neural network due the error {:?}", err);
                 continue;
             }
-        }
+        };
         
         /* Process detected objects and match them to existing ones */
         let mut tmp_detections = process_yolo_detections(
-            &detections,
-            conf_threshold,
-            nms_threshold,
+            &nms_bboxes,
+            nms_classes_ids,
+            nms_confidences,
             width,
             height,
             max_points_in_track,
@@ -573,7 +557,7 @@ fn main() {
     let mut tracker = Tracker::new(15, 0.3);
     println!("Tracker is:\n\t{}", tracker);
 
-    let mut neural_net = match prepare_neural_net(&app_settings.detection.network_weights, &app_settings.detection.network_cfg) {
+    let mut neural_net = match prepare_neural_net(&app_settings.detection.network_weights, &app_settings.detection.network_cfg, (app_settings.detection.net_width, app_settings.detection.net_height)) {
         Ok(nn) => nn,
         Err(err) => {
             println!("Can't prepare neural network due the error: {}", err);
@@ -586,7 +570,7 @@ fn main() {
         None => { false }
     };
     
-    match run(&app_settings, path_to_config, &mut tracker, &mut neural_net.0, neural_net.1, verbose) {
+    match run(&app_settings, path_to_config, &mut tracker, &mut neural_net, verbose) {
         Ok(_) => {},
         Err(_err) => {
             println!("Error in main thread: {}", _err);
