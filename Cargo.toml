@@ -29,7 +29,7 @@ futures = "0.3.1"
 mot-rs = "0.1.1"
 utoipa = { version = "3", features = ["actix_extras"] }
 utoipa-rapidoc = { version = "0.1", features = ["actix-web"] }
-od_opencv = "0.1.2"
+od_opencv = "0.1.4"
 
 [build-dependencies]
 static-files = "0.2.1"

@@ -1221,9 +1221,9 @@ dependencies = [
 
 [[package]]
 name = "od_opencv"
-version = "0.1.2"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d67a778429f460303c788968ecc397672786e289b9c47e99063498df4016668e"
+checksum = "c758f27183aafe3601555eafe8e1dc8dc2799917681a31b7fb4c0e39ddf891d3"
 dependencies = [
  "lazy_static",
  "opencv",

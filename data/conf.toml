@@ -21,6 +21,12 @@
     window_name = "Toy GUI"
 
 [detection]
+    # Available model_versions: v3, v4, v7, v8
+    # Default is v3
+    network_ver = 3
+    # Available model formats: "darknet", "onnx"
+    # Default is "darknet"
+    network_format = "darknet"
     # Vehicles-only YOLOv3-tiny:
     network_weights = "./data/tinyv3-vehicles_best.weights"
     network_cfg = "./data/tinyv3-vehicles.cfg"

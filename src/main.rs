@@ -21,8 +21,9 @@ use opencv::{
 
 use od_opencv::{
     model_format::ModelFormat,
+    model_format::ModelVersion,
+    model::new_from_file,
     model::ModelTrait,
-    model::new_from_file_v3,
 };
 
 mod lib;
@@ -143,26 +144,30 @@ fn probe_video(capture: &mut VideoCapture) ->  Result<(f32, f32, f32), AppError>
     return Ok((frame_cols, frame_rows, fps));
 }
 
-fn prepare_neural_net(weights: &str, configuration: &str, net_size: (i32, i32)) -> Result<Box<dyn ModelTrait>, AppError> {
+fn prepare_neural_net(mf: ModelFormat, mv: ModelVersion, weights: &str, configuration: Option<String>, net_size: (i32, i32)) -> Result<Box<dyn ModelTrait>, AppError> {
 
-     /* Check if CUDA is an option at all */
-     let cuda_count = get_cuda_enabled_device_count()?;
-     let cuda_available = cuda_count > 0;
-     println!("CUDA is {}", if cuda_available { "'available'" } else { "'not available'" });
+    /* Check if CUDA is an option at all */
+    let cuda_count = get_cuda_enabled_device_count()?;
+    let cuda_available = cuda_count > 0;
+    println!("CUDA is {}", if cuda_available { "'available'" } else { "'not available'" });
+    println!("Model format is '{:?}'", mf);
+    println!("Model type is '{:?}'", mv);
 
-    let mf = ModelFormat::Darknet;
-    let neural_net = match new_from_file_v3(
+    // Hacky way to convert Option<String> to Option<&str>
+    let configuration_str = configuration.as_deref();
+
+    let neural_net = match new_from_file(
         &weights,
-        Some(configuration),
+        configuration_str,
         (net_size.0, net_size.1),
-        mf,
+        mf, mv,
         if cuda_available { DNN_BACKEND_CUDA } else { DNN_BACKEND_OPENCV },
         if cuda_available { DNN_TARGET_CUDA } else { DNN_TARGET_CPU },
         vec![]
     ) {
         Ok(result) => result,
         Err(err) => {
-            panic!("Can't read network '{}' (with cfg '{}') due the error: {:?}", weights, configuration, err);
+            panic!("Can't read network '{}' (with cfg '{:?}') due the error: {:?}", weights, configuration, err);
         }
     };
     Ok(neural_net)
@@ -384,9 +389,6 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
     });
 
     /* Detection thread */
-    let net_size = Size::new(settings.detection.net_width, settings.detection.net_height);
-    let blob_mean: Scalar = Scalar::new(0.0, 0.0, 0.0, 0.0);
-    let mut detections = Vector::<Mat>::new();
     let conf_threshold: f32 = settings.detection.conf_threshold;
     let nms_threshold: f32 = settings.detection.nms_threshold;
     let coco_classnames = &settings.detection.net_classes;
@@ -559,7 +561,23 @@ fn main() {
     let mut tracker = Tracker::new(15, 0.3);
     println!("Tracker is:\n\t{}", tracker);
 
-    let mut neural_net = match prepare_neural_net(&app_settings.detection.network_weights, &app_settings.detection.network_cfg, (app_settings.detection.net_width, app_settings.detection.net_height)) {
+    let model_format = match app_settings.detection.get_nn_format() {
+        Ok(mf) => mf,
+        Err(err) => {
+            println!("Can't get model format due the error: {}", err);
+            return
+        }
+    };
+
+    let model_version = match app_settings.detection.get_nn_version() {
+        Ok(mf) => mf,
+        Err(err) => {
+            println!("Can't get model version due the error: {}", err);
+            return
+        }
+    };
+
+    let mut neural_net = match prepare_neural_net(model_format, model_version, &app_settings.detection.network_weights, app_settings.detection.network_cfg.clone(), (app_settings.detection.net_width, app_settings.detection.net_height)) {
         Ok(nn) => nn,
         Err(err) => {
             println!("Can't prepare neural network due the error: {}", err);
