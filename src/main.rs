@@ -21,7 +21,8 @@ use opencv::{
 
 use od_opencv::{
     model_format::ModelFormat,
-    model_classic::ModelYOLOClassic
+    model::ModelTrait,
+    model::new_from_file_v3,
 };
 
 mod lib;
@@ -142,7 +143,7 @@ fn probe_video(capture: &mut VideoCapture) ->  Result<(f32, f32, f32), AppError>
     return Ok((frame_cols, frame_rows, fps));
 }
 
-fn prepare_neural_net(weights: &str, configuration: &str, net_size: (i32, i32)) -> Result<ModelYOLOClassic, AppError> {
+fn prepare_neural_net(weights: &str, configuration: &str, net_size: (i32, i32)) -> Result<Box<dyn ModelTrait>, AppError> {
 
      /* Check if CUDA is an option at all */
      let cuda_count = get_cuda_enabled_device_count()?;
@@ -150,14 +151,15 @@ fn prepare_neural_net(weights: &str, configuration: &str, net_size: (i32, i32)) 
      println!("CUDA is {}", if cuda_available { "'available'" } else { "'not available'" });
 
     let mf = ModelFormat::Darknet;
-    let mut neural_net = match ModelYOLOClassic::new_from_file(
-    &weights,
-    Some(configuration),
-    (net_size.0, net_size.1),
-    mf,
-    if cuda_available { DNN_BACKEND_CUDA } else { DNN_BACKEND_OPENCV },
-    if cuda_available { DNN_TARGET_CUDA } else { DNN_TARGET_CPU },
-    vec![]) {
+    let neural_net = match new_from_file_v3(
+        &weights,
+        Some(configuration),
+        (net_size.0, net_size.1),
+        mf,
+        if cuda_available { DNN_BACKEND_CUDA } else { DNN_BACKEND_OPENCV },
+        if cuda_available { DNN_TARGET_CUDA } else { DNN_TARGET_CPU },
+        vec![]
+    ) {
         Ok(result) => result,
         Err(err) => {
             panic!("Can't read network '{}' (with cfg '{}') due the error: {:?}", weights, configuration, err);
@@ -166,7 +168,7 @@ fn prepare_neural_net(weights: &str, configuration: &str, net_size: (i32, i32)) 
     Ok(neural_net)
 }
 
-fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neural_net: &mut ModelYOLOClassic, verbose: bool) -> Result<(), AppError> {
+fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neural_net: &mut dyn ModelTrait, verbose: bool) -> Result<(), AppError> {
     println!("Verbose is '{}'", verbose);
     println!("REST API is '{}'", settings.rest_api.enable);
     println!("Redis publisher is '{}'", settings.redis_publisher.enable);
@@ -570,7 +572,7 @@ fn main() {
         None => { false }
     };
     
-    match run(&app_settings, path_to_config, &mut tracker, &mut neural_net, verbose) {
+    match run(&app_settings, path_to_config, &mut tracker, &mut *neural_net, verbose) {
         Ok(_) => {},
         Err(_err) => {
             println!("Error in main thread: {}", _err);
