@@ -6,40 +6,38 @@ use opencv::{
     core::Mat,
     core::Vector,
     core::get_cuda_enabled_device_count,
-    core::CV_32F,
     highgui::named_window,
     highgui::resize_window,
     highgui::imshow,
     highgui::wait_key,
     videoio::VideoCapture,
-    videoio::get_backends,
     imgproc::resize,
     imgcodecs::imencode,
     dnn::DNN_BACKEND_CUDA,
     dnn::DNN_TARGET_CUDA,
-    dnn::Net,
-    dnn::read_net,
-    dnn::blob_from_image,
+    dnn::DNN_BACKEND_OPENCV,
+    dnn::DNN_TARGET_CPU,
+};
+
+use od_opencv::{
+    model_format::ModelFormat,
+    model_format::ModelVersion,
+    model::new_from_file,
+    model::ModelTrait,
 };
 
 mod lib;
-use lib::data_storage::{
-    new_datastorage,
-};
+use lib::data_storage::new_datastorage;
 use lib::draw;
 use lib::tracker::{
     Tracker,
     SpatialInfo
 };
-use lib::detection::{
-    process_yolo_detections
-};
+use lib::detection::process_yolo_detections;
 use lib::zones::Zone;
 
 mod settings;
-use settings::{
-    AppSettings,
-};
+use settings::AppSettings;
 
 mod video_capture;
 use video_capture::{
@@ -47,33 +45,20 @@ use video_capture::{
     ThreadedFrame
 };
 
-use lib::publisher::{
-    RedisConnection
-};
+use lib::publisher::RedisConnection;
 
 use lib::rest_api;
 
 use std::env;
 use std::time::Duration as STDDuration;
-use std::time::{SystemTime};
+use std::time::SystemTime;
 use std::process;
-use std::time::Instant;
-use std::io::Write;
 use std::thread;
-use std::sync::{Arc, RwLock, mpsc};
-use std::error::Error;
-use std::error;
+use std::sync::mpsc;
 use std::fmt;
 use ctrlc;
 
-use crate::lib::spatial::meters_to_lonlat;
-use crate::lib::spatial::lonlat_to_meters;
-use crate::lib::{data_storage, zones};
-
-const VIDEOCAPTURE_POS_MSEC: i32 = 0;
 const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
-const BLOB_SCALE: f64 = 1.0 / 255.0;
-const BLOB_NAME: &'static str = "";
 const EMPTY_FRAMES_LIMIT: u16 = 60;
 
 fn get_sys_time_in_secs() -> u64 {
@@ -140,41 +125,36 @@ fn probe_video(capture: &mut VideoCapture) ->  Result<(f32, f32, f32), AppError>
     return Ok((frame_cols, frame_rows, fps));
 }
 
-fn prepare_neural_net(weights: &str, configuration: &str) -> Result<(Net, Vector<String>), AppError> {
-    let mut neural_net = match read_net(weights, configuration, "Darknet"){
-        Ok(result) => result,
-        Err(err) => {
-            panic!("Can't read network '{}' (with cfg '{}') due the error: {:?}", weights, configuration, err);
-        }
-    };
-
-    let out_layers_names = neural_net.get_unconnected_out_layers_names()?;
+fn prepare_neural_net(mf: ModelFormat, mv: ModelVersion, weights: &str, configuration: Option<String>, net_size: (i32, i32)) -> Result<Box<dyn ModelTrait>, AppError> {
 
     /* Check if CUDA is an option at all */
     let cuda_count = get_cuda_enabled_device_count()?;
     let cuda_available = cuda_count > 0;
     println!("CUDA is {}", if cuda_available { "'available'" } else { "'not available'" });
+    println!("Model format is '{:?}'", mf);
+    println!("Model type is '{:?}'", mv);
 
-    // Initialize CUDA back-end if possible
-    if cuda_available {
-        match neural_net.set_preferable_backend(DNN_BACKEND_CUDA){
-            Ok(_) => {},
-            Err(err) => {
-                panic!("Can't set DNN_BACKEND_CUDA for neural network due the error {:?}", err);
-            }
-        }
-        match neural_net.set_preferable_target(DNN_TARGET_CUDA){
-            Ok(_) => {},
-            Err(err) => {
-                panic!("Can't set DNN_TARGET_CUDA for neural network due the error {:?}", err);
-            }
-        }
-    }
+    // Hacky way to convert Option<String> to Option<&str>
+    let configuration_str = configuration.as_deref();
 
-    Ok((neural_net, out_layers_names))
+    let neural_net = match new_from_file(
+        &weights,
+        configuration_str,
+        (net_size.0, net_size.1),
+        mf, mv,
+        if cuda_available { DNN_BACKEND_CUDA } else { DNN_BACKEND_OPENCV },
+        if cuda_available { DNN_TARGET_CUDA } else { DNN_TARGET_CPU },
+        vec![]
+    ) {
+        Ok(result) => result,
+        Err(err) => {
+            panic!("Can't read network '{}' (with cfg '{:?}') due the error: {:?}", weights, configuration, err);
+        }
+    };
+    Ok(neural_net)
 }
 
-fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neural_net: &mut Net, neural_net_out_layers: Vector<String>, verbose: bool) -> Result<(), AppError> {
+fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neural_net: &mut dyn ModelTrait, verbose: bool) -> Result<(), AppError> {
     println!("Verbose is '{}'", verbose);
     println!("REST API is '{}'", settings.rest_api.enable);
     println!("Redis publisher is '{}'", settings.redis_publisher.enable);
@@ -390,9 +370,6 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
     });
 
     /* Detection thread */
-    let net_size = Size::new(settings.detection.net_width, settings.detection.net_height);
-    let blob_mean: Scalar = Scalar::new(0.0, 0.0, 0.0, 0.0);
-    let mut detections = Vector::<Mat>::new();
     let conf_threshold: f32 = settings.detection.conf_threshold;
     let nms_threshold: f32 = settings.detection.nms_threshold;
     let coco_classnames = &settings.detection.net_classes;
@@ -413,28 +390,20 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
     for received in rx_capture {
         // println!("Received frame from capture thread: {}", received.current_second);
         let mut frame = received.frame.clone();
-        let blobimg = blob_from_image(&frame, BLOB_SCALE, net_size, blob_mean, true, false, CV_32F)?;
-        match neural_net.set_input(&blobimg, BLOB_NAME, 1.0, blob_mean) {
-            Ok(_) => {},
-            Err(err) => {
-                println!("Can't set input of neural network due the error {:?}", err);
-                continue;
-            }
-        };
-        
-        match neural_net.forward(&mut detections, &neural_net_out_layers) {
-            Ok(_) => {},
+
+        let (nms_bboxes, nms_classes_ids, nms_confidences) = match neural_net.forward(&frame, conf_threshold, nms_threshold) {
+            Ok((a, b, c)) => { (a, b, c) },
             Err(err) => {
                 println!("Can't process input of neural network due the error {:?}", err);
                 continue;
             }
-        }
+        };
         
         /* Process detected objects and match them to existing ones */
         let mut tmp_detections = process_yolo_detections(
-            &detections,
-            conf_threshold,
-            nms_threshold,
+            &nms_bboxes,
+            nms_classes_ids,
+            nms_confidences,
             width,
             height,
             max_points_in_track,
@@ -573,7 +542,23 @@ fn main() {
     let mut tracker = Tracker::new(15, 0.3);
     println!("Tracker is:\n\t{}", tracker);
 
-    let mut neural_net = match prepare_neural_net(&app_settings.detection.network_weights, &app_settings.detection.network_cfg) {
+    let model_format = match app_settings.detection.get_nn_format() {
+        Ok(mf) => mf,
+        Err(err) => {
+            println!("Can't get model format due the error: {}", err);
+            return
+        }
+    };
+
+    let model_version = match app_settings.detection.get_nn_version() {
+        Ok(mf) => mf,
+        Err(err) => {
+            println!("Can't get model version due the error: {}", err);
+            return
+        }
+    };
+
+    let mut neural_net = match prepare_neural_net(model_format, model_version, &app_settings.detection.network_weights, app_settings.detection.network_cfg.clone(), (app_settings.detection.net_width, app_settings.detection.net_height)) {
         Ok(nn) => nn,
         Err(err) => {
             println!("Can't prepare neural network due the error: {}", err);
@@ -586,7 +571,7 @@ fn main() {
         None => { false }
     };
     
-    match run(&app_settings, path_to_config, &mut tracker, &mut neural_net.0, neural_net.1, verbose) {
+    match run(&app_settings, path_to_config, &mut tracker, &mut *neural_net, verbose) {
         Ok(_) => {},
         Err(_err) => {
             println!("Error in main thread: {}", _err);
