@@ -37,8 +37,9 @@ UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic
 
 * Web-UI for configuration:
 
-    <img src="data/ui2.png" width="320"> | 
+    <img src="data/ui2.png" width="640">
 
+    <img src="data/ui3.gif" width="640">
 
 ## Installation and usage
 1. You need installed Rust compiler obviously. Follow instruction of official site: https://www.rust-lang.org/tools/install
