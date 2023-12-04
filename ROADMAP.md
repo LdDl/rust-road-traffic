@@ -45,7 +45,7 @@
     * RabbitMQ integration module? Do we need those?
     * ~~Verbose output as option (fps/workers output)~~
     * Consider color as hex representation (additional field with priority lower than RGBA)
-    * ~~Consider training YOLO v4 tiny for vehicle classes only (we do need false positive detection for peoples/boats/chairs and etc.) ~~ [I want to provide link for custom trained network: only vehicles + network size is 416x256 rather than 416x416 due the problem when resizing image provided too much squeezing]
+    * ~~Consider training YOLO v4 tiny for vehicle classes only (we do need false positive detection for peoples/boats/chairs and etc.)~~ [I want to provide link for custom trained network: only vehicles + network size is 416x256 rather than 416x416 due the problem when resizing image provided too much squeezing]
     * ~~Organize structure to reduce connectiviy of components of applications~~
     * ~~Consider YOLOX (nano/tiny)~~ [Well, I checked it and it not that good as I was thought]
     * ~~More neural network parameters in TOML ~~
