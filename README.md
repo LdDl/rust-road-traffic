@@ -48,6 +48,8 @@ UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic
     sudo make install_cuda
     ```
 
+    __Be aware: OpenCV < 4.7.0 probably wont work with YOLOv8 (even with ONNX opset12) if you need those.__
+
 3. OpenCV's bindings have already meant as dependencies in [Cargo.toml](Cargo.toml)
 
 4. Clone the repo
