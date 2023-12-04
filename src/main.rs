@@ -27,23 +27,17 @@ use od_opencv::{
 };
 
 mod lib;
-use lib::data_storage::{
-    new_datastorage,
-};
+use lib::data_storage::new_datastorage;
 use lib::draw;
 use lib::tracker::{
     Tracker,
     SpatialInfo
 };
-use lib::detection::{
-    process_yolo_detections
-};
+use lib::detection::process_yolo_detections;
 use lib::zones::Zone;
 
 mod settings;
-use settings::{
-    AppSettings,
-};
+use settings::AppSettings;
 
 mod video_capture;
 use video_capture::{
@@ -51,33 +45,20 @@ use video_capture::{
     ThreadedFrame
 };
 
-use lib::publisher::{
-    RedisConnection
-};
+use lib::publisher::RedisConnection;
 
 use lib::rest_api;
 
 use std::env;
 use std::time::Duration as STDDuration;
-use std::time::{SystemTime};
+use std::time::SystemTime;
 use std::process;
-use std::time::Instant;
-use std::io::Write;
 use std::thread;
-use std::sync::{Arc, RwLock, mpsc};
-use std::error::Error;
-use std::error;
+use std::sync::mpsc;
 use std::fmt;
 use ctrlc;
 
-use crate::lib::spatial::meters_to_lonlat;
-use crate::lib::spatial::lonlat_to_meters;
-use crate::lib::{data_storage, zones};
-
-const VIDEOCAPTURE_POS_MSEC: i32 = 0;
 const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
-const BLOB_SCALE: f64 = 1.0 / 255.0;
-const BLOB_NAME: &'static str = "";
 const EMPTY_FRAMES_LIMIT: u16 = 60;
 
 fn get_sys_time_in_secs() -> u64 {
