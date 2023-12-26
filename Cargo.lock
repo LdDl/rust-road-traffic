@@ -417,7 +417,6 @@ checksum = "10612c0ec0e0a1ff0e97980647cb058a6e7aedb913d01d009c406b8b7d0b26ee"
 dependencies = [
  "glob",
  "libc",
- "libloading",
 ]
 
 [[package]]
@@ -954,16 +953,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04c3b4822ccebfa39c02fc03d1534441b22ead323fa0f48bb7ddd8e6ba076a40"
 
 [[package]]
-name = "libloading"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b67380fd3b2fbe7527a606e18729d21c6f3951633d0500574c4dc22d2d638b9f"
-dependencies = [
- "cfg-if",
- "winapi",
-]
-
-[[package]]
 name = "link-cplusplus"
 version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1007,12 +996,6 @@ checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
 dependencies = [
  "cfg-if",
 ]
-
-[[package]]
-name = "maplit"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
 
 [[package]]
 name = "matches"
@@ -1221,9 +1204,9 @@ dependencies = [
 
 [[package]]
 name = "od_opencv"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c758f27183aafe3601555eafe8e1dc8dc2799917681a31b7fb4c0e39ddf891d3"
+checksum = "fef1b18cad4e369c1e41ccec241e7fac8df2bebc95a15322bd72fa2f2ee01bb1"
 dependencies = [
  "lazy_static",
  "opencv",
@@ -1237,14 +1220,12 @@ checksum = "b7e5500299e16ebb147ae15a00a942af264cf3688f47923b8fc2cd5858f23ad3"
 
 [[package]]
 name = "opencv"
-version = "0.66.0"
+version = "0.88.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae1211402fae55d0054e5779bcb231660752b8da825f88aa8a837aef7944c68d"
+checksum = "980aa24534b9bcfb03c259779ffcbe422e0395cf45700d6d85657734ea1d5c57"
 dependencies = [
  "cc",
- "clang",
  "dunce",
- "glob",
  "jobserver",
  "libc",
  "num-traits",
@@ -1258,14 +1239,13 @@ dependencies = [
 
 [[package]]
 name = "opencv-binding-generator"
-version = "0.45.0"
+version = "0.82.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1070da825ea3584b7ef0a2951fc002843f986ec430681b2273d9d425da2ffd61"
+checksum = "e4ac010a66cd1e1dc457c20d467a16286cc83381307cace05357b414c06740f6"
 dependencies = [
  "clang",
  "clang-sys",
  "dunce",
- "maplit",
  "once_cell",
  "percent-encoding",
  "regex",
