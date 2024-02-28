@@ -23,7 +23,7 @@ Vehicle detection/tracking and speed estimation via next instruments:
 
 Notice:
 
-UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic-ui. Therefore there is '[static_old](src/lib/rest_api/static_old/)' for just legacy and history + [static](src/lib/rest_api/static/)' for new one.
+UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic-ui. Prepared `static` directory after `npm run build` is [here](src/lib/rest_api/static/)' 
 
 ## Screenshots
 * imshow() output:
