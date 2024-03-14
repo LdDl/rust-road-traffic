@@ -3,7 +3,7 @@ use actix_web::{web, http, App, HttpServer};
 use actix_cors::Cors;
 
 use crate::settings::AppSettings;
-use crate::lib::rest_api::services;
+use crate::rest_api::services;
 use crate::lib::data_storage::ThreadedDataStorage;
 use crate::lib::mjpeg_streaming::Broadcaster;
 use std::sync::{

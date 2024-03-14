@@ -2,7 +2,7 @@ use actix_web::{HttpResponse, web, Responder};
 use actix_web_static_files::ResourceFiles;
 include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 
-use crate::lib::rest_api::{
+use crate::rest_api::{
     zones_mutations,
     toml_mutations,
     mjpeg_page,
@@ -78,11 +78,11 @@ use utoipa_rapidoc::RapiDoc;
             crate::lib::zones::geojson::ZoneFeature,
             crate::lib::zones::geojson::ZonePropertiesGeoJSON,
             crate::lib::zones::geojson::GeoPolygon,
-            crate::lib::rest_api::zones_stats::AllZonesStats,
-            crate::lib::rest_api::zones_stats::ZoneStats,
-            crate::lib::rest_api::zones_stats::VehicleTypeParameters,
-            crate::lib::rest_api::zones_stats::AllZonesRealtimeStatistics,
-            crate::lib::rest_api::zones_stats::ZoneRealtime,
+            crate::rest_api::zones_stats::AllZonesStats,
+            crate::rest_api::zones_stats::ZoneStats,
+            crate::rest_api::zones_stats::VehicleTypeParameters,
+            crate::rest_api::zones_stats::AllZonesRealtimeStatistics,
+            crate::rest_api::zones_stats::ZoneRealtime,
         ),
     )
 )]

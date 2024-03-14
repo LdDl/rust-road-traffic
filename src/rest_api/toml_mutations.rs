@@ -2,7 +2,7 @@ use actix_web::{HttpResponse, web, Error};
 use serde::{
     Serialize
 };
-use crate::lib::rest_api::APIStorage;
+use crate::rest_api::APIStorage;
 use crate::settings::RoadLanesSettings;
 
 #[derive(Debug, Serialize)]

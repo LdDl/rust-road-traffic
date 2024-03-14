@@ -47,7 +47,7 @@ use video_capture::{
 
 use lib::publisher::RedisConnection;
 
-use lib::rest_api;
+mod rest_api;
 
 use std::env;
 use std::time::Duration as STDDuration;

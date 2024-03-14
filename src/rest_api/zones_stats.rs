@@ -4,7 +4,7 @@ use utoipa::ToSchema;
 use chrono::{DateTime, Utc};
 
 use std::collections::HashMap;
-use crate::lib::rest_api::APIStorage;
+use crate::rest_api::APIStorage;
 
 /// Information about aggregated road traffic flow parameters for the equipment
 #[derive(Debug, Serialize, ToSchema)]

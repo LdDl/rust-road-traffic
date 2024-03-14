@@ -6,7 +6,7 @@ use std::sync::{ Arc, RwLock };
 use std::error::Error;
 use std::collections::HashMap;
 use crate::lib::publisher::RedisMessage;
-use crate::lib::rest_api::zones_stats::{ AllZonesStats, ZoneStats, VehicleTypeParameters };
+use crate::rest_api::zones_stats::{ AllZonesStats, ZoneStats, VehicleTypeParameters };
 use crate::lib::data_storage::ThreadedDataStorage;
 use std::thread;
 use std::time::Duration as STDDuration;

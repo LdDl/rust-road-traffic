@@ -1,5 +1,5 @@
 use actix_web::{HttpResponse, web, Responder};
-use crate::lib::rest_api::APIStorage;
+use crate::rest_api::APIStorage;
 
 pub async fn add_new_client(ds: web::Data<APIStorage>) -> impl Responder {
     let rx = ds.mjpeg_broadcaster.lock().unwrap().add_client();

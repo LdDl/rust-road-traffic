@@ -1,6 +1,6 @@
 use actix_web::{HttpResponse, web, Error};
 use crate::lib::zones::geojson::ZonesFeatureCollection;
-use crate::lib::rest_api::APIStorage;
+use crate::rest_api::APIStorage;
 
 #[utoipa::path(
     get,

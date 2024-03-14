@@ -1,5 +1,5 @@
 use static_files::resource_dir;
 
 fn main() -> std::io::Result<()> {
-    resource_dir("./src/lib/rest_api/static/build").build()
+    resource_dir("./src/rest_api/static/build").build()
 }

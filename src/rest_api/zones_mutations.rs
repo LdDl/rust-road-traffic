@@ -4,7 +4,7 @@ use serde::{
     Serialize
 };
 use crate::lib::zones::Zone;
-use crate::lib::rest_api::APIStorage;
+use crate::rest_api::APIStorage;
 
 #[derive(Debug, Serialize)]
 pub struct ErrorResponse {
