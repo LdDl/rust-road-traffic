@@ -180,7 +180,7 @@ impl From<&RoadLanesSettings> for Zone {
                     let a = Point2f::new(vl.geometry[0][0] as f32, vl.geometry[0][1] as f32);
                     let b = Point2f::new(vl.geometry[1][0] as f32, vl.geometry[1][1] as f32);
                     let mut line = VirtualLine::new_from_cv(a, b, dir);
-                    line.set_color(vl.color_rgb[2], vl.color_rgb[1], vl.color_rgb[0]);
+                    line.set_color_rgb(vl.color_rgb[0], vl.color_rgb[1], vl.color_rgb[2]);
                     Some(line)
                 }
             },

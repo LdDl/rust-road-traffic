@@ -154,9 +154,21 @@ impl Zone {
         self.spatial_coordinates_epsg4326.clone()
     }
     pub fn set_color(&mut self, rgb: [i16; 3]) {
-        self.color = Scalar::from((rgb[2] as f64, rgb[1] as f64, rgb[0] as f64))
+        // RGB to BGR
+        let (b, g, r) = (rgb[2] as f64, rgb[1] as f64, rgb[0] as f64);
+        self.color = Scalar::from((b, g, r));
     }
-    
+    pub fn get_color(&self) -> [i16; 3] {
+        // BGR to RGB
+        let (b, g, r) = (self.color[2] as i16, self.color[1] as i16, self.color[0] as i16);
+        [r, g, b]
+    }
+    pub fn set_line_color(&mut self, rgb: [i16; 3]) {
+        if let Some(vline) = self.virtual_line.as_mut() {
+            let (r, g, b) = (rgb[0], rgb[1], rgb[2]);
+            vline.set_color_rgb(r, g, b);
+        };
+    }
     pub fn update_skeleton(&mut self) {
          /* Eval distance between sides */
          let a = self.spatial_coordinates_epsg4326[0];

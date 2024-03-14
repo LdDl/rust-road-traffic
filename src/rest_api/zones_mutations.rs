@@ -4,6 +4,7 @@ use serde::{
     Deserialize,
     Serialize
 };
+use utoipa::ToSchema;
 use crate::lib::zones::{
     Zone,
     VirtualLineDirection,
@@ -16,36 +17,60 @@ pub struct ErrorResponse {
     pub error_text: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct PolygonUpdateRequest {
-    pub polygon_id: String,
+/// The body of the request to update the zone
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ZoneUpdateRequest {
+    /// Zone identifier
+    #[schema(example = "dir_0_lane_1")]
+    pub zone_id: String,
+    /// 4 points represinting zone for the image coordinates
+    #[schema(example = json!([[299, 222], [572, 265], [547, 66], [359, 69]]))]
     pub pixel_points: Option<[[u16; 2]; 4]>,
+    /// 4 points represinting zone for the spatial coordinates
+    #[schema(example = json!([[37.61896269287956, 54.205680987916566], [37.61892595368445, 54.205685474312446], [37.618908137083054, 54.20564619851147], [37.618944938776394, 54.20563975740504]]))]
     pub spatial_points: Option<[[f32; 2]; 4]>,
+    /// Road lane number
+    #[schema(example = 939)]
     pub lane_number: Option<u16>,
+    /// Road lane direction
+    #[schema(example = 1)]
     pub lane_direction: Option<u8>,
+    /// Color of the zone
+    #[schema(example = json!([130, 0, 100]))]
     pub color_rgb: Option<[i16; 3]>,
-    pub virtual_line: Option<VirtualLineData>
+    /// Virtual line
+    pub virtual_line: Option<VirtualLineRequestData>
 }
 
-#[derive(Debug, Serialize)]
-pub struct PolygonUpdateResponse <'a>{
+/// Respone on zone update request
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ZoneUpdateResponse <'a>{
+    /// Message
+    #[schema(example = "ok")]
     pub message: &'a str,
 }
 
-//
-// curl -XPOST 'http://localhost:42001/api/mutations/change_polygon' -d '{"polygon_id":"dir_0_lane_1", "lane_number": 939, "pixel_points": [[299, 222], [572, 265], [547, 66], [359, 69]], "color_rgb": [130, 0, 100]}' -H 'Content-Type: application/json'
-//
-pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<PolygonUpdateRequest>) -> Result<HttpResponse, Error> {
+#[utoipa::path(
+    post,
+    tag = "Zones mutations",
+    path = "/api/mutations/zones/update",
+    request_body = ZoneUpdateRequest,
+    responses(
+        (status = 200, description = "Update specific zone", body = ZoneUpdateRequest),
+        (status = 424, description = "Failed dependency", body = ErrorResponse)
+    )
+)]
+pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<ZoneUpdateRequest>) -> Result<HttpResponse, Error> {
 
     let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
     let mut zones = ds_guard.zones.write().expect("Spatial data is poisoned [RWLock]");
 
-    let zone_guarded = match zones.get_mut(&_update_zone.polygon_id) {
+    let zone_guarded = match zones.get_mut(&_update_zone.zone_id) {
         /* Check if polygon with such identifier exists */
         Some(val) => val,
         None => {
             return Ok(HttpResponse::build(StatusCode::FAILED_DEPENDENCY).json(ErrorResponse {
-                error_text: format!("No such zone. Requested ID: {}", _update_zone.polygon_id)
+                error_text: format!("No such zone. Requested ID: {}", _update_zone.zone_id)
             }));
         }
     };
@@ -82,6 +107,7 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Po
 
     match _update_zone.lane_number {
         Some(val) => {
+            println!("lane_number: {}", val);
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             zone.set_road_lane_num(val);
             drop(zone)
@@ -93,6 +119,7 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Po
         Some(val) => {
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             zone.set_color(val);
+            zone.set_line_color(val);
             drop(zone)
         },
         _ => {}
@@ -102,8 +129,13 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Po
         Some(val) => {
             let dir = VirtualLineDirection::from_str(val.direction.as_str()).unwrap_or_default();
             let mut new_line = VirtualLine::new_from(val.geometry, dir);
-            new_line.set_color(val.color_rgb[2], val.color_rgb[1], val.color_rgb[0]);
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
+            if let Some(rgb) = val.color_rgb{
+                new_line.set_color_rgb(rgb[0], rgb[1], rgb[2]);
+            } else {
+                let zone_color = zone.get_color();
+                new_line.set_color_rgb(zone_color[0], zone_color[1], zone_color[2]);
+            };
             zone.set_virtual_line(new_line);
             drop(zone)
         },
@@ -112,7 +144,7 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Po
 
     drop(zone_guarded);
 
-    return Ok(HttpResponse::Ok().json(PolygonUpdateResponse{
+    return Ok(HttpResponse::Ok().json(ZoneUpdateResponse{
         message: "ok"
     }));
 }
@@ -154,16 +186,22 @@ pub struct PolygonCreateRequest {
     pub lane_number: Option<u16>,
     pub lane_direction: Option<u8>,
     pub color_rgb: Option<[i16; 3]>,
-    pub virtual_line: Option<VirtualLineData>
+    pub virtual_line: Option<VirtualLineRequestData>
 }
 
-#[derive(Deserialize, Debug)]
-pub struct VirtualLineData {
+/// Information about virtual line
+#[derive(Deserialize, Debug, ToSchema)]
+pub struct VirtualLineRequestData {
+    /// Line geometry. 2 points
+    #[schema(example = json!([[365, 207], [540, 215]]))]
     pub geometry: [[i32; 2]; 2],
-    pub color_rgb: [i16; 3],
+    /// Color of the line
+    #[schema(example = json!([130, 70, 0]))]
+    pub color_rgb: Option<[i16; 3]>,
     /// Direction. Possible values:
     /// 'lrtb' stands for "left->right, top->bottom"
     /// 'rlbt' stands for "right->left, bottom->top"
+    #[schema(example = "lrtb")]
     pub direction: String,
 }
 
@@ -220,7 +258,12 @@ pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<Polyg
         Some(val) => {
             let dir = VirtualLineDirection::from_str(val.direction.as_str()).unwrap_or_default();
             let mut new_line = VirtualLine::new_from(val.geometry, dir);
-            new_line.set_color(val.color_rgb[2], val.color_rgb[1], val.color_rgb[0]);
+            if let Some(rgb) = val.color_rgb{
+                new_line.set_color_rgb(rgb[0], rgb[1], rgb[2]);
+            } else {
+                let zone_color = zone.get_color();
+                new_line.set_color_rgb(zone_color[0], zone_color[1], zone_color[2]);
+            };
             zone.set_virtual_line(new_line);
         },
         _ => {}
@@ -240,7 +283,7 @@ pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<Polyg
 
     drop(ds_guard);
 
-    return Ok(HttpResponse::Ok().json(PolygonCreateResponse{
+    return Ok(HttpResponse::Created().json(PolygonCreateResponse{
         polygon_id: new_id
     }));
 }
@@ -318,7 +361,9 @@ pub async fn replace_all(data: web::Data<APIStorage>, _new_zones: web::Json<Poly
             Some(val) => {
                 let dir = VirtualLineDirection::from_str(val.direction.as_str()).unwrap_or_default();
                 let mut new_line = VirtualLine::new_from(val.geometry, dir);
-                new_line.set_color(val.color_rgb[2], val.color_rgb[1], val.color_rgb[0]);
+                if let Some(rgb) = val.color_rgb{  
+                    new_line.set_color_rgb(rgb[0], rgb[1], rgb[2]);
+                };
                 zone.set_virtual_line(new_line);
             },
             _ => {}

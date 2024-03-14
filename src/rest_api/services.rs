@@ -46,7 +46,7 @@ pub fn init_routes(enable_mjpeg: bool) -> impl Fn(&mut web::ServiceConfig) {
                 .service(
                     web::scope("/mutations")
                     .route("/create_polygon", web::post().to(zones_mutations::create_zone))
-                    .route("/change_polygon", web::post().to(zones_mutations::update_zone))
+                    .route("/zones/update", web::post().to(zones_mutations::update_zone))
                     .route("/delete_polygon", web::post().to(zones_mutations::delete_zone))
                     .route("/replace_all", web::post().to(zones_mutations::replace_all))
                     .route("/save_toml", web::get().to(toml_mutations::save_toml))
@@ -66,10 +66,12 @@ use utoipa_rapidoc::RapiDoc;
         zones_list::all_zones_list,
         zones_stats::all_zones_stats,
         zones_stats::all_zones_occupancy,
+        zones_mutations::update_zone,
     ),
     tags(
         (name = "Zones", description = "Main information about detection zones"),
         (name = "Statistics", description = "Aggregated and real-time statistics in the detections zones"),
+        (name = "Zones mutations", description = "A way to mutate information about detection zones"),
     ),
     components(
         // We need to import all possible schemas since `utopia` can't discover recursive schemas (yet?)
@@ -84,6 +86,9 @@ use utoipa_rapidoc::RapiDoc;
             crate::rest_api::zones_stats::VehicleTypeParameters,
             crate::rest_api::zones_stats::AllZonesRealtimeStatistics,
             crate::rest_api::zones_stats::ZoneRealtime,
+            crate::rest_api::zones_mutations::VirtualLineRequestData,
+            crate::rest_api::zones_mutations::ZoneUpdateRequest,
+            crate::rest_api::zones_mutations::ZoneUpdateResponse,
         ),
     )
 )]

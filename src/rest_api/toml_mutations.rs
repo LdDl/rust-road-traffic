@@ -15,6 +15,7 @@ pub struct ErrorResponse {
 pub struct SucccessResponse<'a> {
     pub message: &'a str,
 }
+
 pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Error> {
     println!("Saving TOML configuration");
     let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");

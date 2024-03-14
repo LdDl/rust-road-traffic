@@ -48,8 +48,6 @@ pub struct VirtualLine {
     pub line_cvi: [Point2i; 2],
     pub color_cv: Scalar,
     pub color: [i16; 3],
-    // 0 - left->right, top->bottom
-    // 1 - right->left, bottom->top
     pub direction: VirtualLineDirection,
 }
 
@@ -74,8 +72,8 @@ impl VirtualLine {
             direction: _direction,
         }
     }
-    pub fn set_color(&mut self, r: i16, g: i16, b: i16) {
-        self.color_cv = Scalar::from((r as f64, g as f64, b as f64));
+    pub fn set_color_rgb(&mut self, r: i16, g: i16, b: i16) {
+        self.color_cv = Scalar::from((b as f64, g as f64, r as f64)); // BGR
         self.color = [r, g, b];
     }
     // is_left returns true if the given point is to the left side of the vertical AB or if the given point is above of the horizontal AB
