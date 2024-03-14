@@ -66,10 +66,10 @@ pub struct VirtualLineFeature {
     #[schema(example = json!([255, 0, 0]))]
     pub color_rgb: [i16; 3],
     /// Direction. Possible values:
-    /// 0 - left->right, top->bottom
-    /// 1 - right->left, bottom->top
-    #[schema(example = 1)]
-    pub direction: u8,
+    /// 'lrtb' stands for "left->right, top->bottom"
+    /// 'rlbt' stands for "right->left, bottom->top"
+    #[schema(example = "lrtb")]
+    pub direction: String,
 }
 
 /// Polygon in GeoJSON specification

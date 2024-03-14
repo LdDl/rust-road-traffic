@@ -5,7 +5,7 @@ use serde::{ Deserialize, Serialize };
 use toml;
 use std::error::Error;
 use std::fmt;
-
+use std::str::FromStr;
 use od_opencv::model_format::{ModelFormat, ModelVersion};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -110,9 +110,9 @@ pub struct RoadLanesSettings {
 pub struct VirtualLineSettings {
     pub geometry: [[i32; 2]; 2],
     pub color_rgb: [i16; 3],
-    // 0 - left->right, top->bottom
-    // 1 - right->left, bottom->top
-    pub direction: u8,
+    // 'lrtb' stands for "left->right, top->bottom"
+    // 'rlbt' stands for "right->left, bottom->top"
+    pub direction: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -145,7 +145,7 @@ pub struct MJPEGStreamingSettings {
 }
 
 use crate::lib::zones::Zone;
-use crate::lib::zones::VirtualLine;
+use crate::lib::zones::{VirtualLineDirection, VirtualLine};
 use crate::lib::spatial::epsg::lonlat_to_meters;
 use opencv::core::Point2f;
 use opencv::core::Scalar;
@@ -176,9 +176,10 @@ impl From<&RoadLanesSettings> for Zone {
                 if vl.geometry.len() != 2{
                     None
                 } else {
+                    let dir = VirtualLineDirection::from_str(&vl.direction).unwrap_or_default();
                     let a = Point2f::new(vl.geometry[0][0] as f32, vl.geometry[0][1] as f32);
                     let b = Point2f::new(vl.geometry[1][0] as f32, vl.geometry[1][1] as f32);
-                    let mut line = VirtualLine::new_from_cv(a, b, vl.direction);
+                    let mut line = VirtualLine::new_from_cv(a, b, dir);
                     line.set_color(vl.color_rgb[2], vl.color_rgb[1], vl.color_rgb[0]);
                     Some(line)
                 }

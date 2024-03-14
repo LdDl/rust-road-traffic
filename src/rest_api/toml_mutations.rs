@@ -33,7 +33,7 @@ pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Erro
                     Some(VirtualLineSettings{
                         geometry: vl.line,
                         color_rgb: [vl.color[2] as i16, vl.color[1] as i16, vl.color[0] as i16], // BGR -> RGB
-                        direction: vl.direction,
+                        direction: vl.direction.to_string(),
                     })
                 },
                 None => {

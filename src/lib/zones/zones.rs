@@ -38,7 +38,7 @@ use crate::lib::spatial::SpatialConverter;
 use crate::lib::spatial::epsg::lonlat_to_meters;
 use crate::lib::spatial::compute_center;
 use crate::lib::spatial::haversine;
-use crate::lib::zones::{VehicleTypeParameters, Statistics, Skeleton, VirtualLine};
+use crate::lib::zones::{VehicleTypeParameters, Statistics, Skeleton, VirtualLineDirection, VirtualLine};
 
 
 #[derive(Debug)]
@@ -359,7 +359,7 @@ impl Zone {
             Some(vl) => {
                 let is_left_before = vl.is_left(x1, y1);
                 let is_left_after = vl.is_left(x2, y2);
-                if vl.direction == 0 {
+                if vl.direction == VirtualLineDirection::LeftToRightTopToBottom {
                     if is_left_before && !is_left_after {
                         return true;
                     }
@@ -457,7 +457,7 @@ impl Zone {
                     Some(vl) => Some(VirtualLineFeature{
                         geometry: vl.line,
                         color_rgb: vl.color,
-                        direction: vl.direction
+                        direction: vl.direction.to_string(),
                     }),
                     None => None
                 }

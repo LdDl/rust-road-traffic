@@ -61,7 +61,7 @@
     [road_lanes.virtual_line]
         geometry = [[100, 236], [270, 234]]
         color_rgb = [180, 0, 0]
-        direction = 0
+        direction = "lrtb"
 [[road_lanes]]
     lane_number = 1
     lane_direction = 0
@@ -75,7 +75,7 @@
     [road_lanes.virtual_line]
         geometry = [[365, 237], [540, 235]]
         color_rgb = [0, 180, 0]
-        direction = 0
+        direction = "lrtb"
 [[road_lanes]]
     lane_number = 2
     lane_direction = 0
@@ -89,7 +89,7 @@
     [road_lanes.virtual_line]
         geometry = [[650, 237], [825, 237]]
         color_rgb = [0, 0, 180]
-        direction = 0
+        direction = "lrtb"
 [worker]
     # Period to reset analytics
     reset_data_milliseconds = 30000
