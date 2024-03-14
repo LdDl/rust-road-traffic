@@ -6,11 +6,6 @@
     typ = "rtsp"
     # typ = "local"
 
-    # Scale factor. Just in case when 'road_lanes' are prepared for source video widht/height but actual input has been scaled down
-    # Optional. Default is 1.0. Value should lie in (0; 1.0]
-    scale_x = 1.0
-    scale_y = 1.0
-
 [debug]
     enable = true
 

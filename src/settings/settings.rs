@@ -26,8 +26,6 @@ pub struct AppSettings {
 pub struct InputSettings {
     pub video_src: String,
     pub typ: String,
-    pub scale_x: Option<f32>,
-    pub scale_y: Option<f32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -218,18 +216,6 @@ impl AppSettings {
                     enable: false,
                 });
             },
-            _ => {  }
-        }
-        match app_settings.input.scale_x {
-            None => { 
-                app_settings.input.scale_x = Some(1.0);
-            }, 
-            _ => {  }
-        }
-        match app_settings.input.scale_y {
-            None => { 
-                app_settings.input.scale_y = Some(1.0);
-            }, 
             _ => {  }
         }
         return app_settings;

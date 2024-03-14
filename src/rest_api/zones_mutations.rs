@@ -49,7 +49,6 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Po
     };
 
     // @todo need to deal with those (see main function):
-    // polygon.scale_geom(scale_x, scale_y);    
     // polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
 
     match _update_zone.pixel_points {
@@ -99,9 +98,9 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Po
 
     match &_update_zone.virtual_line {
         Some(val) => {
-            let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             let mut new_line = VirtualLine::new_from(val.geometry, val.direction);
             new_line.set_color(val.color_rgb[2], val.color_rgb[1], val.color_rgb[0]);
+            let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             zone.set_virtual_line(new_line);
             drop(zone)
         },
@@ -175,7 +174,6 @@ pub struct PolygonCreateResponse {
 pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<PolygonCreateRequest>) -> Result<HttpResponse, Error> {
 
     // @todo need to deal with those (see main function):
-    // polygon.scale_geom(scale_x, scale_y);    
     // polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
 
     let mut zone = Zone::default();

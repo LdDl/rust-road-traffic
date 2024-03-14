@@ -169,17 +169,8 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
     /* Preprocess spatial data */
     let data_storage = new_datastorage(settings.equipment_info.id.clone(), verbose);
 
-    let scale_x = match settings.input.scale_x {
-        Some(x) => { x },
-        None => { 1.0 }
-    };
-    let scale_y = match settings.input.scale_y {
-        Some(y) => { y },
-        None => { 1.0 }
-    };
     for road_lane in settings.road_lanes.iter() {
         let mut zone = Zone::from(road_lane);
-        zone.scale_geom(scale_x, scale_y);    
         zone.set_target_classes(COCO_FILTERED_CLASSNAMES);
         match data_storage.write().unwrap().insert_zone(zone) {
             Ok(_) => {},

@@ -348,12 +348,6 @@ impl Zone {
         }
         false
     }
-    pub fn scale_geom(&mut self, scale_factor_x: f32, scale_factor_y: f32) {
-        for pair in self.pixel_coordinates.iter_mut() {
-            pair.x = (pair.x * scale_factor_x).floor();
-            pair.y = (pair.y * scale_factor_y).floor();
-        }
-    }
     pub fn project_to_skeleton(&self, x: f32, y: f32) -> (f32, f32) {
         self.skeleton.project(x, y)
     }
