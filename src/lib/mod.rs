@@ -5,5 +5,4 @@ pub mod tracker;
 pub mod draw;
 pub mod data_storage;
 pub mod mjpeg_streaming;
-pub mod rest_api;
 pub mod publisher;

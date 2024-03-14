@@ -7,7 +7,7 @@ use crate::lib::zones::{
     Zone,
     VirtualLine
 };
-use crate::lib::rest_api::APIStorage;
+use crate::rest_api::APIStorage;
 
 #[derive(Debug, Serialize)]
 pub struct ErrorResponse {
