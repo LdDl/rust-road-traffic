@@ -151,31 +151,44 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Zo
 }
 
 
-#[derive(Debug, Deserialize)]
-pub struct PolygonDeleteRequest {
-    pub polygon_id: String,
+/// The body of the request to delete the zone
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ZoneDeleteRequest {
+    /// Zone identifier
+    #[schema(example = "dir_0_lane_1")]
+    pub zone_id: String,
 }
 
-#[derive(Debug, Serialize)]
-pub struct PolygonDeleteResponse <'a>{
+/// Respone on zone delete request
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ZoneDeleteResponse <'a>{
+    /// Message
+    #[schema(example = "ok")]
     pub message: &'a str,
 }
 
-//
-// curl -XPOST 'http://localhost:42001/api/mutations/delete_polygon' -d '{"polygon_id":"dir_0_lane_1"}' -H 'Content-Type: application/json'
-//
-pub async fn delete_zone(data: web::Data<APIStorage>, _delete_zone: web::Json<PolygonDeleteRequest>) -> Result<HttpResponse, Error> {
+#[utoipa::path(
+    post,
+    tag = "Zones mutations",
+    path = "/api/mutations/zones/delete",
+    request_body = ZoneDeleteRequest,
+    responses(
+        (status = 204, description = "Zone has been deleted", body = ZoneDeleteResponse),
+        (status = 500, description = "Internal error", body = ErrorResponse)
+    )
+)]
+pub async fn delete_zone(data: web::Data<APIStorage>, _delete_zone: web::Json<ZoneDeleteRequest>) -> Result<HttpResponse, Error> {
     let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
-    match ds_guard.delete_zone(&_delete_zone.polygon_id) {
+    match ds_guard.delete_zone(&_delete_zone.zone_id) {
         Ok(_) => {},
         Err(err) => {
             return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).json(ErrorResponse {
-                error_text: format!("Can't delete zone ID: {}. Error: {}", _delete_zone.polygon_id, err)
+                error_text: format!("Can't delete zone ID: {}. Error: {}", _delete_zone.zone_id, err)
             }));
         }
     }
     drop(ds_guard);
-    return Ok(HttpResponse::Ok().json(PolygonDeleteResponse{
+    return Ok(HttpResponse::NoContent().json(ZoneDeleteResponse{
         message: "ok"
     }));
 }
