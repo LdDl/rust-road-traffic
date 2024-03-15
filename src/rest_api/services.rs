@@ -69,6 +69,7 @@ use utoipa_rapidoc::RapiDoc;
         zones_mutations::create_zone,
         zones_mutations::update_zone,
         zones_mutations::delete_zone,
+        zones_mutations::replace_all,
     ),
     tags(
         (name = "Zones", description = "Main information about detection zones"),
@@ -95,6 +96,8 @@ use utoipa_rapidoc::RapiDoc;
             crate::rest_api::zones_mutations::ZoneUpdateResponse,
             crate::rest_api::zones_mutations::ZoneDeleteRequest,
             crate::rest_api::zones_mutations::ZoneDeleteResponse,
+            crate::rest_api::zones_mutations::ZonesOverwriteAllRequest,
+            crate::rest_api::zones_mutations::ZonesOverwriteAllResponse,
         ),
     )
 )]

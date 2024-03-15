@@ -220,7 +220,7 @@ pub struct ZoneCreateRequest {
 #[derive(Deserialize, Debug, ToSchema)]
 pub struct VirtualLineRequestData {
     /// Line geometry. 2 points
-    #[schema(example = json!([[365, 207], [540, 215]]))]
+    #[schema(example = json!([[365, 177], [540, 185]]))]
     pub geometry: [[i32; 2]; 2],
     /// Color of the line
     #[schema(example = json!([130, 70, 0]))]
@@ -326,21 +326,34 @@ pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<ZoneC
 }
 
 
-
-#[derive(Debug, Deserialize)]
-pub struct PolygonReplaceAllRequest {
+/// The body of the request to overwrite all zones
+/// It does delete all existing zones and create new ones
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ZonesOverwriteAllRequest {
+    /// List of new zones
+    #[schema(example = json!([{"lane_number":53,"lane_direction":153,"pixel_points":[[230,200],[550,235],[512,40],[359,69]],"spatial_points":[[37.618908137083054,54.20564619851147],[37.61891517788172,54.20564502193819],[37.618927247822285,54.205668749493036],[37.61892020702362,54.2056701221611]],"color_rgb":[130,130,0],"virtual_line":{"geometry":[[365,177],[540,185]],"color_rgb":[210,65,80],"direction":"lrtb"}},{"lane_number":42,"lane_direction":142,"pixel_points":[[591,265],[835,265],[726,48],[555,58]],"spatial_points":[[37.618923808130916,54.205684902663165],[37.618887068935805,54.205689389059046],[37.618869252334406,54.205650113258066],[37.61890605402775,54.20564367215164]],"color_rgb":[130,0,130]}]))]
     pub data: Vec<ZoneCreateRequest>
 }
 
-#[derive(Debug, Serialize)]
-pub struct PolygonReplaceAllResponse {
-    pub polygons_ids: Vec<String>
+/// Respone on overwrite all zones request
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ZonesOverwriteAllResponse {
+    /// List of new zones identifiers
+    #[schema(example = json!(["fad8a040-5979-47e9-9ebf-3a571f677f49", "dcd66eeb-545c-4f81-99f6-e94229f8008a"]))]
+    pub zones_ids: Vec<String>
 }
 
-//
-// curl -XPOST 'http://localhost:42001/api/mutations/replace_all' -d '{"data":[{"lane_number":0,"lane_direction":0,"pixel_points":[[1,1],[50,1],[50,50],[1,50]],"spatial_points":[[37.618908137083054,54.20564619851147],[37.61891517788172,54.20564502193819],[37.618927247822285,54.205668749493036],[37.61892020702362,54.2056701221611]],"color_rgb":[130,130,0]},{"lane_number":1,"lane_direction":0,"pixel_points":[[55,55],[105,55],[105,105],[55,105]],"spatial_points":[[37.618908137083054,54.20564619851147],[37.61891517788172,54.20564502193819],[37.618927247822285,54.205668749493036],[37.61892020702362,54.2056701221611]],"color_rgb":[130,0,130]}]}' -H 'Content-Type: application/json'
-//
-pub async fn replace_all(data: web::Data<APIStorage>, _new_zones: web::Json<PolygonReplaceAllRequest>) -> Result<HttpResponse, Error> {
+#[utoipa::path(
+    post,
+    tag = "Zones mutations",
+    path = "/api/mutations/replace_all",
+    request_body = ZonesOverwriteAllRequest,
+    responses(
+        (status = 201, description = "All zones has been overwritten", body = ZonesOverwriteAllResponse),
+        (status = 500, description = "Internal error", body = ErrorResponse)
+    )
+)]
+pub async fn replace_all(data: web::Data<APIStorage>, _new_zones: web::Json<ZonesOverwriteAllRequest>) -> Result<HttpResponse, Error> {
 
     if _new_zones.data.len() == 0 {
         return Ok(HttpResponse::build(StatusCode::BAD_REQUEST).json(ErrorResponse {
@@ -400,6 +413,9 @@ pub async fn replace_all(data: web::Data<APIStorage>, _new_zones: web::Json<Poly
                 let mut new_line = VirtualLine::new_from(val.geometry, dir);
                 if let Some(rgb) = val.color_rgb{  
                     new_line.set_color_rgb(rgb[0], rgb[1], rgb[2]);
+                } else {
+                    let zone_color = zone.get_color();
+                    new_line.set_color_rgb(zone_color[0], zone_color[1], zone_color[2]);
                 };
                 zone.set_virtual_line(new_line);
             },
@@ -436,7 +452,7 @@ pub async fn replace_all(data: web::Data<APIStorage>, _new_zones: web::Json<Poly
         }
     }
 
-    return Ok(HttpResponse::Ok().json(PolygonReplaceAllResponse{
-        polygons_ids: response
+    return Ok(HttpResponse::Created().json(ZonesOverwriteAllResponse{
+        zones_ids: response
     }));
 }

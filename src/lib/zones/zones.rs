@@ -159,8 +159,7 @@ impl Zone {
         self.color = Scalar::from((b, g, r));
     }
     pub fn get_color(&self) -> [i16; 3] {
-        // BGR to RGB
-        let (b, g, r) = (self.color[2] as i16, self.color[1] as i16, self.color[0] as i16);
+        let (b, g, r) = (self.color[0] as i16, self.color[1] as i16, self.color[2] as i16);
         [r, g, b]
     }
     pub fn set_line_color(&mut self, rgb: [i16; 3]) {
