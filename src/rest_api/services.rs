@@ -45,7 +45,7 @@ pub fn init_routes(enable_mjpeg: bool) -> impl Fn(&mut web::ServiceConfig) {
                 )
                 .service(
                     web::scope("/mutations")
-                    .route("/create_polygon", web::post().to(zones_mutations::create_zone))
+                    .route("/zones/create", web::post().to(zones_mutations::create_zone))
                     .route("/zones/update", web::post().to(zones_mutations::update_zone))
                     .route("/delete_polygon", web::post().to(zones_mutations::delete_zone))
                     .route("/replace_all", web::post().to(zones_mutations::replace_all))
@@ -66,6 +66,7 @@ use utoipa_rapidoc::RapiDoc;
         zones_list::all_zones_list,
         zones_stats::all_zones_stats,
         zones_stats::all_zones_occupancy,
+        zones_mutations::create_zone,
         zones_mutations::update_zone,
     ),
     tags(
@@ -87,6 +88,8 @@ use utoipa_rapidoc::RapiDoc;
             crate::rest_api::zones_stats::AllZonesRealtimeStatistics,
             crate::rest_api::zones_stats::ZoneRealtime,
             crate::rest_api::zones_mutations::VirtualLineRequestData,
+            crate::rest_api::zones_mutations::ZoneCreateRequest,
+            crate::rest_api::zones_mutations::ZoneCreateResponse,
             crate::rest_api::zones_mutations::ZoneUpdateRequest,
             crate::rest_api::zones_mutations::ZoneUpdateResponse,
         ),

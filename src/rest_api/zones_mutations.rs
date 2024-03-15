@@ -26,7 +26,8 @@ pub struct ZoneUpdateRequest {
     /// 4 points represinting zone for the image coordinates
     #[schema(example = json!([[299, 222], [572, 265], [547, 66], [359, 69]]))]
     pub pixel_points: Option<[[u16; 2]; 4]>,
-    /// 4 points represinting zone for the spatial coordinates
+    /// 4 points represinting zone for the spatial coordinates (WGS84)
+    /// Order of points should be the same as for the pixel_points
     #[schema(example = json!([[37.61896269287956, 54.205680987916566], [37.61892595368445, 54.205685474312446], [37.618908137083054, 54.20564619851147], [37.618944938776394, 54.20563975740504]]))]
     pub spatial_points: Option<[[f32; 2]; 4]>,
     /// Road lane number
@@ -56,7 +57,7 @@ pub struct ZoneUpdateResponse <'a>{
     path = "/api/mutations/zones/update",
     request_body = ZoneUpdateRequest,
     responses(
-        (status = 200, description = "Update specific zone", body = ZoneUpdateRequest),
+        (status = 200, description = "Specific zone has been updated", body = ZoneUpdateResponse),
         (status = 424, description = "Failed dependency", body = ErrorResponse)
     )
 )]
@@ -179,13 +180,26 @@ pub async fn delete_zone(data: web::Data<APIStorage>, _delete_zone: web::Json<Po
     }));
 }
 
-#[derive(Debug, Deserialize)]
-pub struct PolygonCreateRequest {
+/// The body of the request to create new zone
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ZoneCreateRequest {
+    /// 4 points represinting zone for the image coordinates
+    #[schema(example = json!([[230, 200], [550, 235], [512, 40], [359, 69]]))]
     pub pixel_points: Option<[[u16; 2]; 4]>,
+    /// 4 points represinting zone for the spatial coordinates (WGS84)
+    /// Order of points should be the same as for the pixel_points
+    #[schema(example = json!([[37.618908137083054, 54.20564619851147], [37.61891517788172, 54.20564502193819], [37.618927247822285, 54.205668749493036], [37.61892020702362, 54.2056701221611]]))]
     pub spatial_points: Option<[[f32; 2]; 4]>,
+    /// Road lane number
+    #[schema(example = 939)]
     pub lane_number: Option<u16>,
+    /// Road lane direction
+    #[schema(example = 33)]
     pub lane_direction: Option<u8>,
+    /// Color of the zone
+    #[schema(example = json!([130, 130, 0]))]
     pub color_rgb: Option<[i16; 3]>,
+    /// Virtual line
     pub virtual_line: Option<VirtualLineRequestData>
 }
 
@@ -205,15 +219,25 @@ pub struct VirtualLineRequestData {
     pub direction: String,
 }
 
-#[derive(Debug, Serialize)]
-pub struct PolygonCreateResponse {
-    pub polygon_id: String
+/// Respone on zone create request
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ZoneCreateResponse {
+    /// Zone identifier
+    #[schema(example = "fad8a040-5979-47e9-9ebf-3a571f677f49")]
+    pub zone_id: String
 }
 
-//
-// curl -XPOST 'http://localhost:42001/api/mutations/create_polygon' -d '{"lane_number": 939, "lane_direction": 33, "pixel_points": [[230, 200], [550, 235], [512, 40], [359, 69]], "spatial_points": [[37.618908137083054, 54.20564619851147], [37.61891517788172, 54.20564502193819], [37.618927247822285, 54.205668749493036], [37.61892020702362, 54.2056701221611]], "color_rgb": [130, 130, 0]}' -H 'Content-Type: application/json'
-//
-pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<PolygonCreateRequest>) -> Result<HttpResponse, Error> {
+#[utoipa::path(
+    post,
+    tag = "Zones mutations",
+    path = "/api/mutations/zones/create",
+    request_body = ZoneCreateRequest,
+    responses(
+        (status = 201, description = "Zone has been created", body = ZoneCreateResponse),
+        (status = 500, description = "Internal error", body = ErrorResponse)
+    )
+)]
+pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<ZoneCreateRequest>) -> Result<HttpResponse, Error> {
 
     // @todo need to deal with those (see main function):
     // polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
@@ -283,8 +307,8 @@ pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<Polyg
 
     drop(ds_guard);
 
-    return Ok(HttpResponse::Created().json(PolygonCreateResponse{
-        polygon_id: new_id
+    return Ok(HttpResponse::Created().json(ZoneCreateResponse{
+        zone_id: new_id
     }));
 }
 
@@ -292,7 +316,7 @@ pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<Polyg
 
 #[derive(Debug, Deserialize)]
 pub struct PolygonReplaceAllRequest {
-    pub data: Vec<PolygonCreateRequest>
+    pub data: Vec<ZoneCreateRequest>
 }
 
 #[derive(Debug, Serialize)]
