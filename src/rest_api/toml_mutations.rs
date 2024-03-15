@@ -1,21 +1,35 @@
 use actix_web::{HttpResponse, web, Error};
-use serde::{
-    Serialize
-};
+use serde::Serialize;
+use utoipa::ToSchema;
 use crate::rest_api::APIStorage;
 use crate::settings::RoadLanesSettings;
 use crate::settings::VirtualLineSettings;
 
-#[derive(Debug, Serialize)]
+/// Error response
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ErrorResponse {
+    /// Error message
+    #[schema(example = "Can't save TOML due the error")]
     pub error_text: String,
 }
 
-#[derive(Debug, Serialize)]
-pub struct SucccessResponse<'a> {
+/// Response for the save configuration file request
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UpdateTOMLResponse<'a> {
+    /// Message
+    #[schema(example = "ok")]
     pub message: &'a str,
 }
 
+#[utoipa::path(
+    get,
+    tag = "Configuration file mutations",
+    path = "/api/mutations/save_toml",
+    responses(
+        (status = 201, description = "All zones has been overwritten", body = UpdateTOMLResponse),
+        (status = 500, description = "Internal error", body = ErrorResponse)
+    )
+)]
 pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Error> {
     println!("Saving TOML configuration");
     let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
@@ -33,7 +47,7 @@ pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Erro
                 Some(vl) => {
                     Some(VirtualLineSettings{
                         geometry: vl.line,
-                        color_rgb: [vl.color[2] as i16, vl.color[1] as i16, vl.color[0] as i16], // BGR -> RGB
+                        color_rgb: [vl.color[0] as i16, vl.color[1] as i16, vl.color[2] as i16], // BGR -> RGB
                         direction: vl.direction.to_string(),
                     })
                 },
@@ -54,7 +68,7 @@ pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Erro
             }));
         },
     };
-    return Ok(HttpResponse::Ok().json(SucccessResponse{
+    return Ok(HttpResponse::Ok().json(UpdateTOMLResponse{
         message: "ok"
     }));
 }

@@ -12,8 +12,11 @@ use crate::lib::zones::{
 };
 use crate::rest_api::APIStorage;
 
-#[derive(Debug, Serialize)]
+/// Error response
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ErrorResponse {
+    /// Error message
+    #[schema(example = "No such zone. Requested ID: dir_0_lane_1")]
     pub error_text: String,
 }
 

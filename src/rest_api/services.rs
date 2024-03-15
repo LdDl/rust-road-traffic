@@ -70,6 +70,7 @@ use utoipa_rapidoc::RapiDoc;
         zones_mutations::update_zone,
         zones_mutations::delete_zone,
         zones_mutations::replace_all,
+        toml_mutations::save_toml,
     ),
     tags(
         (name = "Zones", description = "Main information about detection zones"),
@@ -98,6 +99,9 @@ use utoipa_rapidoc::RapiDoc;
             crate::rest_api::zones_mutations::ZoneDeleteResponse,
             crate::rest_api::zones_mutations::ZonesOverwriteAllRequest,
             crate::rest_api::zones_mutations::ZonesOverwriteAllResponse,
+            crate::rest_api::zones_mutations::ErrorResponse,
+            crate::rest_api::toml_mutations::UpdateTOMLResponse,
+            crate::rest_api::toml_mutations::ErrorResponse,
         ),
     )
 )]
