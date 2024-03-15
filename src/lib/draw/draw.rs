@@ -100,7 +100,6 @@ pub fn draw_projections(img: &mut Mat, tracker: &Tracker, color: Scalar, inv_col
                 panic!("Can't draw circle at blob's projected center due the error: {:?}", err)
             }
         };
-
         // let object = tracker.engine.objects.get(&object_id).unwrap();
         // let mut color_choose = color;
         // if object.get_no_match_times() > 1 {

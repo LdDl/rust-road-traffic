@@ -169,19 +169,10 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
     /* Preprocess spatial data */
     let data_storage = new_datastorage(settings.equipment_info.id.clone(), verbose);
 
-    let scale_x = match settings.input.scale_x {
-        Some(x) => { x },
-        None => { 1.0 }
-    };
-    let scale_y = match settings.input.scale_y {
-        Some(y) => { y },
-        None => { 1.0 }
-    };
     for road_lane in settings.road_lanes.iter() {
-        let mut polygon = Zone::from(road_lane);
-        polygon.scale_geom(scale_x, scale_y);    
-        polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
-        match data_storage.write().unwrap().insert_zone(polygon) {
+        let mut zone = Zone::from(road_lane);
+        zone.set_target_classes(COCO_FILTERED_CLASSNAMES);
+        match data_storage.write().unwrap().insert_zone(zone) {
             Ok(_) => {},
             Err(err) => {
                 panic!("Can't insert zone due the error {:?}", err);
@@ -446,7 +437,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
             let track: &Vec<mot_rs::utils::Point> = object.get_track();
             let last_point = &track[track.len() - 1];
 
-            // Check if object is inside of any polygon
+            // Check if object is inside of any zone (optionally: check if it crossed the virtual line inside of it)
             for (_, zone_guarded) in zones.iter() {
                 let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
                 if !zone.contains_point(last_point.x, last_point.y) {
@@ -455,24 +446,34 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                 zone.current_statistics.occupancy += 1; // Increment current load to match number of objects in zone
                 let projected_pt = zone.project_to_skeleton(last_point.x, last_point.y);
                 let pixels_per_meters = zone.get_skeleton_ppm();
+
+                let crossed = if track.len() >= 2 {
+                    let last_before_point = &track[track.len() - 2];
+                    zone.crossed_virtual_line(last_point.x, last_point.y, last_before_point.x, last_before_point.y)
+                } else {
+                    false
+                };
                 match object_extra.spatial_info {
                     Some(ref mut spatial_info) => {
                         spatial_info.update_avg(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1, pixels_per_meters);
-                        zone.register_or_update_object(object_id.clone(), spatial_info.speed, object_extra.get_classname());
+                        zone.register_or_update_object(object_id.clone(), spatial_info.speed, object_extra.get_classname(), crossed);
                     },
                     None => {
                         object_extra.spatial_info = Some(SpatialInfo::new(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1));
-                        zone.register_or_update_object(object_id.clone(), -1.0, object_extra.get_classname());
+                        zone.register_or_update_object(object_id.clone(), -1.0, object_extra.get_classname(), crossed);
                     }
                 }
+                drop(zone);
             }
         }
         if enable_mjpeg || settings.output.enable {
             for (_, v) in zones.iter() {
-                let polygon = v.lock().expect("Mutex poisoned");
-                polygon.draw_geom(&mut frame);
-                polygon.draw_skeleton(&mut frame);
-                polygon.draw_current_intensity(&mut frame);
+                let zone = v.lock().expect("Mutex poisoned");
+                zone.draw_geom(&mut frame);
+                zone.draw_skeleton(&mut frame);
+                zone.draw_current_intensity(&mut frame);
+                zone.draw_virtual_line(&mut frame);
+                drop(zone);
             }
         }
 
