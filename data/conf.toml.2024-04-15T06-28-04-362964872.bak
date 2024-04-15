@@ -1,0 +1,116 @@
+[input]
+    video_src = "./data/sample_960_540.mp4"
+    # Use string below for usage with CSI camera (where sensor-id is camera indentifier)
+    # video_src = "nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM), width=(int)1280, height=(int)720, format=(string)NV12, framerate=(fraction)30/1 ! nvvidconv flip-method=0 ! video/x-raw, width=(int)1280, height=(int)720, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink"
+    # Two options: rtsp / any number corresponding to local camera
+    typ = "rtsp"
+    # typ = "local"
+
+[debug]
+    enable = true
+
+[output]
+    # Define attributes for imshow() if needed
+    enable = true
+    width = 1024
+    height = 720
+    window_name = "Toy GUI"
+
+[detection]
+    # Available model_versions: v3, v4, v7, v8
+    # Default is v3
+    network_ver = 3
+    # Available model formats: "darknet", "onnx"
+    # Default is "darknet"
+    network_format = "darknet"
+    # Vehicles-only YOLOv3-tiny:
+    network_weights = "./data/tinyv3-vehicles_best.weights"
+    network_cfg = "./data/tinyv3-vehicles.cfg"
+    conf_threshold = 0.4
+    nms_threshold = 0.2
+    net_width = 416
+    net_height = 416
+    # Vehicles-only classes
+    net_classes = ["car", "motorbike", "bus", "truck"]
+    # Default COCO classes
+    # net_classes = ["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]
+
+[tracking]
+    # Adjust number of points for each object in its track
+    max_points_in_track = 100
+
+[equipment_info]
+    # Just field for future identification of application. Could be any string.
+    # I've used https://www.uuidgenerator.net/version4 for ID generation
+    id = "1e23985f-1fa3-45d0-a365-2d8525a23ddd"
+
+
+# Define parameters for zones of intereset
+# Each zone is defined by lane number, direction, corresponding coordinates on image,
+# corresponding coordinates on WGS84 (longitude, lattitude) + color as a gimmick to distinct in visually
+[[road_lanes]]
+    lane_number = 0
+    lane_direction = 0
+    # left-bot, right-bot, right-top, left-top
+    geometry = [[51, 266], [281, 264], [334, 80], [179, 68]]
+    geometry_wgs84 = [[37.619001577628154, 54.205674090505426], [37.618964838433044, 54.205678576901306], [37.618947021831644, 54.20563930110033], [37.618983823524985, 54.2056328599939]]
+    color_rgb = [255, 0, 0]
+    # Optional attribute.
+    # By default road traffic flow in calculated as number of vehicles which has been registered by naive verification metric: if even single point were registered in lane - it is counted as +1. 
+    # This attribute overrides default behaviour and allows to count only vehicles which has been registered by virtual line in this zone.
+    [road_lanes.virtual_line]
+        geometry = [[100, 236], [270, 234]]
+        color_rgb = [180, 0, 0]
+        direction = "lrtb"
+[[road_lanes]]
+    lane_number = 1
+    lane_direction = 0
+    # left-bot, right-bot, right-top, left-top
+    geometry = [[315, 267], [572, 265], [547, 66], [359, 69]]
+    geometry_wgs84 = [[37.61896269287956, 54.205680987916566], [37.61892595368445, 54.205685474312446], [37.618908137083054, 54.20564619851147], [37.618944938776394, 54.20563975740504]]
+    color_rgb = [0, 255, 0]
+    # Optional attribute.
+    # By default road traffic flow in calculated as number of vehicles which has been registered by naive verification metric: if even single point were registered in lane - it is counted as +1. 
+    # This attribute overrides default behaviour and allows to count only vehicles which has been registered by virtual line in this zone.
+    [road_lanes.virtual_line]
+        geometry = [[365, 237], [540, 235]]
+        color_rgb = [0, 180, 0]
+        direction = "lrtb"
+[[road_lanes]]
+    lane_number = 2
+    lane_direction = 0
+    # left-bot, right-bot, right-top, left-top
+    geometry = [[604, 267], [885, 267], [746, 58], [575, 68]]
+    geometry_wgs84 = [[37.618923808130916, 54.205684902663165], [37.618887068935805, 54.205689389059046], [37.618869252334406, 54.205650113258066], [37.61890605402775, 54.20564367215164]]
+    color_rgb = [0, 0, 255]
+    # Optional attribute.
+    # By default road traffic flow in calculated as number of vehicles which has been registered by naive verification metric: if even single point were registered in lane - it is counted as +1. 
+    # This attribute overrides default behaviour and allows to count only vehicles which has been registered by virtual line in this zone.
+    [road_lanes.virtual_line]
+        geometry = [[650, 237], [825, 237]]
+        color_rgb = [0, 0, 180]
+        direction = "lrtb"
+[worker]
+    # Period to reset analytics
+    reset_data_milliseconds = 30000
+    
+[rest_api]
+    # REST API attributes
+    # If it is enabled then you can go http://localhost:42001/ in your browser and see what is happening in software
+    enable = true
+    host = "0.0.0.0"
+    back_end_port = 42001
+    api_scope = "/api"
+    [rest_api.mjpeg_streaming]
+        # Do no forget to enable MJPEG streaming to see videooutput in browser
+        enable = true
+
+[redis_publisher]
+    # Right before reset analytics worker is done it could dump data to Redis
+    # Adjust this attributes as needed
+    enable = false
+    host = "localhost"
+    port = 6379
+    password = ""
+    db_index = 0
+    channel_name = "DETECTORS_STATISTICS"
