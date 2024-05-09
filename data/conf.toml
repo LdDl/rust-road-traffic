@@ -85,7 +85,7 @@
 
 [worker]
     # Period to reset analytics
-    reset_data_milliseconds = 300000
+    reset_data_milliseconds = 30000
 
 [rest_api]
     # REST API attributes
