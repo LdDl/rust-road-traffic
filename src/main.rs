@@ -381,7 +381,6 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
     for received in rx_capture {
         // println!("Received frame from capture thread: {}", received.current_second);
         let mut frame = received.frame.clone();
-
         let (nms_bboxes, nms_classes_ids, nms_confidences) = match neural_net.forward(&frame, conf_threshold, nms_threshold) {
             Ok((a, b, c)) => { (a, b, c) },
             Err(err) => {
