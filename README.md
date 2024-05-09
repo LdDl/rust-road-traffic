@@ -1,15 +1,16 @@
-# W.I.P
 # Rust toy utility for monitoring road traffic
 
 ## Table of Contents
-- [W.I.P](#wip)
-- [Rust toy utility for monitoring road traffic](#rust-toy-utility-for-monitoring-road-traffic)
-  - [Table of Contents](#table-of-contents)
-  - [About](#about)
-  - [Installation and usage](#installation-and-usage)
-  - [Screenshots](#screenshots)
+- [Video showcase](#video-showcase)
+- [About](#about)
+- [Installation and usage](#installation-and-usage)
+- [Screenshots](#screenshots)
 - [ROADMAP](#roadmap)
   - [Support](#support)
+
+## Video showcase
+
+<video src='https://github.com/LdDl/rust-road-traffic-ui/assets/8864477/fb7f5aa0-884f-4838-939f-29dfaf6cadea' width="720px"></video>
 
 ## About
 
