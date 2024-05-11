@@ -1,0 +1,99 @@
+[input]
+    # Source URL of video: https://www.youtube.com/watch?v=KBsqQez-O4w
+    video_src = "./data/4K_Video_of_Highway_Traffic.mp4"
+    # Use string below for usage with CSI camera (where sensor-id is camera indentifier)
+    # video_src = "nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM), width=(int)1280, height=(int)720, format=(string)NV12, framerate=(fraction)30/1 ! nvvidconv flip-method=0 ! video/x-raw, width=(int)1280, height=(int)720, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink"
+    # Two options: rtsp / any number corresponding to local camera
+    typ = "rtsp"
+    # typ = "local"
+
+[debug]
+    enable = true
+
+[output]
+    # Define attributes for imshow() if needed
+    enable = true
+    width = 1024
+    height = 720
+    window_name = "Toy GUI"
+
+[detection]
+    # Available model_versions: v3, v4, v7, v8
+    # Default is v3
+    network_ver = 7
+    # Available model formats: "darknet", "onnx"
+    # Default is "darknet"
+    network_format = "darknet"
+    network_weights = "./data/yolov7.weights"
+    network_cfg = "./data/yolov7.cfg"
+    conf_threshold = 0.4
+    nms_threshold = 0.2
+    net_width = 608
+    net_height = 608
+    # Target classes to be used in filtering.
+    # Leave array empty if all net classes should be used
+    target_classes = ["car", "motorbike", "bus", "train", "truck"]
+    # Neural network classes
+    net_classes = ["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]
+
+[tracking]
+    # Adjust number of points for each object in its track
+    max_points_in_track = 100
+
+[equipment_info]
+    # Just field for future identification of application. Could be any string.
+    # I've used https://www.uuidgenerator.net/version4 for ID generation
+    id = "1e23985f-1fa3-45d0-a365-2d8525a23ddd"
+
+# Define parameters for zones of intereset
+# Each zone is defined by lane number, direction, corresponding coordinates on image,
+# corresponding coordinates on WGS84 (longitude, lattitude) + color as a gimmick to distinct in visually
+[[road_lanes]]
+    lane_number = 0
+    lane_direction = 0
+    # left-bot, right-bot, right-top, left-top
+    geometry = [[204, 542], [398, 558], [506, 325], [402, 318]]
+    geometry_wgs84 = [[-3.7058048784300297,40.39308821416677],[-3.7058296599552705,40.39306089952626],[-3.7059466895758533,40.393116604041296],[-3.705927467488266,40.39314855180666]]
+    color_rgb = [255, 0, 0]
+    # Optional attribute.
+    # By default road traffic flow in calculated as number of vehicles which has been registered by naive verification metric: if even single point were registered in lane - it is counted as +1.
+    # This attribute overrides default behaviour and allows to count only vehicles which has been registered by virtual line in this zone.
+
+
+
+[[road_lanes]]
+    lane_number = 0
+    lane_direction = 1
+    geometry = [[847, 524], [1265, 418], [1000, 264], [739, 302]]
+    geometry_wgs84 = [[-3.705993897269792,40.3930559331794],[-3.7060362418659167,40.392987552243824],[-3.705919328016762,40.39294132477778],[-3.7058850074338068,40.39300219015797]]
+    color_rgb = [0, 0, 255]
+    [road_lanes.virtual_line]
+        geometry = [[704, 321], [1078, 271]]
+        color_rgb = [0, 0, 255]
+        direction = "rlbt"
+
+
+[worker]
+    # Period to reset analytics
+    reset_data_milliseconds = 30000
+
+[rest_api]
+    # REST API attributes
+    # If it is enabled then you can go http://localhost:42001/ in your browser and see what is happening in software
+    enable = true
+    host = "0.0.0.0"
+    back_end_port = 42001
+    api_scope = "/api"
+    [rest_api.mjpeg_streaming]
+        # Do no forget to enable MJPEG streaming to see videooutput in browser
+        enable = true
+
+[redis_publisher]
+    # Right before reset analytics worker is done it could dump data to Redis
+    # Adjust this attributes as needed
+    enable = false
+    host = "localhost"
+    port = 6379
+    password = ""
+    db_index = 0
+    channel_name = "DETECTORS_STATISTICS"

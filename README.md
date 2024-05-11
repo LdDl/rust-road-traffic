@@ -1,15 +1,16 @@
-# W.I.P
 # Rust toy utility for monitoring road traffic
 
 ## Table of Contents
-- [W.I.P](#wip)
-- [Rust toy utility for monitoring road traffic](#rust-toy-utility-for-monitoring-road-traffic)
-  - [Table of Contents](#table-of-contents)
-  - [About](#about)
-  - [Installation and usage](#installation-and-usage)
-  - [Screenshots](#screenshots)
+- [Video showcase](#video-showcase)
+- [About](#about)
+- [Installation and usage](#installation-and-usage)
+- [Virtual lines](#virtual-lines)
 - [ROADMAP](#roadmap)
   - [Support](#support)
+
+## Video showcase
+
+<video src='https://github.com/LdDl/rust-road-traffic-ui/assets/8864477/fb7f5aa0-884f-4838-939f-29dfaf6cadea' width="720px"></video>
 
 ## About
 
@@ -80,6 +81,26 @@ UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic
     ```shell
     export RUSTFLAGS='-C link-arg=-s' && cargo build --release && ./target/release/rust-road-traffic path-to-toml-file
     ```
+
+8. UI configuration
+
+    If you enabled both REST API and MJPEG streaming and you want to adjust parameters for detection zones you could open http://localhost:42001/ in your browser and adjust polygons as you need (this UI still needs to be debugged and polished):
+
+    <img src="data/ui.png" width="640">
+
+    Configuration file lines:
+    ```toml
+    [rest_api]
+        enable = true
+        host = "0.0.0.0"
+        back_end_port = 42001
+        api_scope = "/api"
+        [rest_api.mjpeg_streaming]
+            enable = true
+    ```
+
+8. REST API
+
     If you want to do some REST calls you can do following (based on *rest_api* field in TOML configuration files)
     ```bash
     # Get polygons (GeoJSON) in which road traffic monitoring is requested
@@ -87,12 +108,60 @@ UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic
     # Get statistics info for each polygon and each vehicle type in that polygon
     curl -XGET 'http://localhost:42001/api/stats/all'
     ```
+   
+9. Export data
 
-    If you enabled MJPEG streaming and you want to adjust parameters for velocity estimation you could open http://localhost:42001/ in your browser and adjust polygons as you need (this UI still needs to be debugged and polished):
+    If you enabled Redis output you can connect to Redis server (e.g. via CLI) and monitor incoming messages:
+    
+    <img src="data/redis.png" width="640">
 
-    <img src="data/ui.png" width="640">
+    Configuration file lines:
+    ```toml
+    [redis_publisher]
+        enable = true
+        host = "localhost"
+        port = 6379
+        password = ""
+        db_index = 0
+        channel_name = "DETECTORS_STATISTICS"
+    ```
 
-# ROADMAP
+    Both REST API and Redis publisher reset statistics in specific amount of time which could be adjusted via `reset_data_milliseconds` option:
+    ```toml
+    [worker]
+        reset_data_milliseconds = 30000
+    ```
+
+## Virtual lines
+
+This utility supports vehicle counting via two approaches:
+| Vehicle appeared in the zone    | Vehicle crossed the line        |
+:--------------------------------:|:--------------------------------:
+<img src="data/without-line.gif" width="320"> | <img src="data/with-line.gif" width="320">
+
+_But what is the point to have optional virtual line for zone? Why just not use either line or zone at all?_
+
+-- Well, zone is essential for estimating speed, so it is needed for sure. Why need line then: sometimes it is needed to register vehicles in specific direction only or at specific moment of time (in center of zone, in bottom of zone, after zone and etc.).
+
+You can configure virtual lines via configuration file or via UI (look at [showcase](#video-showcase)):
+```toml
+[[road_lanes]]
+    lane_number = 0
+    lane_direction = 0
+    geometry = [[204, 542], [398, 558], [506, 325], [402, 318]]
+    geometry_wgs84 = [[-3.7058048784300297,40.39308821416677],[-3.7058296599552705,40.39306089952626],[-3.7059466895758533,40.393116604041296],[-3.705927467488266,40.39314855180666]]
+    color_rgb = [255, 0, 0]
+    # Remove lines below if you don't want to include virtual line
+    # Note: There is only one possible virtual line for given zone 
+    [road_lanes.virtual_line]
+        geometry = [[254, 456], [456, 475]]
+        color_rgb = [255, 0, 0]
+        # lrtb - left->right or top-bottom object registration
+        # rtbt - right->left or bottom->top object registration
+        direction = "lrtb"
+```
+
+## ROADMAP
 Please see [this](ROADMAP.md) file
 ## Support
 If you have troubles or questions please [open an issue](https://github.com/LdDl/rust-road-traffic/issues/new).

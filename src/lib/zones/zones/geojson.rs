@@ -51,7 +51,25 @@ pub struct ZonePropertiesGeoJSON {
     pub coordinates: Vec<Vec<i32>>,
     /// Color to visually distinct zones
     #[schema(example = json!([255, 0, 0]))]
-    pub color_rgb: [i16; 3]
+    pub color_rgb: [i16; 3],
+    /// Information about virtual line (optional)
+    pub virtual_line: Option<VirtualLineFeature>
+}
+
+/// Information about virtual line
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct VirtualLineFeature {
+    /// Geometry: two poins
+    #[schema(example = json!([[100, 236], [270, 234]]))]
+    pub geometry: [[i32; 2]; 2],
+    /// Corresponding color
+    #[schema(example = json!([255, 0, 0]))]
+    pub color_rgb: [i16; 3],
+    /// Direction. Possible values:
+    /// 'lrtb' stands for "left->right, top->bottom"
+    /// 'rlbt' stands for "right->left, bottom->top"
+    #[schema(example = "lrtb")]
+    pub direction: String,
 }
 
 /// Polygon in GeoJSON specification

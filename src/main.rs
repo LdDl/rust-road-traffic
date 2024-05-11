@@ -56,9 +56,10 @@ use std::process;
 use std::thread;
 use std::sync::mpsc;
 use std::fmt;
+use std::collections::HashSet;
+use std::iter::FromIterator;
 use ctrlc;
 
-const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
 const EMPTY_FRAMES_LIMIT: u16 = 60;
 
 fn get_sys_time_in_secs() -> u64 {
@@ -168,20 +169,18 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
 
     /* Preprocess spatial data */
     let data_storage = new_datastorage(settings.equipment_info.id.clone(), verbose);
+    let target_classes = HashSet::from_iter(settings.detection.target_classes.to_owned());
+    let net_classes = settings.detection.net_classes.to_owned();
+    let net_classes_set = HashSet::from_iter(net_classes.clone());
 
-    let scale_x = match settings.input.scale_x {
-        Some(x) => { x },
-        None => { 1.0 }
-    };
-    let scale_y = match settings.input.scale_y {
-        Some(y) => { y },
-        None => { 1.0 }
-    };
     for road_lane in settings.road_lanes.iter() {
-        let mut polygon = Zone::from(road_lane);
-        polygon.scale_geom(scale_x, scale_y);    
-        polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
-        match data_storage.write().unwrap().insert_zone(polygon) {
+        let mut zone = Zone::from(road_lane);
+        zone.set_target_classes(if target_classes.len() != 0 {
+            &target_classes
+        } else {
+            &net_classes_set 
+        });
+        match data_storage.write().unwrap().insert_zone(zone) {
             Ok(_) => {},
             Err(err) => {
                 panic!("Can't insert zone due the error {:?}", err);
@@ -372,7 +371,6 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
     /* Detection thread */
     let conf_threshold: f32 = settings.detection.conf_threshold;
     let nms_threshold: f32 = settings.detection.nms_threshold;
-    let coco_classnames = &settings.detection.net_classes;
     let max_points_in_track: usize = settings.tracking.max_points_in_track;
     let mut resized_frame = Mat::default();
 
@@ -390,7 +388,6 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
     for received in rx_capture {
         // println!("Received frame from capture thread: {}", received.current_second);
         let mut frame = received.frame.clone();
-
         let (nms_bboxes, nms_classes_ids, nms_confidences) = match neural_net.forward(&frame, conf_threshold, nms_threshold) {
             Ok((a, b, c)) => { (a, b, c) },
             Err(err) => {
@@ -407,8 +404,8 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
             width,
             height,
             max_points_in_track,
-            &coco_classnames,
-            COCO_FILTERED_CLASSNAMES,
+            &net_classes,
+            &target_classes,
             tracker_dt,
         );
 
@@ -446,7 +443,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
             let track: &Vec<mot_rs::utils::Point> = object.get_track();
             let last_point = &track[track.len() - 1];
 
-            // Check if object is inside of any polygon
+            // Check if object is inside of any zone (optionally: check if it crossed the virtual line inside of it)
             for (_, zone_guarded) in zones.iter() {
                 let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
                 if !zone.contains_point(last_point.x, last_point.y) {
@@ -455,24 +452,34 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                 zone.current_statistics.occupancy += 1; // Increment current load to match number of objects in zone
                 let projected_pt = zone.project_to_skeleton(last_point.x, last_point.y);
                 let pixels_per_meters = zone.get_skeleton_ppm();
+
+                let crossed = if track.len() >= 2 {
+                    let last_before_point = &track[track.len() - 2];
+                    zone.crossed_virtual_line(last_point.x, last_point.y, last_before_point.x, last_before_point.y)
+                } else {
+                    false
+                };
                 match object_extra.spatial_info {
                     Some(ref mut spatial_info) => {
                         spatial_info.update_avg(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1, pixels_per_meters);
-                        zone.register_or_update_object(object_id.clone(), spatial_info.speed, object_extra.get_classname());
+                        zone.register_or_update_object(object_id.clone(), spatial_info.speed, object_extra.get_classname(), crossed);
                     },
                     None => {
                         object_extra.spatial_info = Some(SpatialInfo::new(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1));
-                        zone.register_or_update_object(object_id.clone(), -1.0, object_extra.get_classname());
+                        zone.register_or_update_object(object_id.clone(), -1.0, object_extra.get_classname(), crossed);
                     }
                 }
+                drop(zone);
             }
         }
         if enable_mjpeg || settings.output.enable {
             for (_, v) in zones.iter() {
-                let polygon = v.lock().expect("Mutex poisoned");
-                polygon.draw_geom(&mut frame);
-                polygon.draw_skeleton(&mut frame);
-                polygon.draw_current_intensity(&mut frame);
+                let zone = v.lock().expect("Mutex poisoned");
+                zone.draw_geom(&mut frame);
+                zone.draw_skeleton(&mut frame);
+                zone.draw_current_intensity(&mut frame);
+                zone.draw_virtual_line(&mut frame);
+                drop(zone);
             }
         }
 

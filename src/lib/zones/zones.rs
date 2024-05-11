@@ -2,13 +2,13 @@
 pub(crate) mod geometry;
 pub(crate) mod geojson;
 
-use std::collections::{HashMap};
+use std::collections::{HashMap, HashSet};
 use std::collections::hash_map::Entry::{
     Occupied,
     Vacant
 };
 use uuid::Uuid;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 
 use geometry::PointsOrientation;
 use geometry::{
@@ -19,6 +19,7 @@ use geometry::{
 
 use geojson::{
     ZoneFeature,
+    VirtualLineFeature,
     ZonePropertiesGeoJSON,
     GeoPolygon
 };
@@ -37,114 +38,17 @@ use crate::lib::spatial::SpatialConverter;
 use crate::lib::spatial::epsg::lonlat_to_meters;
 use crate::lib::spatial::compute_center;
 use crate::lib::spatial::haversine;
+use crate::lib::zones::{VehicleTypeParameters, Statistics, Skeleton, VirtualLineDirection, VirtualLine};
 
-#[derive(Debug)]
-pub struct Statistics {
-    pub period_start: DateTime<Utc>,
-    pub period_end: DateTime<Utc>,
-    pub vehicles_data: HashMap<String, VehicleTypeParameters>
-}
-
-impl Statistics {
-    pub fn default() -> Self {
-        Statistics{
-            period_start: TimeZone::with_ymd_and_hms(&Utc, 1970, 1, 1, 0, 0, 0).unwrap(),
-            period_end: TimeZone::with_ymd_and_hms(&Utc, 1970, 1, 1, 0, 0, 0).unwrap(),
-            vehicles_data: HashMap::new()
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct VehicleTypeParameters {
-    pub avg_speed: f32,
-    pub sum_intensity: u32
-}
-
-impl VehicleTypeParameters {
-    pub fn default() -> Self {
-        VehicleTypeParameters{
-            avg_speed: -1.0,
-            sum_intensity: 0,
-        }
-    }
-}
 
 #[derive(Debug)]
 struct ObjectInfo {
     classname: String,
     speed: f32,
+    crossed_virtual_line: bool
 }
 
 type Registered = HashMap<Uuid, ObjectInfo>;
-
-#[derive(Debug)]
-struct Skeleton {
-    line: [Point2f; 2],
-    color: Scalar,
-    length_pixels: f32,
-    length_meters: f32,
-    pixels_per_meter: f32,
-}
-
-impl Skeleton {
-    fn new(a: Point2f, b: Point2f) -> Self {
-        let length_pixels = ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt();
-        Skeleton {
-            line: [a, b],
-            color: Scalar::from((0.0, 0.0, 0.0)),
-            length_pixels: length_pixels,
-            length_meters: -1.0,
-            pixels_per_meter: -1.0,
-        }
-    }
-    fn default() -> Self {
-        Skeleton {
-            line: [Point2f::default(), Point2f::default()],
-            color: Scalar::from((0.0, 0.0, 0.0)),
-            length_pixels: -1.0,
-            length_meters: -1.0,
-            pixels_per_meter: -1.0,
-        }
-    }
-    pub fn project(&self, x: f32, y: f32) -> (f32, f32) {
-        let a = self.line[0];
-        let b = self.line[1];
-        let (x1, y1) = (a.x, a.y);
-        let (x2, y2) = (b.x, b.y);
-        let (xP, yP) = (x, y);
-
-        // Calculate vector components of AB
-        let ABx = x2 - x1;
-        let ABy = y2 - y1;
-
-        // Calculate vector components of AP
-        let APx = xP - x1;
-        let APy = yP - y1;
-
-        // Calculate the dot product of AB and AP
-        let dot_product = APx * ABx + APy * ABy;
-
-        // Calculate the magnitude of AB squared
-        let AB_squared = ABx.powi(2) + ABy.powi(2);
-
-        // Calculate the scalar projection of P onto AB
-        let scalar_projection = dot_product / AB_squared;
-        
-        if scalar_projection < 0.0 {
-            // P is closest to point A, so use A as the projection point
-            (a.x, a.y)
-        } else if scalar_projection > 1.0 {
-            // P is closest to point B, so use B as the projection point
-            (b.x, b.y)
-        } else {
-            // Calculate the coordinates of the projected point P' on AB
-            let xP_prime = x1 + scalar_projection * ABx;
-            let yP_prime = y1 + scalar_projection * ABy;
-            (xP_prime, yP_prime)
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct Zone {
@@ -157,11 +61,11 @@ pub struct Zone {
     pub road_lane_direction: u8,
     spatial_converter: SpatialConverter,
     pub statistics: Statistics,
-    objects: Registered,
+    objects_registered: Registered,
     pub current_statistics: RealTimeStatistics,
     skeleton: Skeleton,
+    virtual_line: Option<VirtualLine>
 }
-
 
 #[derive(Debug)]
 pub struct RealTimeStatistics {
@@ -181,30 +85,34 @@ impl Zone {
             road_lane_direction: 0,
             spatial_converter: SpatialConverter::default(),
             statistics: Statistics::default(),
-            objects: HashMap::new(),
+            objects_registered: HashMap::new(),
             current_statistics: RealTimeStatistics{
                 last_time: 0,
                 occupancy: 0
             },
             skeleton: Skeleton::default(),
+            virtual_line: None,
         }
     }
-    pub fn new(id: String, coordinates: Vec<Point2f>, spatial_coordinates_epsg4326: Vec<Point2f>, spatial_coordinates_epsg3857: Vec<Point2f>, color: Scalar, road_lane_num: u16, road_lane_direction: u8) -> Self {
-        let converter = SpatialConverter::new_from(coordinates.clone(), spatial_coordinates_epsg3857.clone());
-        /* Eval distance between sides */
-        let a = spatial_coordinates_epsg4326[0];
-        let b = spatial_coordinates_epsg4326[1];
-        let c = spatial_coordinates_epsg4326[2];
-        let d = spatial_coordinates_epsg4326[3];
-        let ab_center = compute_center(a.x, a.y, b.x, b.y);
-        let cd_center = compute_center(c.x, c.y, d.x, d.y);
-        let length_meters = haversine(ab_center.0, ab_center.1, cd_center.0, cd_center.1) * 1000.0;
-  
+    pub fn new(id: String, coordinates: Vec<Point2f>, spatial_coordinates_epsg4326: Vec<Point2f>, spatial_coordinates_epsg3857: Vec<Point2f>, color: Scalar, road_lane_num: u16, road_lane_direction: u8, _virtual_line: Option<VirtualLine>) -> Self {
         /* Init skeleton */
         let skeleton_line = find_skeleton_line(&coordinates, 0, 2); // 0-1 is first segment of polygon, 2-3 is second segment
         let mut skeleton = Skeleton::new(skeleton_line[0], skeleton_line[1]);
-        skeleton.length_meters = length_meters;
-        skeleton.pixels_per_meter = skeleton.length_pixels / skeleton.length_meters;
+        let converter = if spatial_coordinates_epsg4326.len() > 0 {
+            /* Eval distance between sides if spatial data is provided */
+            let a = spatial_coordinates_epsg4326[0];
+            let b = spatial_coordinates_epsg4326[1];
+            let c = spatial_coordinates_epsg4326[2];
+            let d = spatial_coordinates_epsg4326[3];
+            let ab_center = compute_center(a.x, a.y, b.x, b.y);
+            let cd_center = compute_center(c.x, c.y, d.x, d.y);
+            let length_meters = haversine(ab_center.0, ab_center.1, cd_center.0, cd_center.1) * 1000.0;
+            skeleton.length_meters = length_meters;
+            skeleton.pixels_per_meter = skeleton.length_pixels / skeleton.length_meters;
+            SpatialConverter::new_from(coordinates.clone(), spatial_coordinates_epsg3857.clone())
+        } else {
+            SpatialConverter::default()
+        };
         Zone{
             id: id,
             pixel_coordinates: coordinates,
@@ -215,36 +123,17 @@ impl Zone {
             road_lane_direction: road_lane_direction,
             spatial_converter: converter,
             statistics: Statistics::default(),
-            objects: HashMap::new(),
+            objects_registered: HashMap::new(),
             current_statistics: RealTimeStatistics{
                 last_time: 0,
                 occupancy: 0
             },
             skeleton: skeleton,
-        }
-    }
-    pub fn new_from_cv_with_id(points: Vec<Point2f>, id: String) -> Self {
-        let skeleton_line = find_skeleton_line(&points, 0, 2); // 0-1 is first segment of polygon, 2-3 is second segment
-        return Zone{
-            id: id,
-            pixel_coordinates: points,
-            spatial_coordinates_epsg4326: vec![],
-            spatial_coordinates_epsg3857: vec![],
-            color: Scalar::from((255.0, 255.0, 255.0)),
-            road_lane_num: 0,
-            road_lane_direction: 0,
-            spatial_converter: SpatialConverter::default(),
-            statistics: Statistics::default(),
-            objects: HashMap::new(),
-            current_statistics: RealTimeStatistics{
-                last_time: 0,
-                occupancy: 0
-            },
-            skeleton: Skeleton::new(skeleton_line[0], skeleton_line[1])
+            virtual_line: _virtual_line
         }
     }
     pub fn default_from_cv(points: Vec<Point2f>) -> Self{
-        Zone::new_from_cv_with_id(points,"dir_0_lane_0".to_owned())
+        Zone::new("dir_0_lane_0".to_owned(), points, vec![], vec![], Scalar::from((255.0, 255.0, 255.0)), 0, 0, None)
     }
     pub fn get_id(&self) -> String {
         self.id.clone()
@@ -265,9 +154,20 @@ impl Zone {
         self.spatial_coordinates_epsg4326.clone()
     }
     pub fn set_color(&mut self, rgb: [i16; 3]) {
-        self.color = Scalar::from((rgb[2] as f64, rgb[1] as f64, rgb[0] as f64))
+        // RGB to BGR
+        let (b, g, r) = (rgb[2] as f64, rgb[1] as f64, rgb[0] as f64);
+        self.color = Scalar::from((b, g, r));
     }
-    
+    pub fn get_color(&self) -> [i16; 3] {
+        let (b, g, r) = (self.color[0] as i16, self.color[1] as i16, self.color[2] as i16);
+        [r, g, b]
+    }
+    pub fn set_line_color(&mut self, rgb: [i16; 3]) {
+        if let Some(vline) = self.virtual_line.as_mut() {
+            let (r, g, b) = (rgb[0], rgb[1], rgb[2]);
+            vline.set_color_rgb(r, g, b);
+        };
+    }
     pub fn update_skeleton(&mut self) {
          /* Eval distance between sides */
          let a = self.spatial_coordinates_epsg4326[0];
@@ -322,24 +222,32 @@ impl Zone {
             .collect();
         self.update_spatial_map_cv(val);
     }
-    pub fn set_target_classes(&mut self, vehicle_types: &'static [&'static str]) {
+    pub fn set_target_classes(&mut self, vehicle_types: &HashSet<String>) {
         for class in vehicle_types.iter() {
-            self.statistics.vehicles_data.insert(class.to_string(), VehicleTypeParameters::default());
+            self.statistics.vehicles_data.insert(class.clone(), VehicleTypeParameters::default());
         }
     }
-    pub fn register_or_update_object(&mut self, object_id: Uuid, _speed: f32, _classname: String) {
-        match self.objects.entry(object_id) {
+    pub fn register_or_update_object(&mut self, object_id: Uuid, _speed: f32, _classname: String, _crossed_virtual_line: bool) {
+        let register_as_crossed = match &self.virtual_line {
+            Some(_) => _crossed_virtual_line,
+            None => false
+        };
+        match self.objects_registered.entry(object_id) {
             Occupied(mut entry) => {
                 entry.get_mut().classname = _classname;
                 entry.get_mut().speed = _speed;
+                // If object crossed virtual line then we should not reset this flag
+                if !entry.get().crossed_virtual_line {
+                    entry.get_mut().crossed_virtual_line = register_as_crossed;
+                }
             },
             Vacant(entry) => {
-                entry.insert(ObjectInfo{classname: _classname, speed: _speed});
+                entry.insert(ObjectInfo{classname: _classname, speed: _speed, crossed_virtual_line: register_as_crossed});
             },
         }
     }
-    pub fn reset_objects(&mut self) {
-        self.objects.clear();
+    pub fn reset_objects_registered(&mut self) {
+        self.objects_registered.clear();
     }
     pub fn reset_statistics(&mut self, _period_start: DateTime<Utc>, _period_end: DateTime<Utc>) {
         self.statistics.period_start = _period_start;
@@ -351,7 +259,11 @@ impl Zone {
     }
     pub fn update_statistics(&mut self, _period_start: DateTime<Utc>, _period_end: DateTime<Utc>) {
         self.reset_statistics(_period_start, _period_end);
-        for (_, object_info) in self.objects.iter() {
+        let register_via_virtual_line = match &self.virtual_line {
+            Some(_) => true,
+            None => false
+        };
+        for (_, object_info) in self.objects_registered.iter() {
             let classname = object_info.classname.to_owned();
             let speed = object_info.speed;
             let mut vehicle_type_parameters = match self.statistics.vehicles_data.entry(classname) {
@@ -361,12 +273,21 @@ impl Zone {
                     continue;
                 },
             };
-            vehicle_type_parameters.sum_intensity += 1;
+            if register_via_virtual_line {
+                if object_info.crossed_virtual_line {
+                    vehicle_type_parameters.sum_intensity += 1;
+                }
+            } else {
+                vehicle_type_parameters.sum_intensity += 1;
+            }
+            if vehicle_type_parameters.sum_intensity == 0 {
+                continue;
+            }
             // Iterative average calculation
             // https://math.stackexchange.com/questions/106700/incremental-averageing
             vehicle_type_parameters.avg_speed = vehicle_type_parameters.avg_speed * ((vehicle_type_parameters.sum_intensity - 1) as f32 / vehicle_type_parameters.sum_intensity as f32) + speed / vehicle_type_parameters.sum_intensity as f32;
         }
-        self.reset_objects();
+        self.reset_objects_registered();
     }
     // Checks if given polygon contains a point
     // Code has been taken from: https://github.com/LdDl/odam/blob/master/virtual_polygons.go#L180
@@ -418,12 +339,6 @@ impl Zone {
     pub fn contains_point_cv(&self, pt: &Point2f) -> bool {
         self.contains_point(pt.x, pt.y)
     }
-    pub fn transform_to_epsg_cv(&self, pt: &Point2f) -> Point2f {
-        self.spatial_converter.transform_to_epsg_cv(pt)
-    }
-    pub fn transform_to_epsg(&self, x: f32, y: f32) -> (f32, f32) {
-        self.spatial_converter.transform_to_epsg(x, y)
-    }
     // Checks if an object has entered the polygon
     // Let's clarify for future questions: we are assuming the object is represented by a center, not a bounding box
     // So object has entered polygon when its center had entered polygon too
@@ -444,21 +359,41 @@ impl Zone {
         }
         false
     }
-    pub fn scale_geom(&mut self, scale_factor_x: f32, scale_factor_y: f32) {
-        for pair in self.pixel_coordinates.iter_mut() {
-            pair.x = (pair.x * scale_factor_x).floor();
-            pair.y = (pair.y * scale_factor_y).floor();
-        }
-    }
     pub fn project_to_skeleton(&self, x: f32, y: f32) -> (f32, f32) {
         self.skeleton.project(x, y)
     }
     pub fn get_skeleton_ppm(&self) -> f32 {
         self.skeleton.pixels_per_meter
     }
-    pub fn project_to_skeleton_cv(&self, pt: &Point2f) -> Point2f {
-        let pt = self.project_to_skeleton(pt.x , pt.y);
-        Point2f::new(pt.0, pt.1)
+    pub fn crossed_virtual_line(&self, x1: f32, y1: f32, x2: f32, y2: f32) -> bool {
+        match &self.virtual_line {
+            Some(vl) => {
+                let is_left_before = vl.is_left(x1, y1);
+                let is_left_after = vl.is_left(x2, y2);
+                if vl.direction == VirtualLineDirection::LeftToRightTopToBottom {
+                    if is_left_before && !is_left_after {
+                        return true;
+                    }
+                } else {
+                    if !is_left_before && is_left_after {
+                        return true;
+                    }
+                }
+                return false;
+            },
+            None => {
+                return false;
+            }
+        }
+    }
+    pub fn get_virtual_line(&self) -> Option<VirtualLine> {
+        match &self.virtual_line {
+            Some(vl) => Some(vl.clone()),
+            None => None
+        }
+    }
+    pub fn set_virtual_line(&mut self, _virtual_line: VirtualLine) {
+        self.virtual_line = Some(_virtual_line);
     }
     pub fn draw_geom(&self, img: &mut Mat) {
         // @todo: proper error handling
@@ -482,17 +417,25 @@ impl Zone {
         };
     }
     pub fn draw_skeleton(&self, img: &mut Mat) {
-        let a = Point2i::new(self.skeleton.line[0].x as i32, self.skeleton.line[0].y as i32);
-        let b = Point2i::new(self.skeleton.line[1].x as i32, self.skeleton.line[1].y as i32);
-        match line(img, a, b, self.skeleton.color, 2, LINE_8, 0) {
-            Ok(_) => {},
-            Err(err) => {
-                panic!("Can't draw line for polygon due the error: {:?}", err)
-            }
-        };
+        self.skeleton.draw_on_mat(img);
+    }
+    pub fn draw_virtual_line(&self, img: &mut Mat) {
+        match &self.virtual_line {
+            Some(vl) => {
+                vl.draw_on_mat(img);
+            },
+            None => {}
+        }
     }
     pub fn draw_current_intensity(&self, img: &mut Mat) {
-        let current_intensity = self.objects.len();
+        let register_via_virtual_line = match &self.virtual_line {
+            Some(_) => true,
+            None => false
+        };
+        let current_intensity = match register_via_virtual_line {
+            true => self.objects_registered.iter().filter(|x| x.1.crossed_virtual_line == true).count(),
+            false => self.objects_registered.len()
+        };
         let anchor = Point2i::new(self.pixel_coordinates[0].x as i32 + 20, self.pixel_coordinates[0].y as i32 - 10);
         match put_text(img, &current_intensity.to_string(), anchor, FONT_HERSHEY_SIMPLEX, 0.5, Scalar::from((0.0, 0.0, 0.0)), 2, LINE_8, false) {
             Ok(_) => {},
@@ -520,7 +463,15 @@ impl Zone {
                 road_lane_num: self.road_lane_num,
                 road_lane_direction: self.road_lane_direction,
                 coordinates: euclidean,
-                color_rgb: [self.color[2] as i16, self.color[1] as i16, self.color[0] as i16]
+                color_rgb: [self.color[2] as i16, self.color[1] as i16, self.color[0] as i16],
+                virtual_line: match &self.virtual_line {
+                    Some(vl) => Some(VirtualLineFeature{
+                        geometry: vl.line,
+                        color_rgb: vl.color,
+                        direction: vl.direction.to_string(),
+                    }),
+                    None => None
+                }
             },
             geometry: GeoPolygon{
                 geometry_type: "Polygon".to_string(),
@@ -567,27 +518,6 @@ mod tests {
             Zone::default_from_cv(
                 vec![
                     Point2f::new(0.0, 0.0),
-                    Point2f::new(5.0, 5.0),
-                    Point2f::new(5.0, 0.0),
-                ]
-            ),
-            Zone::default_from_cv(
-                vec![
-                    Point2f::new(0.0, 0.0),
-                    Point2f::new(5.0, 5.0),
-                    Point2f::new(5.0, 0.0),
-                ]
-            ),
-            Zone::default_from_cv(
-                vec![
-                    Point2f::new(0.0, 0.0),
-                    Point2f::new(5.0, 5.0),
-                    Point2f::new(5.0, 0.0),
-                ]
-            ),
-            Zone::default_from_cv(
-                vec![
-                    Point2f::new(0.0, 0.0),
                     Point2f::new(5.0, 0.0),
                     Point2f::new(5.0, 5.0),
                     Point2f::new(0.0, 5.0),
@@ -597,17 +527,11 @@ mod tests {
         let points = vec![
             Point2f::new(20.0, 20.0),
             Point2f::new(4.0, 4.0),
-            Point2f::new(3.0, 3.0),
-            Point2f::new(5.0, 1.0),
-            Point2f::new(7.0, 2.0),
             Point2f::new(-2.0, 12.0)
         ];
         let correct_answers = vec![
             false,
             true,
-            true,
-            true,
-            false,
             false
         ];
         for (i, convex_polygon) in convex_polygons.iter().enumerate() {

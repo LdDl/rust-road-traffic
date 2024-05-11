@@ -5,7 +5,7 @@ use serde::{ Deserialize, Serialize };
 use toml;
 use std::error::Error;
 use std::fmt;
-
+use std::str::FromStr;
 use od_opencv::model_format::{ModelFormat, ModelVersion};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -26,8 +26,6 @@ pub struct AppSettings {
 pub struct InputSettings {
     pub video_src: String,
     pub typ: String,
-    pub scale_x: Option<f32>,
-    pub scale_y: Option<f32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -54,6 +52,7 @@ pub struct DetectionSettings {
     pub net_width: i32,
     pub net_height: i32,
     pub net_classes: Vec<String>,
+    pub target_classes: Vec<String>,
 }
 
 impl DetectionSettings {
@@ -105,6 +104,16 @@ pub struct RoadLanesSettings {
     pub geometry: Vec<[i32; 2]>,
     pub geometry_wgs84: Vec<[f32; 2]>,
     pub color_rgb: [i16; 3],
+    pub virtual_line: Option<VirtualLineSettings>
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct VirtualLineSettings {
+    pub geometry: [[i32; 2]; 2],
+    pub color_rgb: [i16; 3],
+    // 'lrtb' stands for "left->right, top->bottom"
+    // 'rlbt' stands for "right->left, bottom->top"
+    pub direction: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -137,6 +146,7 @@ pub struct MJPEGStreamingSettings {
 }
 
 use crate::lib::zones::Zone;
+use crate::lib::zones::{VirtualLineDirection, VirtualLine};
 use crate::lib::spatial::epsg::lonlat_to_meters;
 use opencv::core::Point2f;
 use opencv::core::Scalar;
@@ -162,6 +172,24 @@ impl From<&RoadLanesSettings> for Zone {
             })
             .collect();
 
+        let virtual_line = match &setting.virtual_line {
+            Some(vl) => {
+                if vl.geometry.len() != 2{
+                    None
+                } else {
+                    let dir = VirtualLineDirection::from_str(&vl.direction).unwrap_or_default();
+                    let a = Point2f::new(vl.geometry[0][0] as f32, vl.geometry[0][1] as f32);
+                    let b = Point2f::new(vl.geometry[1][0] as f32, vl.geometry[1][1] as f32);
+                    let mut line = VirtualLine::new_from_cv(a, b, dir);
+                    line.set_color_rgb(vl.color_rgb[0], vl.color_rgb[1], vl.color_rgb[2]);
+                    Some(line)
+                }
+            },
+            None => {
+                None
+            }
+        };
+
         Zone::new(
             format!("dir_{}_lane_{}", setting.lane_direction, setting.lane_number),
             geom,
@@ -169,7 +197,8 @@ impl From<&RoadLanesSettings> for Zone {
             geom_epsg3857,
             Scalar::from((setting.color_rgb[2] as f64, setting.color_rgb[1] as f64, setting.color_rgb[0] as f64)),
             setting.lane_number,
-            setting.lane_direction
+            setting.lane_direction,
+            virtual_line
         )
     }
 }
@@ -189,18 +218,6 @@ impl AppSettings {
                     enable: false,
                 });
             },
-            _ => {  }
-        }
-        match app_settings.input.scale_x {
-            None => { 
-                app_settings.input.scale_x = Some(1.0);
-            }, 
-            _ => {  }
-        }
-        match app_settings.input.scale_y {
-            None => { 
-                app_settings.input.scale_y = Some(1.0);
-            }, 
             _ => {  }
         }
         return app_settings;

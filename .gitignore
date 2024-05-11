@@ -19,3 +19,7 @@
 /.vscode
 data/MobileNetSSD_deploy.caffemodel
 data/MobileNetSSD_deploy.prototxt
+data/conf.toml.*
+data/yolov7.weights
+data/yolov7.cfg
+data/sample_960_540.mp4
