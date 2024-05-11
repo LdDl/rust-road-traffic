@@ -135,8 +135,8 @@ UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic
 ## Virtual lines
 
 This utility supports vehicle counting via two approaches:
-| Vehicle entered the zone    | Vehicle crossed the line    |
-:----------------------------:|:----------------------------:
+| Vehicle appeared on the zone    | Vehicle crossed the line        |
+:--------------------------------:|:--------------------------------:
 <img src="data/without-line.gif" width="320"> | <img src="data/with-line.gif" width="320">
 
 _But what is the point to have optional virtual for zone? Why just not use either line or zone?_
