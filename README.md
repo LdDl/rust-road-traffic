@@ -139,7 +139,7 @@ This utility supports vehicle counting via two approaches:
 :--------------------------------:|:--------------------------------:
 <img src="data/without-line.gif" width="320"> | <img src="data/with-line.gif" width="320">
 
-_But what is the point to have optional virtual for zone? Why just not use either line or zone?_
+_But what is the point to have optional virtual line for zone? Why just not use either line or zone at all?_
 
 -- Well zone is essential for estimating speed, so it is needed for sure. Why need line then: sometimes it is needed to register vehicles in specific direction only or at specific moment of time (in center of zone, in bottom of zone, after zone and etc.).
 
