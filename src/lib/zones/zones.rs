@@ -3,8 +3,8 @@ pub(crate) mod geojson;
 pub(crate) mod geometry;
 
 use chrono::{DateTime, Utc};
-use std::collections::{BTreeMap, btree_map, hash_map};
-use std::collections::{HashSet};
+use std::collections::hash_map::Entry::{Occupied, Vacant};
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use geometry::PointsOrientation;
@@ -12,7 +12,7 @@ use geometry::{get_orientation, is_intersects, is_on_segment};
 
 use geojson::{GeoPolygon, VirtualLineFeature, ZoneFeature, ZonePropertiesGeoJSON};
 
-use crate::lib::spatial::compute_center;
+use crate::lib::{spatial::compute_center, zones::statistics};
 use crate::lib::spatial::epsg::lonlat_to_meters;
 use crate::lib::spatial::haversine;
 use crate::lib::spatial::SpatialConverter;
@@ -24,7 +24,7 @@ use opencv::{
     imgproc::FONT_HERSHEY_SIMPLEX, imgproc::LINE_8,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct ObjectInfo {
     classname: String,
     speed: f32,
@@ -32,7 +32,7 @@ struct ObjectInfo {
     timestamp_registration: f32
 }
 
-type Registered = BTreeMap<Uuid, ObjectInfo>;
+type Registered = HashMap<Uuid, ObjectInfo>;
 
 #[derive(Debug)]
 pub struct Zone {
@@ -69,7 +69,7 @@ impl Zone {
             road_lane_direction: 0,
             spatial_converter: SpatialConverter::default(),
             statistics: Statistics::default(),
-            objects_registered: BTreeMap::new(),
+            objects_registered: HashMap::new(),
             current_statistics: RealTimeStatistics {
                 last_time: 0,
                 occupancy: 0,
@@ -117,7 +117,7 @@ impl Zone {
             road_lane_direction: road_lane_direction,
             spatial_converter: converter,
             statistics: Statistics::default(),
-            objects_registered: BTreeMap::new(),
+            objects_registered: HashMap::new(),
             current_statistics: RealTimeStatistics {
                 last_time: 0,
                 occupancy: 0,
@@ -271,7 +271,7 @@ impl Zone {
             None => false,
         };
         match self.objects_registered.entry(object_id) {
-            btree_map::Entry::Occupied(mut entry) => {
+            Occupied(mut entry) => {
                 entry.get_mut().classname = _classname;
                 entry.get_mut().speed = _speed;
                 // If object crossed virtual line then we should not reset this flag
@@ -279,7 +279,7 @@ impl Zone {
                     entry.get_mut().crossed_virtual_line = register_as_crossed;
                 }
             }
-            btree_map::Entry::Vacant(entry) => {
+            Vacant(entry) => {
                 entry.insert(ObjectInfo {
                     classname: _classname,
                     speed: _speed,
@@ -302,26 +302,31 @@ impl Zone {
     }
     pub fn update_statistics(&mut self, _period_start: DateTime<Utc>, _period_end: DateTime<Utc>) {
         self.reset_statistics(_period_start, _period_end);
-        let register_via_virtual_line = match &self.virtual_line {
-            Some(_) => true,
-            None => false,
+        let register_via_virtual_line = self.virtual_line.is_some();
+        // Are there better ways to sort hashmap (or btreemap) and extract just timestamps? 
+        let headway_avg = if self.objects_registered.len() > 1 { // For headway calculation two vehicles are needed at least
+            let mut sorted_by_time = self.objects_registered.values().map(|object_info| object_info.timestamp_registration).collect::<Vec<f32>>();
+            sorted_by_time.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            sorted_by_time.windows(2).map(|w| w[1] - w[0]).sum::<f32>() / (sorted_by_time.len() as f32 - 1.0)
+        } else {
+            0.0
         };
-        // @todo. Option 1: sort timestamp_registration and calculate headaway
         for (_, object_info) in self.objects_registered.iter() {
             let classname = object_info.classname.to_owned();
             let speed = object_info.speed;
 
-            let mut vehicle_type_parameters = match self.statistics.vehicles_data.entry(classname) {
-                hash_map::Entry::Occupied(o) => o.into_mut(),
-                hash_map::Entry::Vacant(v) => {
+            let vehicle_type_parameters = match self.statistics.vehicles_data.entry(classname) {
+                Occupied(o) => o.into_mut(),
+                Vacant(v) => {
                     v.insert(VehicleTypeParameters {
                         sum_intensity: 1,
                         avg_speed: speed,
-                        avg_headway: 0.0,
+                        avg_headway: headway_avg,
                     });
                     continue;
                 }
             };
+            vehicle_type_parameters.avg_headway = headway_avg; // Every class inherits summary average headway
             if register_via_virtual_line {
                 if object_info.crossed_virtual_line {
                     vehicle_type_parameters.sum_intensity += 1;
