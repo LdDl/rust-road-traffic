@@ -56,9 +56,10 @@ use std::process;
 use std::thread;
 use std::sync::mpsc;
 use std::fmt;
+use std::collections::HashSet;
+use std::iter::FromIterator;
 use ctrlc;
 
-const COCO_FILTERED_CLASSNAMES: &'static [&'static str] = &["car", "motorbike", "bus", "train", "truck"];
 const EMPTY_FRAMES_LIMIT: u16 = 60;
 
 fn get_sys_time_in_secs() -> u64 {
@@ -168,10 +169,17 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
 
     /* Preprocess spatial data */
     let data_storage = new_datastorage(settings.equipment_info.id.clone(), verbose);
+    let target_classes = HashSet::from_iter(settings.detection.target_classes.to_owned());
+    let net_classes = settings.detection.net_classes.to_owned();
+    let net_classes_set = HashSet::from_iter(net_classes.clone());
 
     for road_lane in settings.road_lanes.iter() {
         let mut zone = Zone::from(road_lane);
-        zone.set_target_classes(COCO_FILTERED_CLASSNAMES);
+        zone.set_target_classes(if target_classes.len() != 0 {
+            &target_classes
+        } else {
+            &net_classes_set 
+        });
         match data_storage.write().unwrap().insert_zone(zone) {
             Ok(_) => {},
             Err(err) => {
@@ -363,7 +371,6 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
     /* Detection thread */
     let conf_threshold: f32 = settings.detection.conf_threshold;
     let nms_threshold: f32 = settings.detection.nms_threshold;
-    let coco_classnames = &settings.detection.net_classes;
     let max_points_in_track: usize = settings.tracking.max_points_in_track;
     let mut resized_frame = Mat::default();
 
@@ -397,8 +404,8 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
             width,
             height,
             max_points_in_track,
-            &coco_classnames,
-            COCO_FILTERED_CLASSNAMES,
+            &net_classes,
+            &target_classes,
             tracker_dt,
         );
 

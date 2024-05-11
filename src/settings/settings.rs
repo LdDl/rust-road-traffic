@@ -52,6 +52,7 @@ pub struct DetectionSettings {
     pub net_width: i32,
     pub net_height: i32,
     pub net_classes: Vec<String>,
+    pub target_classes: Vec<String>,
 }
 
 impl DetectionSettings {

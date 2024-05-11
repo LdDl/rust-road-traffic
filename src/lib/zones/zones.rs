@@ -2,7 +2,7 @@
 pub(crate) mod geometry;
 pub(crate) mod geojson;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::collections::hash_map::Entry::{
     Occupied,
     Vacant
@@ -222,9 +222,9 @@ impl Zone {
             .collect();
         self.update_spatial_map_cv(val);
     }
-    pub fn set_target_classes(&mut self, vehicle_types: &'static [&'static str]) {
+    pub fn set_target_classes(&mut self, vehicle_types: &HashSet<String>) {
         for class in vehicle_types.iter() {
-            self.statistics.vehicles_data.insert(class.to_string(), VehicleTypeParameters::default());
+            self.statistics.vehicles_data.insert(class.clone(), VehicleTypeParameters::default());
         }
     }
     pub fn register_or_update_object(&mut self, object_id: Uuid, _speed: f32, _classname: String, _crossed_virtual_line: bool) {
