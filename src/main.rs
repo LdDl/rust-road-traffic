@@ -260,7 +260,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
     if settings.output.enable {
         match named_window(window, 1) {
             Ok(_) => {},
-            Err(err) =>{
+        Err(err) =>{
                 panic!("Can't give a name to output window due the error: {:?}", err)
             }
         };
@@ -449,6 +449,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                     continue
                 }
                 zone.current_statistics.occupancy += 1; // Increment current load to match number of objects in zone
+
                 let projected_pt = zone.project_to_skeleton(last_point.x, last_point.y);
                 let pixels_per_meters = zone.get_skeleton_ppm();
 
@@ -461,11 +462,11 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                 match object_extra.spatial_info {
                     Some(ref mut spatial_info) => {
                         spatial_info.update_avg(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1, pixels_per_meters);
-                        zone.register_or_update_object(*object_id, spatial_info.speed, object_extra.get_classname(), crossed);
+                        zone.register_or_update_object(*object_id, last_time, spatial_info.speed, object_extra.get_classname(), crossed);
                     },
                     None => {
                         object_extra.spatial_info = Some(SpatialInfo::new(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1));
-                        zone.register_or_update_object(*object_id, -1.0, object_extra.get_classname(), crossed);
+                        zone.register_or_update_object(*object_id, last_time, -1.0, object_extra.get_classname(), crossed);
                     }
                 }
                 drop(zone);

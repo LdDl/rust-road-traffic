@@ -3,8 +3,8 @@ pub(crate) mod geojson;
 pub(crate) mod geometry;
 
 use chrono::{DateTime, Utc};
-use std::collections::hash_map::Entry::{Occupied, Vacant};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, btree_map, hash_map};
+use std::collections::{HashSet};
 use uuid::Uuid;
 
 use geometry::PointsOrientation;
@@ -29,9 +29,10 @@ struct ObjectInfo {
     classname: String,
     speed: f32,
     crossed_virtual_line: bool,
+    timestamp_registration: f32
 }
 
-type Registered = HashMap<Uuid, ObjectInfo>;
+type Registered = BTreeMap<Uuid, ObjectInfo>;
 
 #[derive(Debug)]
 pub struct Zone {
@@ -68,7 +69,7 @@ impl Zone {
             road_lane_direction: 0,
             spatial_converter: SpatialConverter::default(),
             statistics: Statistics::default(),
-            objects_registered: HashMap::new(),
+            objects_registered: BTreeMap::new(),
             current_statistics: RealTimeStatistics {
                 last_time: 0,
                 occupancy: 0,
@@ -116,7 +117,7 @@ impl Zone {
             road_lane_direction: road_lane_direction,
             spatial_converter: converter,
             statistics: Statistics::default(),
-            objects_registered: HashMap::new(),
+            objects_registered: BTreeMap::new(),
             current_statistics: RealTimeStatistics {
                 last_time: 0,
                 occupancy: 0,
@@ -260,6 +261,7 @@ impl Zone {
     pub fn register_or_update_object(
         &mut self,
         object_id: Uuid,
+        _timestamp: f32,
         _speed: f32,
         _classname: String,
         _crossed_virtual_line: bool,
@@ -269,7 +271,7 @@ impl Zone {
             None => false,
         };
         match self.objects_registered.entry(object_id) {
-            Occupied(mut entry) => {
+            btree_map::Entry::Occupied(mut entry) => {
                 entry.get_mut().classname = _classname;
                 entry.get_mut().speed = _speed;
                 // If object crossed virtual line then we should not reset this flag
@@ -277,11 +279,12 @@ impl Zone {
                     entry.get_mut().crossed_virtual_line = register_as_crossed;
                 }
             }
-            Vacant(entry) => {
+            btree_map::Entry::Vacant(entry) => {
                 entry.insert(ObjectInfo {
                     classname: _classname,
                     speed: _speed,
                     crossed_virtual_line: register_as_crossed,
+                    timestamp_registration: _timestamp
                 });
             }
         }
@@ -303,12 +306,14 @@ impl Zone {
             Some(_) => true,
             None => false,
         };
+        // @todo. Option 1: sort timestamp_registration and calculate headaway
         for (_, object_info) in self.objects_registered.iter() {
             let classname = object_info.classname.to_owned();
             let speed = object_info.speed;
+
             let mut vehicle_type_parameters = match self.statistics.vehicles_data.entry(classname) {
-                Occupied(o) => o.into_mut(),
-                Vacant(v) => {
+                hash_map::Entry::Occupied(o) => o.into_mut(),
+                hash_map::Entry::Vacant(v) => {
                     v.insert(VehicleTypeParameters {
                         sum_intensity: 1,
                         avg_speed: speed,
