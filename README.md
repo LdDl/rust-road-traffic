@@ -81,6 +81,26 @@ UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic
     ```shell
     export RUSTFLAGS='-C link-arg=-s' && cargo build --release && ./target/release/rust-road-traffic path-to-toml-file
     ```
+
+8. UI configuration
+
+    If you enabled both REST API and MJPEG streaming and you want to adjust parameters for detection zones you could open http://localhost:42001/ in your browser and adjust polygons as you need (this UI still needs to be debugged and polished):
+
+    <img src="data/ui.png" width="640">
+
+    Configuration file lines:
+    ```toml
+    [rest_api]
+        enable = true
+        host = "0.0.0.0"
+        back_end_port = 42001
+        api_scope = "/api"
+        [rest_api.mjpeg_streaming]
+            enable = true
+    ```
+
+8. REST API
+
     If you want to do some REST calls you can do following (based on *rest_api* field in TOML configuration files)
     ```bash
     # Get polygons (GeoJSON) in which road traffic monitoring is requested
@@ -88,10 +108,29 @@ UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic
     # Get statistics info for each polygon and each vehicle type in that polygon
     curl -XGET 'http://localhost:42001/api/stats/all'
     ```
+   
+9. Export data
 
-    If you enabled MJPEG streaming and you want to adjust parameters for velocity estimation you could open http://localhost:42001/ in your browser and adjust polygons as you need (this UI still needs to be debugged and polished):
+    If you enabled Redis output you can connect to Redis server (e.g. via CLI) and monitor incoming messages:
+    
+    <img src="data/redis.png" width="640">
 
-    <img src="data/ui.png" width="640">
+    Configuration file lines:
+    ```toml
+    [redis_publisher]
+        enable = true
+        host = "localhost"
+        port = 6379
+        password = ""
+        db_index = 0
+        channel_name = "DETECTORS_STATISTICS"
+    ```
+
+    Both REST API and Redis publisher reset statistics in specific amount of time which could be adjusted via `reset_data_milliseconds` option:
+    ```toml
+    [worker]
+        reset_data_milliseconds = 30000
+    ```
 
 # ROADMAP
 Please see [this](ROADMAP.md) file

@@ -42,7 +42,7 @@
     * ~~Optional choice between Tiny YOLO and MobilenetSSD(Caffe)~~[removed]
     * ~~Fill Jetson Nano instructions~~
     * ~~Estimate speed and intensity for each vehicle type~~
-    * RabbitMQ integration module? Do we need those?
+    * RabbitMQ/NATS/Tarantool/Kafka integration module? Do we need those?
     * ~~Verbose output as option (fps/workers output)~~
     * Consider color as hex representation (additional field with priority lower than RGBA)
     * ~~Consider training YOLO v4 tiny for vehicle classes only (we do need false positive detection for peoples/boats/chairs and etc.)~~ [I want to provide link for custom trained network: only vehicles + network size is 416x256 rather than 416x416 due the problem when resizing image provided too much squeezing]
@@ -51,7 +51,7 @@
     * ~~More neural network parameters in TOML ~~
     * ~~Figure it out, how to boost perfomance for YOLOv4-tiny (or mobilenet-ssd?). Best idea I have so far is: pick tensort-rt and onnx and do magick trick.~~ [But there are no good and mature tensor-rt libs for Rust I guess...]
     * ~~Scaling by x/y~~
-    * Swagger docs. __W.I.P.__
+    * ~~Swagger docs.~~
     
 
 * Some bugs
