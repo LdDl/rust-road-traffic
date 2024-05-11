@@ -1,10 +1,10 @@
-use actix_web::{HttpResponse, web, Error};
+use actix_web::{web, Error, HttpResponse};
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
-use chrono::{DateTime, Utc};
 
-use std::collections::HashMap;
 use crate::rest_api::APIStorage;
+use std::collections::HashMap;
 
 /// Information about aggregated road traffic flow parameters for the equipment
 #[derive(Debug, Serialize, ToSchema)]
@@ -13,7 +13,7 @@ pub struct AllZonesStats {
     #[schema(example = "1e23985f-1fa3-45d0-a365-2d8525a23ddd")]
     pub equipment_id: String,
     /// Set of data with summary information about road traffic parameters for each detection zone
-    pub data: Vec<ZoneStats>
+    pub data: Vec<ZoneStats>,
 }
 
 /// Summary information for each detection zone
@@ -33,7 +33,7 @@ pub struct ZoneStats {
     pub period_end: DateTime<Utc>,
     /// Statistic for every vehicle type. Key: vehicle type; Value - road traffic flow parameters
     #[schema(example = json!({"train":{"estimated_avg_speed":-1,"estimated_sum_intensity":0},"bus":{"estimated_avg_speed":15.2,"estimated_sum_intensity":2},"truck":{"estimated_avg_speed":20.965343,"estimated_sum_intensity":3},"car":{"estimated_avg_speed":23.004976,"estimated_sum_intensity":4},"motorbike":{"estimated_avg_speed":-1,"estimated_sum_intensity":0}  }))]
-    pub statistics: HashMap<String, VehicleTypeParameters>
+    pub statistics: HashMap<String, VehicleTypeParameters>,
 }
 
 /// Road traffic parameters for specific vehicle type
@@ -44,7 +44,10 @@ pub struct VehicleTypeParameters {
     pub estimated_avg_speed: f32,
     /// Summary road traffic flow (if it is needed could be extrapolated to the intensity: vehicles/hour)
     #[schema(example = 15)]
-    pub estimated_sum_intensity: u32
+    pub estimated_sum_intensity: u32,
+    /// Average headway. Headway - number of seconds between arrival of leading vehicle and following vehicle
+    #[schema(example = 2.5)]
+    pub estimated_avg_headway: f32,
 }
 
 #[utoipa::path(
@@ -56,26 +59,36 @@ pub struct VehicleTypeParameters {
     )
 )]
 pub async fn all_zones_stats(data: web::Data<APIStorage>) -> Result<HttpResponse, Error> {
-    let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
-    let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
-    let mut ans: AllZonesStats = AllZonesStats{
+    let ds_guard = data
+        .data_storage
+        .read()
+        .expect("DataStorage is poisoned [RWLock]");
+    let zones = ds_guard
+        .zones
+        .read()
+        .expect("Spatial data is poisoned [RWLock]");
+    let mut ans: AllZonesStats = AllZonesStats {
         equipment_id: ds_guard.id.clone(),
-        data: vec![]
+        data: vec![],
     };
     for (_, zone_guarded) in zones.iter() {
         let zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
-        let mut stats = ZoneStats{
+        let mut stats = ZoneStats {
             lane_number: zone.road_lane_num,
             lane_direction: zone.road_lane_direction,
             period_start: zone.statistics.period_start,
             period_end: zone.statistics.period_end,
-            statistics: HashMap::new()
+            statistics: HashMap::new(),
         };
         for (vehicle_type, statistics) in zone.statistics.vehicles_data.iter() {
-            stats.statistics.insert(vehicle_type.to_string(), VehicleTypeParameters{
-                estimated_avg_speed: statistics.avg_speed,
-                estimated_sum_intensity: statistics.sum_intensity
-            });
+            stats.statistics.insert(
+                vehicle_type.to_string(),
+                VehicleTypeParameters {
+                    estimated_avg_speed: statistics.avg_speed,
+                    estimated_sum_intensity: statistics.sum_intensity,
+                    estimated_avg_headway: statistics.avg_headway,
+                },
+            );
         }
         ans.data.push(stats);
     }
@@ -84,7 +97,6 @@ pub async fn all_zones_stats(data: web::Data<APIStorage>) -> Result<HttpResponse
     return Ok(HttpResponse::Ok().json(ans));
 }
 
-
 /// Information about occupancy in real-time for each detection zone
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AllZonesRealtimeStatistics {
@@ -92,7 +104,7 @@ pub struct AllZonesRealtimeStatistics {
     #[schema(example = "1e23985f-1fa3-45d0-a365-2d8525a23ddd")]
     pub equipment_id: String,
     /// Set of detection zones and its realtime occupancy information
-    pub data: Vec<ZoneRealtime>
+    pub data: Vec<ZoneRealtime>,
 }
 
 /// Information about realtime occupancy for the specific detection zone
@@ -109,7 +121,7 @@ pub struct ZoneRealtime {
     pub last_time: u64,
     /// Occupancy
     #[schema(example = 3)]
-    pub occupancy: u16
+    pub occupancy: u16,
 }
 
 #[utoipa::path(
@@ -121,19 +133,25 @@ pub struct ZoneRealtime {
     )
 )]
 pub async fn all_zones_occupancy(data: web::Data<APIStorage>) -> Result<HttpResponse, Error> {
-    let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
-    let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
-    let mut ans: AllZonesRealtimeStatistics = AllZonesRealtimeStatistics{
+    let ds_guard = data
+        .data_storage
+        .read()
+        .expect("DataStorage is poisoned [RWLock]");
+    let zones = ds_guard
+        .zones
+        .read()
+        .expect("Spatial data is poisoned [RWLock]");
+    let mut ans: AllZonesRealtimeStatistics = AllZonesRealtimeStatistics {
         equipment_id: ds_guard.id.clone(),
-        data: vec![]
+        data: vec![],
     };
     for (_, zone_guarded) in zones.iter() {
         let zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
-        let stats = ZoneRealtime{
+        let stats = ZoneRealtime {
             lane_number: zone.road_lane_num,
             lane_direction: zone.road_lane_direction,
             last_time: zone.current_statistics.last_time,
-            occupancy: zone.current_statistics.occupancy
+            occupancy: zone.current_statistics.occupancy,
         };
         ans.data.push(stats);
     }
@@ -141,3 +159,4 @@ pub async fn all_zones_occupancy(data: web::Data<APIStorage>) -> Result<HttpResp
     drop(ds_guard);
     return Ok(HttpResponse::Ok().json(ans));
 }
+

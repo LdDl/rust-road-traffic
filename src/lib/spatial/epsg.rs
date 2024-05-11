@@ -1,7 +1,7 @@
 use opencv::core::Point2f;
 
-use std::f32::consts::PI;
 use std::f32::consts::E;
+use std::f32::consts::PI;
 const EARTH_RADIUS_M: f32 = 6378137.0;
 const EARTH_RADIUS_KM: f32 = 6378.137;
 const f: f32 = 298.257223563;
@@ -23,14 +23,11 @@ pub fn x2lon(x: f32) -> f32 {
 }
 
 pub fn lat2y(lat: f32) -> f32 {
-    ((lat.to_radians() / 2. + PI / 4.).tan()).log(E)
-        * EARTH_RADIUS_KM
-        * 1000.
+    ((lat.to_radians() / 2. + PI / 4.).tan()).log(E) * EARTH_RADIUS_KM * 1000.
 }
 
 pub fn y2lat(y: f32) -> f32 {
-    (2. * ((y / (EARTH_RADIUS_KM * 1000.)).exp()).atan() - PI / 2.)
-        .to_degrees()
+    (2. * ((y / (EARTH_RADIUS_KM * 1000.)).exp()).atan() - PI / 2.).to_degrees()
 }
 
 pub fn lonlat_to_meters(lon: f32, lat: f32) -> (f32, f32) {
@@ -68,3 +65,4 @@ mod tests {
         assert!((lat - test_lat).abs() < eps_lonlat);
     }
 }
+
