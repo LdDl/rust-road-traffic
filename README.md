@@ -141,7 +141,7 @@ This utility supports vehicle counting via two approaches:
 
 _But what is the point to have optional virtual for zone? Why just not use either line or zone?_
 
--- Well zone is essential for estimating speed, so it is needed for sure. Why need line then: sometimes it is needed to register vehicles in specific direction only or at specific moment of time (in center of zone, in bottom of zone and etc.).
+-- Well zone is essential for estimating speed, so it is needed for sure. Why need line then: sometimes it is needed to register vehicles in specific direction only or at specific moment of time (in center of zone, in bottom of zone, after zone and etc.).
 
 You can configure virtual lines via configuration file or via UI (look at [showcase](#video-showcase)):
 ```toml
