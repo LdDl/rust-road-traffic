@@ -4,7 +4,7 @@
 - [Video showcase](#video-showcase)
 - [About](#about)
 - [Installation and usage](#installation-and-usage)
-- [Screenshots](#screenshots)
+- [Virtual lines](#virtual-lines)
 - [ROADMAP](#roadmap)
   - [Support](#support)
 
@@ -132,7 +132,36 @@ UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic
         reset_data_milliseconds = 30000
     ```
 
-# ROADMAP
+## Virtual lines
+
+This utility supports vehicle counting via two approaches:
+| Vehicle entered the zone    | Vehicle crossed the line    |
+:----------------------------:|:----------------------------:
+<img src="data/without-line.gif" width="320"> | <img src="data/with-line.gif" width="320">
+
+_But what is the point to have optional virtual for zone? Why just not use either line or zone?_
+
+-- Well zone is essential for estimating speed, so it is needed for sure. Why need line then: sometimes it is needed to register vehicles in specific direction only or at specific moment of time (in center of zone, in bottom of zone and etc.).
+
+You can configure virtual lines via configuration file or via UI (look at [showcase](#video-showcase)):
+```toml
+[[road_lanes]]
+    lane_number = 0
+    lane_direction = 0
+    geometry = [[204, 542], [398, 558], [506, 325], [402, 318]]
+    geometry_wgs84 = [[-3.7058048784300297,40.39308821416677],[-3.7058296599552705,40.39306089952626],[-3.7059466895758533,40.393116604041296],[-3.705927467488266,40.39314855180666]]
+    color_rgb = [255, 0, 0]
+    # Remove lines below if you don't want to include virtual line
+    # Note: There is only one possible virtual line for given zone 
+    [road_lanes.virtual_line]
+        geometry = [[254, 456], [456, 475]]
+        color_rgb = [255, 0, 0]
+        # lrtb - left->right or top-bottom object registration
+        # rtbt - right->left or bottom->top object registration
+        direction = "lrtb"
+```
+
+## ROADMAP
 Please see [this](ROADMAP.md) file
 ## Support
 If you have troubles or questions please [open an issue](https://github.com/LdDl/rust-road-traffic/issues/new).

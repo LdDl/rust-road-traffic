@@ -58,24 +58,8 @@
     # Optional attribute.
     # By default road traffic flow in calculated as number of vehicles which has been registered by naive verification metric: if even single point were registered in lane - it is counted as +1.
     # This attribute overrides default behaviour and allows to count only vehicles which has been registered by virtual line in this zone.
-    # Note: There is only one possible virtual line for given zone
-    [road_lanes.virtual_line]
-        geometry = [[254, 456], [456, 475]]
-        color_rgb = [255, 0, 0]
-        # lrtb - left->right or top-bottom object registration
-        # rtbt - right->left or bottom->top object registration
-        direction = "lrtb"
 
-[[road_lanes]]
-    lane_number = 1
-    lane_direction = 0
-    geometry = [[34, 357], [297, 415], [461, 257], [289, 247]]
-    geometry_wgs84 = [[-3.7059398340939538,40.39321540939261],[-3.705722041522307,40.39311216511089],[-3.705755817984624,40.393093668143706],[-3.7059520342002656,40.393187305050645]]
-    color_rgb = [0, 255, 0]
-    [road_lanes.virtual_line]
-        geometry = [[84, 315], [357, 380]]
-        color_rgb = [0, 255, 0]
-        direction = "lrtb"
+
 
 [[road_lanes]]
     lane_number = 0
