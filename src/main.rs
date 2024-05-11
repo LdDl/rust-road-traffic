@@ -58,7 +58,6 @@ use std::sync::mpsc;
 use std::fmt;
 use std::collections::HashSet;
 use std::iter::FromIterator;
-use ctrlc;
 
 const EMPTY_FRAMES_LIMIT: u16 = 60;
 
@@ -123,7 +122,7 @@ fn probe_video(capture: &mut VideoCapture) ->  Result<(f32, f32, f32), AppError>
     // };
     // let frame_cols = frame.cols() as f32;
     // let frame_rows = frame.rows() as f32;
-    return Ok((frame_cols, frame_rows, fps));
+    Ok((frame_cols, frame_rows, fps))
 }
 
 fn prepare_neural_net(mf: ModelFormat, mv: ModelVersion, weights: &str, configuration: Option<String>, net_size: (i32, i32)) -> Result<Box<dyn ModelTrait>, AppError> {
@@ -139,7 +138,7 @@ fn prepare_neural_net(mf: ModelFormat, mv: ModelVersion, weights: &str, configur
     let configuration_str = configuration.as_deref();
 
     let neural_net = match new_from_file(
-        &weights,
+        weights,
         configuration_str,
         (net_size.0, net_size.1),
         mf, mv,
@@ -175,7 +174,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
 
     for road_lane in settings.road_lanes.iter() {
         let mut zone = Zone::from(road_lane);
-        zone.set_target_classes(if target_classes.len() != 0 {
+        zone.set_target_classes(if !target_classes.is_empty() {
             &target_classes
         } else {
             &net_classes_set 
@@ -248,7 +247,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
 
     /* Probe video */
     let mut video_capture = get_video_capture(&settings.input.video_src, settings.input.typ.clone());
-    let opened = VideoCapture::is_opened(&video_capture).map_err(|err| AppError::from(err))?;
+    let opened = VideoCapture::is_opened(&video_capture).map_err(AppError::from)?;
     if !opened {
         return Err(AppError::VideoError(AppVideoError{typ: 1}))
     }
@@ -341,7 +340,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                 } else {
                     // Next iterations
                     ds_writer.period_start = ds_writer.period_end;
-                    ds_writer.period_end = ds_writer.period_end + chrono::Duration::milliseconds(reset_time);
+                    ds_writer.period_end += chrono::Duration::milliseconds(reset_time);
                 }
                 
                 match ds_writer.update_statistics() {
@@ -376,7 +375,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
 
     let ds_tracker = data_storage.clone();
     
-    let tracker_dt = (1.0/fps) as f32;
+    let tracker_dt = 1.0/fps;
 
     /* Can't create colors as const/static currently */
     let trajectory_scalar: Scalar = Scalar::from((0.0, 255.0, 0.0));
@@ -462,11 +461,11 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                 match object_extra.spatial_info {
                     Some(ref mut spatial_info) => {
                         spatial_info.update_avg(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1, pixels_per_meters);
-                        zone.register_or_update_object(object_id.clone(), spatial_info.speed, object_extra.get_classname(), crossed);
+                        zone.register_or_update_object(*object_id, spatial_info.speed, object_extra.get_classname(), crossed);
                     },
                     None => {
                         object_extra.spatial_info = Some(SpatialInfo::new(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1));
-                        zone.register_or_update_object(object_id.clone(), -1.0, object_extra.get_classname(), crossed);
+                        zone.register_or_update_object(*object_id, -1.0, object_extra.get_classname(), crossed);
                     }
                 }
                 drop(zone);
@@ -489,21 +488,21 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
         
         /* Imshow + re-stream input video as MJPEG */
         if enable_mjpeg || settings.output.enable {
-            draw::draw_trajectories(&mut frame, &tracker, trajectory_scalar, trajectory_scalar_inverse);
-            draw::draw_bboxes(&mut frame, &tracker, bbox_scalar, bbox_scalar_inverse);
-            draw::draw_identifiers(&mut frame, &tracker, id_scalar, id_scalar_inverse);
-            draw::draw_speeds(&mut frame, &tracker, id_scalar, id_scalar_inverse);
-            draw::draw_projections(&mut frame, &tracker, id_scalar, id_scalar_inverse);
+            draw::draw_trajectories(&mut frame, tracker, trajectory_scalar, trajectory_scalar_inverse);
+            draw::draw_bboxes(&mut frame, tracker, bbox_scalar, bbox_scalar_inverse);
+            draw::draw_identifiers(&mut frame, tracker, id_scalar, id_scalar_inverse);
+            draw::draw_speeds(&mut frame, tracker, id_scalar, id_scalar_inverse);
+            draw::draw_projections(&mut frame, tracker, id_scalar, id_scalar_inverse);
             
             if settings.output.enable {
-                match resize(&mut frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
+                match resize(&frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
                     Ok(_) => {},
                     Err(err) => {
                         panic!("Can't resize output frame due the error {:?}", err);
                     }
                 }
                 if resized_frame.size()?.width > 0 {
-                    imshow(window, &mut resized_frame)?;
+                    imshow(window, &resized_frame)?;
                 }
                 let key = wait_key(10)?;
                 if key == 27 /* esc */ || key == 115 /* s */ || key == 83 /* S */ {
