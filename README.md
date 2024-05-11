@@ -135,7 +135,7 @@ UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic
 ## Virtual lines
 
 This utility supports vehicle counting via two approaches:
-| Vehicle appeared on the zone    | Vehicle crossed the line        |
+| Vehicle appeared in the zone    | Vehicle crossed the line        |
 :--------------------------------:|:--------------------------------:
 <img src="data/without-line.gif" width="320"> | <img src="data/with-line.gif" width="320">
 
