@@ -312,51 +312,40 @@ impl Zone {
         } else {
             0.0
         };
-        // We can use something like self.statistics.vehicles_data.values().map(|vt_param| vt_param.sum_intensity).sum::<u32>();
-        let mut total_sum_intensity = 0;
         let mut total_avg_speed = 0.0;
-        if self.id != "dir_0_lane_1" {
-            return
-        }
-        println!("Zone: {}", self.id);
-        let mut k = vec![];
+        let mut total_sum_intensity = 0;
+        let mut total_defined_sum_intensity: usize = 0;
         for (_, object_info) in self.objects_registered.iter() {
             let classname = object_info.classname.to_owned();
-            if classname == "truck" {
-                continue;
-            }
             let speed = object_info.speed;
             let vehicle_type_parameters = match self.statistics.vehicles_data.entry(classname.clone()) {
                 Occupied(o) => o.into_mut(),
                 Vacant(v) => {
-                    v.insert(VehicleTypeParameters {
-                        sum_intensity: 1,
-                        avg_speed: speed,
-                    });
-                    continue;
+                    let new_params = v.insert(VehicleTypeParameters::default());
+                    new_params
                 }
             };
             if register_via_virtual_line && !object_info.crossed_virtual_line {
                 continue;
             }
             vehicle_type_parameters.sum_intensity += 1;
-            if vehicle_type_parameters.sum_intensity == 0 {
-                continue;
-            }
+            total_sum_intensity += 1;
             // Ignore undefined vehicle speed (but keep it as counted in intensity parameter)
             if speed < 0.0 {
                 continue
             }
+            vehicle_type_parameters.defined_sum_intensity += 1;
+            total_defined_sum_intensity += 1;
             // Iterative average calculation
             // https://math.stackexchange.com/questions/106700/incremental-averageing
-            vehicle_type_parameters.avg_speed = vehicle_type_parameters.avg_speed * ((vehicle_type_parameters.sum_intensity - 1) as f32 / vehicle_type_parameters.sum_intensity as f32) + speed / vehicle_type_parameters.sum_intensity as f32;
-            k.push(speed);
-            // println!("\t\tcalc");
-            if total_sum_intensity == 0 {
-               total_avg_speed = speed 
-            } else {
-                total_avg_speed = total_avg_speed * ((total_sum_intensity - 1) as f32 / total_sum_intensity as f32) + speed / total_sum_intensity as f32;
+            // Start calculate average speed calculation only when there are two vehicles atleast
+            if total_defined_sum_intensity < 2 {
+                vehicle_type_parameters.avg_speed = speed;
+                total_avg_speed = speed;
+                continue;
             }
+            vehicle_type_parameters.avg_speed = vehicle_type_parameters.avg_speed + (speed - vehicle_type_parameters.avg_speed) / (vehicle_type_parameters.defined_sum_intensity as f32);
+            total_avg_speed = total_avg_speed + (speed - total_avg_speed) / (total_defined_sum_intensity as f32);
         }
         self.statistics.traffic_flow_parameters.avg_speed = if total_sum_intensity > 0 {
             // Could have non-estimated speed for some vehicle classes. Therefore it is needed to filter those
@@ -369,7 +358,6 @@ impl Zone {
         } else {
             -1.0
         };
-        println!("stats: {};{};{};{:?}", total_sum_intensity, total_avg_speed, self.statistics.traffic_flow_parameters.avg_speed, k);
         self.statistics.traffic_flow_parameters.sum_intensity = total_sum_intensity;
         self.statistics.traffic_flow_parameters.avg_headway = headway_avg;
         // self.statistics.traffic_flow_parameters.avg_speed = self.statistics.vehicles_data.values().map(|vt_param| vt_param.sum_intensity).sum::<u32>();

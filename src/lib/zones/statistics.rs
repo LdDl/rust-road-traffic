@@ -5,6 +5,10 @@ use std::collections::HashMap;
 pub struct VehicleTypeParameters {
     pub avg_speed: f32,
     pub sum_intensity: u32,
+    // The main difference between defined_sum_intensity and sum_intensity is in that fact
+    // that sum_intensity does not take into account whether vehicles have estimated speed, when
+    // defined_sum_intensity does.
+    pub defined_sum_intensity: u32
 }
 
 impl VehicleTypeParameters {
@@ -12,6 +16,7 @@ impl VehicleTypeParameters {
         VehicleTypeParameters {
             avg_speed: -1.0,
             sum_intensity: 0,
+            defined_sum_intensity: 0
         }
     }
 }
