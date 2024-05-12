@@ -1,6 +1,6 @@
 extern crate redis;
 
-use crate::lib::data_storage::ThreadedDataStorage;
+use crate::{lib::data_storage::ThreadedDataStorage, rest_api::zones_stats::TrafficFlowInfo};
 use crate::lib::publisher::RedisMessage;
 use crate::rest_api::zones_stats::{AllZonesStats, VehicleTypeParameters, ZoneStats};
 use redis::{Client, Commands};
@@ -83,6 +83,11 @@ impl RedisConnection {
                 period_start: element.statistics.period_start,
                 period_end: element.statistics.period_end,
                 statistics: HashMap::new(),
+                traffic_flow_parameters: TrafficFlowInfo{
+                    avg_speed: -1.0,
+                    sum_intensity: 0,
+                    avg_headway: 0.0
+                }
             };
             for (vehicle_type, statistics) in element.statistics.vehicles_data.iter() {
                 stats.statistics.insert(
@@ -90,7 +95,6 @@ impl RedisConnection {
                     VehicleTypeParameters {
                         estimated_avg_speed: statistics.avg_speed,
                         estimated_sum_intensity: statistics.sum_intensity,
-                        estimated_avg_headway: statistics.avg_headway,
                     },
                 );
             }

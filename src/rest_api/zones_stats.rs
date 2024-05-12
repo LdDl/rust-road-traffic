@@ -34,6 +34,9 @@ pub struct ZoneStats {
     /// Statistic for every vehicle type. Key: vehicle type; Value - road traffic flow parameters
     #[schema(example = json!({"train":{"estimated_avg_speed":-1,"estimated_sum_intensity":0},"bus":{"estimated_avg_speed":15.2,"estimated_sum_intensity":2},"truck":{"estimated_avg_speed":20.965343,"estimated_sum_intensity":3},"car":{"estimated_avg_speed":23.004976,"estimated_sum_intensity":4},"motorbike":{"estimated_avg_speed":-1,"estimated_sum_intensity":0}  }))]
     pub statistics: HashMap<String, VehicleTypeParameters>,
+    /// Aggregated traffic flow parameters across the all vehicle types
+    // #[schema()]
+    pub traffic_flow_parameters: TrafficFlowInfo
 }
 
 /// Road traffic parameters for specific vehicle type
@@ -44,11 +47,23 @@ pub struct VehicleTypeParameters {
     pub estimated_avg_speed: f32,
     /// Summary road traffic flow (if it is needed could be extrapolated to the intensity: vehicles/hour)
     #[schema(example = 15)]
-    pub estimated_sum_intensity: u32,
+    pub estimated_sum_intensity: u32
+}
+
+/// Road traffic parameters for specific vehicle type
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TrafficFlowInfo {
+    /// Average speed of road traffic flow. Value "-1" indicates not vehicles detected at all.
+    #[schema(example = 32.1)]
+    pub avg_speed: f32,
+    /// Total number of vehicles that passed throught the zone
+    #[schema(example = 15)]
+    pub sum_intensity: u32,
     /// Average headway. Headway - number of seconds between arrival of leading vehicle and following vehicle
     #[schema(example = 2.5)]
-    pub estimated_avg_headway: f32,
+    pub avg_headway: f32,
 }
+
 
 #[utoipa::path(
     get,
@@ -79,14 +94,18 @@ pub async fn all_zones_stats(data: web::Data<APIStorage>) -> Result<HttpResponse
             period_start: zone.statistics.period_start,
             period_end: zone.statistics.period_end,
             statistics: HashMap::new(),
+            traffic_flow_parameters: TrafficFlowInfo{
+                avg_speed: zone.statistics.traffic_flow_parameters.avg_speed,
+                sum_intensity: zone.statistics.traffic_flow_parameters.sum_intensity,
+                avg_headway: zone.statistics.traffic_flow_parameters.avg_headway
+            }
         };
         for (vehicle_type, statistics) in zone.statistics.vehicles_data.iter() {
             stats.statistics.insert(
                 vehicle_type.to_string(),
                 VehicleTypeParameters {
                     estimated_avg_speed: statistics.avg_speed,
-                    estimated_sum_intensity: statistics.sum_intensity,
-                    estimated_avg_headway: statistics.avg_headway,
+                    estimated_sum_intensity: statistics.sum_intensity
                 },
             );
         }

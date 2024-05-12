@@ -12,12 +12,12 @@ use geometry::{get_orientation, is_intersects, is_on_segment};
 
 use geojson::{GeoPolygon, VirtualLineFeature, ZoneFeature, ZonePropertiesGeoJSON};
 
-use crate::lib::{spatial::compute_center, zones::statistics};
+use crate::{lib::{spatial::compute_center}};
 use crate::lib::spatial::epsg::lonlat_to_meters;
 use crate::lib::spatial::haversine;
 use crate::lib::spatial::SpatialConverter;
 use crate::lib::zones::{
-    Skeleton, Statistics, VehicleTypeParameters, VirtualLine, VirtualLineDirection,
+    Skeleton, Statistics, VehicleTypeParameters, TrafficFlowParameters, VirtualLine, VirtualLineDirection,
 };
 use opencv::{
     core::Mat, core::Point2f, core::Point2i, core::Scalar, imgproc::line, imgproc::put_text,
@@ -299,6 +299,7 @@ impl Zone {
             class_stats.sum_intensity = 0;
             class_stats.avg_speed = -1.0;
         }
+        self.statistics.traffic_flow_parameters = TrafficFlowParameters::default()
     }
     pub fn update_statistics(&mut self, _period_start: DateTime<Utc>, _period_end: DateTime<Utc>) {
         self.reset_statistics(_period_start, _period_end);
@@ -311,17 +312,26 @@ impl Zone {
         } else {
             0.0
         };
+        // We can use something like self.statistics.vehicles_data.values().map(|vt_param| vt_param.sum_intensity).sum::<u32>();
+        let mut total_sum_intensity = 0;
+        let mut total_avg_speed = 0.0;
+        if self.id != "dir_0_lane_1" {
+            return
+        }
+        println!("Zone: {}", self.id);
+        let mut k = vec![];
         for (_, object_info) in self.objects_registered.iter() {
             let classname = object_info.classname.to_owned();
+            if classname == "truck" {
+                continue;
+            }
             let speed = object_info.speed;
-
-            let vehicle_type_parameters = match self.statistics.vehicles_data.entry(classname) {
+            let vehicle_type_parameters = match self.statistics.vehicles_data.entry(classname.clone()) {
                 Occupied(o) => o.into_mut(),
                 Vacant(v) => {
                     v.insert(VehicleTypeParameters {
                         sum_intensity: 1,
                         avg_speed: speed,
-                        avg_headway: headway_avg,
                     });
                     continue;
                 }
@@ -340,7 +350,29 @@ impl Zone {
             // Iterative average calculation
             // https://math.stackexchange.com/questions/106700/incremental-averageing
             vehicle_type_parameters.avg_speed = vehicle_type_parameters.avg_speed * ((vehicle_type_parameters.sum_intensity - 1) as f32 / vehicle_type_parameters.sum_intensity as f32) + speed / vehicle_type_parameters.sum_intensity as f32;
+            k.push(speed);
+            // println!("\t\tcalc");
+            if total_sum_intensity == 0 {
+               total_avg_speed = speed 
+            } else {
+                total_avg_speed = total_avg_speed * ((total_sum_intensity - 1) as f32 / total_sum_intensity as f32) + speed / total_sum_intensity as f32;
+            }
         }
+        self.statistics.traffic_flow_parameters.avg_speed = if total_sum_intensity > 0 {
+            // Could have non-estimated speed for some vehicle classes. Therefore it is needed to filter those
+            let speeds = self.statistics.vehicles_data.iter().filter(|vt_param| vt_param.1.avg_speed > 0.0).map(|v| v.1.avg_speed).collect::<Vec<f32>>();
+            if speeds.is_empty() {
+                -1.0
+            } else {
+                speeds.iter().sum::<f32>() / (speeds.len() as f32)
+            }
+        } else {
+            -1.0
+        };
+        println!("stats: {};{};{};{:?}", total_sum_intensity, total_avg_speed, self.statistics.traffic_flow_parameters.avg_speed, k);
+        self.statistics.traffic_flow_parameters.sum_intensity = total_sum_intensity;
+        self.statistics.traffic_flow_parameters.avg_headway = headway_avg;
+        // self.statistics.traffic_flow_parameters.avg_speed = self.statistics.vehicles_data.values().map(|vt_param| vt_param.sum_intensity).sum::<u32>();
         self.reset_objects_registered();
     }
     // Checks if given polygon contains a point
