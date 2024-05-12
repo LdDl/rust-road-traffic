@@ -280,6 +280,10 @@ impl Zone {
             if vehicle_type_parameters.sum_intensity == 0 {
                 continue;
             }
+            // Ignore undefined vehicle speed (but keep it as counted in intensity parameter)
+            if speed < 0.0 {
+                continue
+            }
             // Iterative average calculation
             // https://math.stackexchange.com/questions/106700/incremental-averageing
             vehicle_type_parameters.avg_speed = vehicle_type_parameters.avg_speed * ((vehicle_type_parameters.sum_intensity - 1) as f32 / vehicle_type_parameters.sum_intensity as f32) + speed / vehicle_type_parameters.sum_intensity as f32;
