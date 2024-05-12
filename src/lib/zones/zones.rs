@@ -273,13 +273,10 @@ impl Zone {
                     continue;
                 },
             };
-            if register_via_virtual_line {
-                if object_info.crossed_virtual_line {
-                    vehicle_type_parameters.sum_intensity += 1;
-                }
-            } else {
-                vehicle_type_parameters.sum_intensity += 1;
+            if register_via_virtual_line && !object_info.crossed_virtual_line {
+                continue;
             }
+            vehicle_type_parameters.sum_intensity += 1;
             if vehicle_type_parameters.sum_intensity == 0 {
                 continue;
             }
