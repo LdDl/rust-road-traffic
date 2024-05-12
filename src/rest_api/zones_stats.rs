@@ -46,8 +46,13 @@ pub struct VehicleTypeParameters {
     #[schema(example = 32.1)]
     pub estimated_avg_speed: f32,
     /// Summary road traffic flow (if it is needed could be extrapolated to the intensity: vehicles/hour)
-    #[schema(example = 15)]
-    pub estimated_sum_intensity: u32
+    #[schema(example = 19)]
+    pub estimated_sum_intensity: u32,
+    // The main difference between defined_sum_intensity and sum_intensity is in that fact
+    // that sum_intensity does not take into account whether vehicles have estimated speed, when
+    // defined_sum_intensity does. Could be less or equal to sum_intensity.
+    #[schema(example = 12)]
+    pub estimated_defined_sum_intensity: u32
 }
 
 /// Road traffic parameters for specific vehicle type
@@ -111,7 +116,8 @@ pub async fn all_zones_stats(data: web::Data<APIStorage>) -> Result<HttpResponse
                 vehicle_type.to_string(),
                 VehicleTypeParameters {
                     estimated_avg_speed: statistics.avg_speed,
-                    estimated_sum_intensity: statistics.sum_intensity
+                    estimated_sum_intensity: statistics.sum_intensity,
+                    estimated_defined_sum_intensity: statistics.defined_sum_intensity
                 },
             );
         }

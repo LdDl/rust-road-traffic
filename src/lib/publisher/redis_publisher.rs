@@ -96,6 +96,7 @@ impl RedisConnection {
                     VehicleTypeParameters {
                         estimated_avg_speed: statistics.avg_speed,
                         estimated_sum_intensity: statistics.sum_intensity,
+                        estimated_defined_sum_intensity: statistics.defined_sum_intensity
                     },
                 );
             }
