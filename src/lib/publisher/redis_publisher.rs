@@ -84,9 +84,10 @@ impl RedisConnection {
                 period_end: element.statistics.period_end,
                 statistics: HashMap::new(),
                 traffic_flow_parameters: TrafficFlowInfo{
-                    avg_speed: -1.0,
-                    sum_intensity: 0,
-                    avg_headway: 0.0
+                    avg_speed: element.statistics.traffic_flow_parameters.avg_speed,
+                    sum_intensity: element.statistics.traffic_flow_parameters.sum_intensity,
+                    defined_sum_intensity: element.statistics.traffic_flow_parameters.defined_sum_intensity,
+                    avg_headway: element.statistics.traffic_flow_parameters.avg_headway
                 }
             };
             for (vehicle_type, statistics) in element.statistics.vehicles_data.iter() {

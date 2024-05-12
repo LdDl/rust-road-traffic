@@ -7,7 +7,7 @@ pub struct VehicleTypeParameters {
     pub sum_intensity: u32,
     // The main difference between defined_sum_intensity and sum_intensity is in that fact
     // that sum_intensity does not take into account whether vehicles have estimated speed, when
-    // defined_sum_intensity does.
+    // defined_sum_intensity does. Could be less or equal to sum_intensity.
     pub defined_sum_intensity: u32
 }
 
@@ -25,6 +25,10 @@ impl VehicleTypeParameters {
 pub struct TrafficFlowParameters {
     pub avg_speed: f32,
     pub sum_intensity: u32,
+    // The main difference between defined_sum_intensity and sum_intensity is in that fact
+    // that sum_intensity does not take into account whether vehicles have estimated speed, when
+    // defined_sum_intensity does. Could be less or equal to sum_intensity.
+    pub defined_sum_intensity: u32,
     pub avg_headway: f32,
 }
 
@@ -33,6 +37,7 @@ impl TrafficFlowParameters {
         TrafficFlowParameters {
             avg_speed: -1.0,
             sum_intensity: 0,
+            defined_sum_intensity: 0,
             avg_headway: 0.0
         }
     }

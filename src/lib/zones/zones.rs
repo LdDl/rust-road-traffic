@@ -314,7 +314,7 @@ impl Zone {
         };
         let mut total_avg_speed = 0.0;
         let mut total_sum_intensity = 0;
-        let mut total_defined_sum_intensity: usize = 0;
+        let mut total_defined_sum_intensity: u32 = 0;
         for (_, object_info) in self.objects_registered.iter() {
             let classname = object_info.classname.to_owned();
             let speed = object_info.speed;
@@ -359,6 +359,7 @@ impl Zone {
             -1.0
         };
         self.statistics.traffic_flow_parameters.sum_intensity = total_sum_intensity;
+        self.statistics.traffic_flow_parameters.defined_sum_intensity = total_defined_sum_intensity;
         self.statistics.traffic_flow_parameters.avg_headway = headway_avg;
         // self.statistics.traffic_flow_parameters.avg_speed = self.statistics.vehicles_data.values().map(|vt_param| vt_param.sum_intensity).sum::<u32>();
         self.reset_objects_registered();

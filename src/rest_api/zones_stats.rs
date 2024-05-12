@@ -59,6 +59,11 @@ pub struct TrafficFlowInfo {
     /// Total number of vehicles that passed throught the zone
     #[schema(example = 15)]
     pub sum_intensity: u32,
+    // The main difference between defined_sum_intensity and sum_intensity is in that fact
+    // that sum_intensity does not take into account whether vehicles have estimated speed, when
+    // defined_sum_intensity does. Could be less or equal to sum_intensity.
+    #[schema(example = 13)]
+    pub defined_sum_intensity: u32,
     /// Average headway. Headway - number of seconds between arrival of leading vehicle and following vehicle
     #[schema(example = 2.5)]
     pub avg_headway: f32,
@@ -97,7 +102,8 @@ pub async fn all_zones_stats(data: web::Data<APIStorage>) -> Result<HttpResponse
             traffic_flow_parameters: TrafficFlowInfo{
                 avg_speed: zone.statistics.traffic_flow_parameters.avg_speed,
                 sum_intensity: zone.statistics.traffic_flow_parameters.sum_intensity,
-                avg_headway: zone.statistics.traffic_flow_parameters.avg_headway
+                defined_sum_intensity: zone.statistics.traffic_flow_parameters.defined_sum_intensity,
+                avg_headway: zone.statistics.traffic_flow_parameters.avg_headway,
             }
         };
         for (vehicle_type, statistics) in zone.statistics.vehicles_data.iter() {
