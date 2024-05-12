@@ -326,23 +326,20 @@ impl Zone {
                     continue;
                 }
             };
-            vehicle_type_parameters.avg_headway = headway_avg; // Every class inherits summary average headway
-            if register_via_virtual_line {
-                if object_info.crossed_virtual_line {
-                    vehicle_type_parameters.sum_intensity += 1;
-                }
-            } else {
-                vehicle_type_parameters.sum_intensity += 1;
+            if register_via_virtual_line && !object_info.crossed_virtual_line {
+                continue;
             }
+            vehicle_type_parameters.sum_intensity += 1;
             if vehicle_type_parameters.sum_intensity == 0 {
                 continue;
             }
+            // Ignore undefined vehicle speed (but keep it as counted in intensity parameter)
+            if speed < 0.0 {
+                continue
+            }
             // Iterative average calculation
             // https://math.stackexchange.com/questions/106700/incremental-averageing
-            vehicle_type_parameters.avg_speed = vehicle_type_parameters.avg_speed
-                * ((vehicle_type_parameters.sum_intensity - 1) as f32
-                    / vehicle_type_parameters.sum_intensity as f32)
-                + speed / vehicle_type_parameters.sum_intensity as f32;
+            vehicle_type_parameters.avg_speed = vehicle_type_parameters.avg_speed * ((vehicle_type_parameters.sum_intensity - 1) as f32 / vehicle_type_parameters.sum_intensity as f32) + speed / vehicle_type_parameters.sum_intensity as f32;
         }
         self.reset_objects_registered();
     }
