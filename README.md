@@ -3,6 +3,7 @@
 ## Table of Contents
 - [Video showcase](#video-showcase)
 - [About](#about)
+- [Traffic flow parameters](#traffic-flow-parameters)
 - [Installation and usage](#installation-and-usage)
 - [Virtual lines](#virtual-lines)
 - [ROADMAP](#roadmap)
@@ -25,6 +26,37 @@ Vehicle detection/tracking and speed estimation via next instruments:
 Notice:
 
 UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic-ui. Prepared `static` directory after `npm run build` is [here](src/lib/rest_api/static/)' 
+
+## Traffic flow parameters
+
+Both REST API and Redis publisher export following parameters for each user-defined vehicle class:
+
+- __Flow__ (a.k.a intensity)
+
+    Number of vehicles that pass given zone (or cross virtual line) in a specified period of time - `vehicles per period`.
+
+    You can cast any given flow to `vehicles/hour` by multiplying the value by specific multiplier. E.g. software outputs 100 `vehicles per 15 minutes`, then you may have 100*15=1500 `vehicles/hour`.
+    
+    Look up at [Virtual lines](#virtual-lines) section on how vehicles are counted for additional information.
+
+- __Defined flow__
+
+    Same as just flow, but it is a number of vehicles that both pass given zone (or cross virtual line) in specified period of time and HAVE defined speed. Sometimes software just can't calculate speed, therefore _defined_ flow has been introduced. _This parameter could be renamed in further (in both documentation and code/api)._
+
+- __Average speed of the flow__
+
+   Basically it is just average value among all speeds of vehicles that pass given zone (or cross virtual line) in a specified period of time. If speed could not be determined due some circumstances it is considered to be `-1` (and not to be used in average aggregation).
+
+For the all user-defined vehicles' classes there are:
+- Same as for single vehicle class: __Flow__, __Defined Flow__, __Average speed of the flow__. 
+- __Average headway__
+
+    Average value amoung all calculated headway values. Headhway is the time that elapsed between the arrival of the leading vehicle and following vehicle to the zone (or virtual line).
+
+    Let's break down an example: you have 3 vehicles crossed a certain virtual line at specific times: `[10:00:01, 10:00:07, 10:00:09]`. Then you have differences: `[10:00:07 - 10:00:01, 10:00:09 - 10:00:07]` which gives `[6 seconds, 2 seconds]` headways which gives `(6+2)/2 = 4 seconds` as average headway.
+
+    You may ask: why average headway is not calculated for single class? 
+    -- It does not make that much sense to estimate it because headway is not that representative for some specific classes (e.g. bus) due the nature of distribution of that classes among the popular ones (e.g. personal cars). It could be reconsidered in further for some edge cases (PR's are welcome).
 
 ## Screenshots
 * imshow() output:
@@ -111,7 +143,7 @@ UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic
    
 9. Export data
 
-    If you enabled Redis output you can connect to Redis server (e.g. via CLI) and monitor incoming messages:
+    If you've enabled Redis output you can connect to Redis server (e.g. via CLI) and monitor incoming messages:
     
     <img src="data/redis.png" width="640">
 
