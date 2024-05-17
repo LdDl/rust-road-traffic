@@ -168,7 +168,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
 
     /* Preprocess spatial data */
     let data_storage = new_datastorage(settings.equipment_info.id.clone(), verbose);
-    let target_classes = HashSet::from_iter(settings.detection.target_classes.to_owned());
+    let target_classes = HashSet::from_iter(settings.detection.target_classes.to_owned().unwrap_or(vec![]));
     let net_classes = settings.detection.net_classes.to_owned();
     let net_classes_set = HashSet::from_iter(net_classes.clone());
 
