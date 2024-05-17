@@ -60,6 +60,10 @@ pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Erro
     }
     drop(zones);
     drop(ds_guard);
+    if setting_cloned.detection.target_classes.is_none() {
+        // If option is empty, set one
+        setting_cloned.detection.target_classes = Some(setting_cloned.detection.net_classes.clone());
+    }
     match setting_cloned.save(&data.settings_filename) {
         Ok(_) => {},
         Err(_err) => {
