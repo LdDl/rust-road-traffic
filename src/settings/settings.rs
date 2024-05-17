@@ -205,7 +205,7 @@ impl From<&RoadLanesSettings> for Zone {
 
 impl AppSettings {
     pub fn new(filename: &str) -> Self {
-        let toml_contents = fs::read_to_string(filename).expect("Something went wrong reading the file");
+        let toml_contents = fs::read_to_string(filename).expect(&format!("Something went wrong reading the file: '{}'", &filename));
         let mut app_settings = match toml::from_str::<AppSettings>(&toml_contents) {
             Ok(result) => result,
             Err(err) => {
@@ -225,7 +225,7 @@ impl AppSettings {
     pub fn save(&self, filename: &str) -> Result<(), Box<dyn Error>>{
         fs::copy(filename, filename.to_owned() + &format!(".{}.bak", Utc::now().format("%Y-%m-%dT%H-%M-%S-%f")))?;
         let docs = toml::to_string(self)?;
-        fs::write(filename, docs.to_string())?;
+        fs::write(filename, docs)?;
         Ok(())
     }
     pub fn get_copy_no_roads(&self) -> AppSettings {
