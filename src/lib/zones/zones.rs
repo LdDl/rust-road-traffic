@@ -54,6 +54,8 @@ pub struct Zone {
 #[derive(Debug)]
 pub struct RealTimeStatistics {
     pub last_time: u64,
+    pub last_time_relative: f32,
+    pub last_time_registered: f32,
     pub occupancy: u16,
 }
 
@@ -72,6 +74,8 @@ impl Zone {
             objects_registered: HashMap::new(),
             current_statistics: RealTimeStatistics {
                 last_time: 0,
+                last_time_relative: 0.0,
+                last_time_registered: 0.0,
                 occupancy: 0,
             },
             skeleton: Skeleton::default(),
@@ -120,6 +124,8 @@ impl Zone {
             objects_registered: HashMap::new(),
             current_statistics: RealTimeStatistics {
                 last_time: 0,
+                last_time_relative: 0.0,
+                last_time_registered: 0.0,
                 occupancy: 0,
             },
             skeleton: skeleton,
@@ -262,6 +268,7 @@ impl Zone {
         &mut self,
         object_id: Uuid,
         _timestamp: f32,
+        _relative_time: f32,
         _speed: f32,
         _classname: String,
         _crossed_virtual_line: bool,
@@ -280,6 +287,7 @@ impl Zone {
                 }
             }
             Vacant(entry) => {
+                self.current_statistics.last_time_registered = _relative_time;
                 entry.insert(ObjectInfo {
                     classname: _classname,
                     speed: _speed,
