@@ -412,7 +412,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
         );
 
         let relative_time = received.overall_seconds;
-        match tracker.match_objects(&mut tmp_detections, received.current_second) {
+        match tracker.match_objects(&mut tmp_detections, relative_time) {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't match objects due the error: {:?}", err);
