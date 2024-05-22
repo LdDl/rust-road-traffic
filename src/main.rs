@@ -277,6 +277,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
     thread::spawn(move || {
         let mut frames_counter: f32 = 0.0;
         let mut total_seconds: f32 = 0.0;
+        let mut overall_seconds: f32 = 0.0;
         let mut empty_frames_countrer: u16 = 0;
         // @experimental
         let skip_every_n_frame = 2;
@@ -306,6 +307,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
             let second_fraction = total_seconds + (frames_counter / fps);
             if frames_counter >= fps {
                 total_seconds += 1.0;
+                overall_seconds += 1.0;
                 frames_counter = 0.0;
             }
             if frames_counter as i32 % skip_every_n_frame != 0 {
@@ -317,6 +319,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
             /* Send frame and capture info */
             let frame = ThreadedFrame{
                 frame: read_frame,
+                overall_seconds: overall_seconds,
                 current_second: second_fraction,
             };
 
@@ -408,6 +411,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
             tracker_dt,
         );
 
+        let relative_time = received.overall_seconds;
         match tracker.match_objects(&mut tmp_detections, received.current_second) {
             Ok(_) => {},
             Err(err) => {
@@ -425,6 +429,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             zone.current_statistics.occupancy = 0;
             zone.current_statistics.last_time = current_ut;
+            zone.current_statistics.last_time_relative = relative_time;
             drop(zone);
         }
 
@@ -462,11 +467,11 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
                 match object_extra.spatial_info {
                     Some(ref mut spatial_info) => {
                         spatial_info.update_avg(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1, pixels_per_meters);
-                        zone.register_or_update_object(*object_id, last_time, spatial_info.speed, object_extra.get_classname(), crossed);
+                        zone.register_or_update_object(*object_id, last_time, relative_time, spatial_info.speed, object_extra.get_classname(), crossed);
                     },
                     None => {
                         object_extra.spatial_info = Some(SpatialInfo::new(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1));
-                        zone.register_or_update_object(*object_id, last_time, -1.0, object_extra.get_classname(), crossed);
+                        zone.register_or_update_object(*object_id, last_time, relative_time, -1.0, object_extra.get_classname(), crossed);
                     }
                 }
                 drop(zone);
