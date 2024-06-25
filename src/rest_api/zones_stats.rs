@@ -150,6 +150,13 @@ pub struct ZoneRealtime {
     /// Last time occupancy calculated. Unix Timestamp (seconds)
     #[schema(example = 1693386819)]
     pub last_time: u64,
+    /// Time spent since video has been started. It is relative to FPS
+    #[schema(example = 12.9)]
+    pub last_time_relative: f32,
+    /// Last time (spent since software has been started) when vehicle has been registered is zone (via crossing virtual line
+    /// or appearing in zone) calculated. Measure in seconds.
+    #[schema(example = 10.2)]
+    pub last_time_registered: f32,
     /// Occupancy
     #[schema(example = 3)]
     pub occupancy: u16,
@@ -182,6 +189,8 @@ pub async fn all_zones_occupancy(data: web::Data<APIStorage>) -> Result<HttpResp
             lane_number: zone.road_lane_num,
             lane_direction: zone.road_lane_direction,
             last_time: zone.current_statistics.last_time,
+            last_time_relative: zone.current_statistics.last_time_relative,
+            last_time_registered: zone.current_statistics.last_time_registered,
             occupancy: zone.current_statistics.occupancy,
         };
         ans.data.push(stats);

@@ -1,0 +1,103 @@
+# docker run --rm -it \
+#       -v "$(pwd)/data/conf.toml:/app/data/conf.toml" \
+#       -v "$(pwd)/data/4K_Video_of_Highway_Traffic.mp4:/app/data/4K_Video_of_Highway_Traffic.mp4" \
+#       -v "$(pwd)/data/yolov4.weights:/app/data/yolov4.weights" \
+#       -v "$(pwd)/data/yolov4.cfg:/app/data/yolov4.cfg" \
+#       -e CONFIG_PATH=/app/data/conf.toml \
+#       -p 42001:42001 \
+#       rust_road_traffic-app
+
+FROM ubuntu:22.04 AS build_opencv
+
+# Timezone prompt
+ENV TZ=Etc/UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+ARG OPENCV_VERSION="4.7.0"
+ENV OPENCV_VERSION $OPENCV_VERSION
+
+RUN apt-get update && \
+  apt-get install -y --no-install-recommends \
+  unzip wget build-essential cmake curl git libgtk2.0-dev pkg-config libavcodec-dev libavformat-dev libswscale-dev libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libdc1394-dev \
+  ffmpeg \
+  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-qt5 gstreamer1.0-pulseaudio \
+  ca-certificates \
+  clang libclang-dev
+
+
+RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+ARG OPENCV_FILE="https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip"
+ENV OPENCV_FILE $OPENCV_FILE
+
+ARG OPENCV_CONTRIB_FILE="https://github.com/opencv/opencv_contrib/archive/${OPENCV_VERSION}.zip"
+ENV OPENCV_CONTRIB_FILE $OPENCV_CONTRIB_FILE
+
+RUN wget -O opencv.zip ${OPENCV_FILE} && unzip -q opencv.zip && \
+    wget -O opencv_contrib.zip ${OPENCV_CONTRIB_FILE} && unzip -q opencv_contrib.zip && \
+    rm opencv.zip opencv_contrib.zip
+
+# It is essential to make static libs instead of dynamic one
+RUN cd opencv-${OPENCV_VERSION} && \
+      mkdir build && cd build && \
+      cmake \
+      -D CMAKE_BUILD_TYPE=RELEASE \
+      -D CMAKE_INSTALL_PREFIX=/usr/local \
+      -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib-${OPENCV_VERSION}/modules \
+      -D OPENCV_GENERATE_PKGCONFIG=ON \
+      -D WITH_IPP=OFF \
+      -D WITH_OPENGL=OFF \
+      -D WITH_QT=OFF \
+      -D OPENCV_ENABLE_NONFREE=ON \
+      -D WITH_JASPER=OFF \
+      -D WITH_TBB=ON \
+      -D BUILD_JPEG=ON \
+      -D WITH_SIMD=ON \
+      -D ENABLE_LIBJPEG_TURBO_SIMD=ON \
+      -D BUILD_DOCS=OFF \
+      -D BUILD_EXAMPLES=OFF \
+      -D BUILD_TESTS=OFF \
+      -D BUILD_PERF_TESTS=ON \
+      -D BUILD_opencv_java=NO \
+      -D BUILD_opencv_python=NO \
+      -D BUILD_opencv_python2=NO \
+      -D BUILD_opencv_python3=NO \
+      .. && \
+      make -j $(nproc --all) && \
+      make install && \
+      ldconfig && \
+      cd / && rm -rf opencv*
+
+WORKDIR /build_app
+COPY ./Cargo.lock ./Cargo.lock
+COPY ./Cargo.toml ./Cargo.toml
+COPY ./build.rs ./build.rs
+COPY ./src ./src
+
+# static
+# ENV OPENCV_LINK_LIBS=opencv_gapi,opencv_highgui,opencv_objdetect,opencv_dnn,opencv_videostab,opencv_calib3d,opencv_features2d,opencv_stitching,opencv_flann,opencv_videoio,opencv_rgbd,opencv_aruco,opencv_video,opencv_ml,opencv_imgcodecs,opencv_imgproc,opencv_core,ade,ittnotify,tbb,liblibwebp,liblibtiff,liblibjpeg-turbo,liblibpng,liblibopenjp2,ippiw,ippicv,liblibprotobuf,quirc,zlib
+# ENV OPENCV_LINK_PATHS=/opt/opencv/lib,/opt/opencv/lib/opencv4/3rdparty,/usr/lib/x86_64-linux-gnu
+# ENV OPENCV_INCLUDE_PATHS=/opt/opencv/include/opencv4
+RUN cargo build --release
+
+# ENTRYPOINT cat /opt/opencv/include/opencv4/opencv2/core/version.hpp 
+# ENTRYPOINT pkg-config --modversion opencv4
+# https://www.h3manth.com/content/copying-shared-library-dependencies
+RUN ldd target/release/rust-road-traffic | awk 'BEGIN{ORS=" "}$1 ~/^\//{print $1}$3~/^\//{print $3}' | sed 's/,$/\n/' > /build_app/shared_libs_list.txt
+# Copy shared libs from root of system to the build folder
+RUN mkdir /build_app/shared_libs && for lib in $(cat shared_libs_list.txt); do \
+  mkdir -p /build_app/shared_libs/$(dirname $lib); \
+  cp -v $lib /build_app/shared_libs/$lib; \
+  done
+
+FROM alpine
+COPY --from=build_opencv /build_app/target/release/rust-road-traffic /app/rust-road-traffic
+# Copy shared libs to the root of system
+COPY --from=build_opencv /build_app/shared_libs /
+WORKDIR /app
+RUN mkdir /app/data
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+ENV CONFIG_PATH=conf.toml
+ENTRYPOINT ./rust-road-traffic $CONFIG_PATH
+
