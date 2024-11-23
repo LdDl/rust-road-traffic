@@ -2,7 +2,7 @@
 .PHONY: test deps download build clean
 
 # OpenCV version to use.
-OPENCV_VERSION?=4.7.0
+OPENCV_VERSION?=4.8.0
 
 # Temporary directory to put files into.
 TMP_DIR?=/tmp/
@@ -84,9 +84,9 @@ build_jetson:
 		-D OPENCV_EXTRA_MODULES_PATH=$(TMP_DIR)opencv/opencv_contrib-$(OPENCV_VERSION)/modules \
 		-D BUILD_DOCS=OFF -D BUILD_EXAMPLES=OFF -D BUILD_TESTS=OFF -D BUILD_PERF_TESTS=OFF -D BUILD_opencv_java=OFF -D BUILD_opencv_python=NO -D BUILD_opencv_python2=NO -D BUILD_opencv_python3=NO \
 		-D WITH_JASPER=OFF \
-        -D WITH_OPENCL=OFF \
+    -D WITH_OPENCL=OFF \
 		-D WITH_CUDA=ON \
-		-D CUDA_ARCH_BIN="5.3,6.2,7.2" \
+		-D CUDA_ARCH_BIN="5.3,6.2,7.2,8.7" \
 		-D CUDA_ARCH_PTX="" \
 		-D WITH_CUDNN=ON \
 		-D WITH_CUBLAS=1 \
