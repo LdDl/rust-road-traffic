@@ -88,6 +88,7 @@ use utoipa_rapidoc::RapiDoc;
             crate::rest_api::zones_stats::AllZonesStats,
             crate::rest_api::zones_stats::ZoneStats,
             crate::rest_api::zones_stats::VehicleTypeParameters,
+            crate::rest_api::zones_stats::TrafficFlowInfo,
             crate::rest_api::zones_stats::AllZonesRealtimeStatistics,
             crate::rest_api::zones_stats::ZoneRealtime,
             crate::rest_api::zones_mutations::VirtualLineRequestData,

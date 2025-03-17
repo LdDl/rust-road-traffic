@@ -2,7 +2,7 @@
 .PHONY: test deps download build clean
 
 # OpenCV version to use.
-OPENCV_VERSION?=4.8.0
+OPENCV_VERSION?=4.10.0
 
 # Temporary directory to put files into.
 TMP_DIR?=/tmp/
@@ -118,7 +118,38 @@ build_cuda:
 	mkdir build
 	cd build
 	rm -rf *
-	cmake -D CMAKE_BUILD_TYPE=RELEASE -D CMAKE_INSTALL_PREFIX=/usr/local -D BUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -D OPENCV_EXTRA_MODULES_PATH=$(TMP_DIR)opencv/opencv_contrib-$(OPENCV_VERSION)/modules -D WITH_FFMPEG=ON -D BUILD_DOCS=OFF -D BUILD_EXAMPLES=OFF -D BUILD_TESTS=OFF -D BUILD_PERF_TESTS=OFF -D BUILD_opencv_java=NO -D BUILD_opencv_python=NO -D BUILD_opencv_python2=NO -D BUILD_opencv_python3=NO -D WITH_JASPER=OFF -DOPENCV_GENERATE_PKGCONFIG=ON -DWITH_CUDA=ON -DENABLE_FAST_MATH=1 -DCUDA_FAST_MATH=1 -DWITH_CUBLAS=1 -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda/ -DBUILD_opencv_cudacodec=OFF -D WITH_CUDNN=ON -D OPENCV_DNN_CUDA=ON -D CUDA_GENERATION=Auto ..
+	# export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig"
+		# -D FFMPEG_LIBDIR=/usr/lib \
+	cmake \
+		-D CMAKE_BUILD_TYPE=RELEASE \
+		-D CMAKE_INSTALL_PREFIX=/usr/local \
+		-D BUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} \
+		-D OPENCV_EXTRA_MODULES_PATH=$(TMP_DIR)opencv/opencv_contrib-$(OPENCV_VERSION)/modules \
+		-D WITH_FFMPEG=ON \
+		-D WITH_GSTREAMER=OFF \
+		-D BUILD_DOCS=OFF \
+		-D BUILD_EXAMPLES=OFF \
+		-D BUILD_TESTS=OFF \
+		-D BUILD_PERF_TESTS=OFF \
+		-D BUILD_opencv_java=NO \
+		-D BUILD_opencv_python=NO \
+		-D BUILD_opencv_python2=NO \
+		-D BUILD_opencv_python3=NO \
+		-D WITH_JASPER=OFF \
+		-D OPENCV_GENERATE_PKGCONFIG=ON \
+		-D WITH_CUDA=ON \
+		-D CUDA_ARCH_BIN="5.3,6.2,7.2,8.7" \
+		-D CUDA_ARCH_PTX="" \
+		-D ENABLE_FAST_MATH=1 \
+		-D CUDA_FAST_MATH=1 \
+		-D WITH_CUBLAS=1 \
+		-D CUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda/ \
+		-D BUILD_opencv_cudacodec=OFF \
+		-D WITH_CUDNN=ON \
+		-D OPENCV_DNN_CUDA=ON \
+		-D CMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-12 \
+		-D CMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-12 \
+		..
 	$(MAKE) -j $(shell nproc --all)
 	$(MAKE) preinstall
 	cd -

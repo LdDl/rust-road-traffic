@@ -35,7 +35,6 @@ pub struct ZoneStats {
     #[schema(example = json!({"train":{"estimated_avg_speed":-1,"estimated_sum_intensity":0},"bus":{"estimated_avg_speed":15.2,"estimated_sum_intensity":2},"truck":{"estimated_avg_speed":20.965343,"estimated_sum_intensity":3},"car":{"estimated_avg_speed":23.004976,"estimated_sum_intensity":4},"motorbike":{"estimated_avg_speed":-1,"estimated_sum_intensity":0}  }))]
     pub statistics: HashMap<String, VehicleTypeParameters>,
     /// Aggregated traffic flow parameters across the all vehicle types
-    // #[schema()]
     pub traffic_flow_parameters: TrafficFlowInfo
 }
 
