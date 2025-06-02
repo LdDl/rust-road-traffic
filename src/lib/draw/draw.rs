@@ -3,11 +3,11 @@ use opencv::{
     core::Rect,
     core::Point,
     core::Scalar,
+    core::Size,
     imgproc::LINE_8,
-    imgproc::LINE_4,
     imgproc::FONT_HERSHEY_SIMPLEX,
     imgproc::circle,
-    imgproc::rectangle,
+    imgproc::ellipse,
     imgproc::put_text,
 };
 
@@ -39,10 +39,11 @@ pub fn draw_bboxes(img: &mut Mat, tracker: &Tracker, color: Scalar, inv_color: S
         }
         let bbox = object.get_bbox();
         let cv_rect = Rect::new(bbox.x.floor() as i32, bbox.y.floor() as i32, bbox.width as i32, bbox.height as i32);
-        match rectangle(img, cv_rect, color_choose, 2, LINE_4, 0) {
+        // Use rounded rectangle instead of regular rectangle
+        match draw_rounded_rectangle(img, cv_rect, color_choose, 2, 8) {
             Ok(_) => {},
             Err(err) => {
-                panic!("Can't draw rectangle at blob's bbox due the error: {:?}", err)
+                panic!("Can't draw rounded rectangle at blob's bbox due the error: {:?}", err)
             }
         };
     }
@@ -114,6 +115,52 @@ pub fn draw_projections(img: &mut Mat, tracker: &Tracker, color: Scalar, inv_col
         //     }
         // };
     }
+}
+
+// Add this new function for drawing rounded rectangles
+pub fn draw_rounded_rectangle(img: &mut Mat, rect: Rect, color: Scalar, thickness: i32, corner_radius: i32) -> opencv::Result<()> {
+    let x = rect.x;
+    let y = rect.y;
+    let width = rect.width;
+    let height = rect.height;
+    
+    // Calculate adaptive corner radius based on bbox size
+    let min_dimension = width.min(height);
+    let max_corner_radius = min_dimension / 8; // Corner radius won't exceed 25% of the smallest dimension
+    let adaptive_radius = corner_radius.min(max_corner_radius).max(2); // Minimum radius of 2 pixels
+    
+    // Draw the four corner arcs
+    let arc_size = Size::new(adaptive_radius * 2, adaptive_radius * 2);
+    
+    // Top-left corner
+    ellipse(img, 
+        Point::new(x + adaptive_radius, y + adaptive_radius),
+        arc_size,
+        180.0, 0.0, 90.0,
+        color, thickness, LINE_8, 0)?;
+    
+    // Top-right corner
+    ellipse(img,
+        Point::new(x + width - adaptive_radius, y + adaptive_radius),
+        arc_size,
+        270.0, 0.0, 90.0,
+        color, thickness, LINE_8, 0)?;
+    
+    // Bottom-right corner
+    ellipse(img,
+        Point::new(x + width - adaptive_radius, y + height - adaptive_radius),
+        arc_size,
+        0.0, 0.0, 90.0,
+        color, thickness, LINE_8, 0)?;
+    
+    // Bottom-left corner
+    ellipse(img,
+        Point::new(x + adaptive_radius, y + height - adaptive_radius),
+        arc_size,
+        90.0, 0.0, 90.0,
+        color, thickness, LINE_8, 0)?;
+    
+    Ok(())
 }
 
 pub fn invert_color(color: &Scalar) -> Scalar {
