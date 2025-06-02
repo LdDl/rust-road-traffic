@@ -21,7 +21,7 @@ pub fn draw_trajectories(img: &mut Mat, tracker: &Tracker, color: Scalar, inv_co
         }
         for pt in object.get_track().iter() {
             let cv_pt = Point::new(pt.x.floor() as i32, pt.y.floor() as i32);
-            match circle(img, cv_pt, 5, color_choose, 2, LINE_8, 0) {
+            match circle(img, cv_pt, 2, color_choose, 2, LINE_8, 0) {
                 Ok(_) => {},
                 Err(err) => {
                     panic!("Can't draw circle at blob's center due the error: {:?}", err)
@@ -96,7 +96,7 @@ pub fn draw_projections(img: &mut Mat, tracker: &Tracker, color: Scalar, inv_col
             None => continue,
         };
         let cv_pt = Point::new(spatial_info.last_x_projected.floor() as i32, spatial_info.last_y_projected.floor() as i32);
-        match circle(img, cv_pt, 5, Scalar::from((255.0, 255.0, 0.0)), 2, LINE_8, 0) {
+        match circle(img, cv_pt, 2, Scalar::from((255.0, 255.0, 0.0)), 2, LINE_8, 0) {
             Ok(_) => {},
             Err(err) => {
                 panic!("Can't draw circle at blob's projected center due the error: {:?}", err)
