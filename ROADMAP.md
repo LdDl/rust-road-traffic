@@ -7,7 +7,7 @@
     * ~~Put bounding boxes and classnames onto image after NMS~~
     * ~~Display an output~~
     * ~~Redis (pub to user defined channel + consider password usage)~~
-    * Implement SORT + Deep SORT [I guess we need [ndarray](https://github.com/rust-ndarray/ndarray), not [nalgebra](https://github.com/dimforge/nalgebra)] __W.I.P.__
+    * ~~Implement SORT + Deep SORT [I guess we need [ndarray](https://github.com/rust-ndarray/ndarray), not [nalgebra](https://github.com/dimforge/nalgebra)] ~~ This moved here: https://github.com/LdDl/mot-rs
   
 * Additional functionality
     * ~~Usage of custom implementation (via [nalgebra](https://github.com/dimforge/nalgebra)) of Kalman filter~~
