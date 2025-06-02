@@ -171,6 +171,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
     let target_classes = HashSet::from_iter(settings.detection.target_classes.to_owned().unwrap_or(vec![]));
     let net_classes = settings.detection.net_classes.to_owned();
     let net_classes_set = HashSet::from_iter(net_classes.clone());
+    let class_colors = draw::ClassColors::new(&net_classes);
 
     for road_lane in settings.road_lanes.iter() {
         let mut zone = Zone::from(road_lane);
@@ -490,7 +491,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
         
         /* Imshow + re-stream input video as MJPEG */
         if enable_mjpeg || settings.output.enable {
-            draw::draw_track(&mut frame, tracker, trajectory_scalar, trajectory_scalar_inverse);
+            draw::draw_track(&mut frame, tracker, &class_colors);
             
             if settings.output.enable {
                 match resize(&frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
