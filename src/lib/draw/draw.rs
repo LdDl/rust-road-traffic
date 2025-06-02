@@ -57,7 +57,8 @@ pub fn draw_identifiers(img: &mut Mat, tracker: &Tracker, color: Scalar, inv_col
         }
         let bbox = object.get_bbox();
         let anchor = Point::new(bbox.x.floor() as i32 + 2, bbox.y.floor() as i32 + 10);
-        match put_text(img, &object.get_id().to_string(), anchor, FONT_HERSHEY_SIMPLEX, 0.5, color_choose, 2, LINE_8, false) {
+        let short_id = object.get_id().to_string().chars().take(8).collect::<String>();
+        match put_text(img, &short_id, anchor, FONT_HERSHEY_SIMPLEX, 0.5, color_choose, 2, LINE_8, false) {
             Ok(_) => {},
             Err(err) => {
                 println!("Can't display ID of object due the error {:?}", err);
