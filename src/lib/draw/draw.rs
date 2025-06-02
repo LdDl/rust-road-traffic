@@ -13,6 +13,19 @@ use opencv::{
 
 use crate::lib::tracker::Tracker;
 
+pub fn draw_track(
+    img: &mut Mat,
+    tracker: &Tracker,
+    color: Scalar,
+    inv_color: Scalar,
+) {
+    draw_trajectories(img, tracker, color, inv_color);
+    draw_bboxes(img, tracker, color, inv_color);
+    draw_identifiers(img, tracker, color, inv_color);
+    draw_speeds(img, tracker, color, inv_color);
+    draw_projections(img, tracker, color, inv_color);
+}
+
 pub fn draw_trajectories(img: &mut Mat, tracker: &Tracker, color: Scalar, inv_color: Scalar) {
     for (_, object) in tracker.engine.objects.iter() {
         let mut color_choose = color;
