@@ -11,7 +11,7 @@
 
 ## Video showcase
 
-<video src='https://github.com/LdDl/rust-road-traffic-ui/assets/8864477/fb7f5aa0-884f-4838-939f-29dfaf6cadea' width="720px"></video>
+<video src='https://github.com/user-attachments/assets/49fcc355-c05f-4847-961f-13a4abb1b0a6' width="720px"></video>
 
 ## About
 
