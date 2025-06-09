@@ -61,7 +61,7 @@ For the all user-defined vehicles' classes there are:
 ## Screenshots
 * imshow() output:
 
-    <img src="data/ui3.png" width="320">
+    <img src="data/ui3_new.png" width="320">
 
     <details>
     <summary>Legacy screenshots</summary>
@@ -70,9 +70,9 @@ For the all user-defined vehicles' classes there are:
 
 * Web-UI for configuration:
 
-    <img src="data/ui2.png" width="640">
+    <img src="data/ui2_new.png" width="640">
 
-    <img src="data/ui3.gif" width="640">
+    <img src="data/ui3_new.gif" width="640">
 
 ## Installation and usage
 1. You need installed Rust compiler obviously. Follow instruction of official site: https://www.rust-lang.org/tools/install
@@ -118,7 +118,7 @@ For the all user-defined vehicles' classes there are:
 
     If you enabled both REST API and MJPEG streaming and you want to adjust parameters for detection zones you could open http://localhost:42001/ in your browser and adjust polygons as you need (this UI still needs to be debugged and polished):
 
-    <img src="data/ui.png" width="640">
+    <img src="data/ui1_new.png" width="640">
 
     Configuration file lines:
     ```toml
