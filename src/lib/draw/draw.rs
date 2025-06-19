@@ -10,12 +10,12 @@ use opencv::{
     imgproc::ellipse,
     imgproc::put_text,
 };
-use crate::lib::tracker::Tracker;
+use crate::lib::tracker::TrackerTrait;
 use crate::lib::draw::colors::ClassColors;
 
 pub fn draw_track(
     img: &mut Mat,
-    tracker: &Tracker,
+    tracker: &dyn TrackerTrait,
     class_colors: &ClassColors,
 ) {
     draw_trajectories(img, tracker, class_colors);
@@ -25,9 +25,11 @@ pub fn draw_track(
     draw_projections(img, tracker, class_colors);
 }
 
-pub fn draw_trajectories(img: &mut Mat, tracker: &Tracker, class_colors: &ClassColors) {
-    for (object_id, object) in tracker.engine.objects.iter() {
-        let class_name = tracker.objects_extra.get(object_id)
+pub fn draw_trajectories(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
+    let engine_objects = tracker.get_engine_objects();
+    let objects_extra = tracker.get_objects_extra();
+    for (object_id, object) in engine_objects.iter() {
+        let class_name = objects_extra.get(object_id)
             .map(|extra| extra.get_classname())
             .unwrap_or("unknown".to_string());
         let color = if object.get_no_match_times() > 1 {
@@ -47,9 +49,11 @@ pub fn draw_trajectories(img: &mut Mat, tracker: &Tracker, class_colors: &ClassC
     }
 }
 
-pub fn draw_bboxes(img: &mut Mat, tracker: &Tracker, class_colors: &ClassColors) {
-    for (object_id, object) in tracker.engine.objects.iter() {
-        let class_name = tracker.objects_extra.get(object_id)
+pub fn draw_bboxes(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
+    let engine_objects = tracker.get_engine_objects();
+    let objects_extra = tracker.get_objects_extra();
+    for (object_id, object) in engine_objects.iter() {
+        let class_name = objects_extra.get(object_id)
             .map(|extra| extra.get_classname())
             .unwrap_or("unknown".to_string());
         let color = if object.get_no_match_times() > 1 {
@@ -69,9 +73,11 @@ pub fn draw_bboxes(img: &mut Mat, tracker: &Tracker, class_colors: &ClassColors)
     }
 }
 
-pub fn draw_identifiers(img: &mut Mat, tracker: &Tracker, class_colors: &ClassColors) {
-    for (object_id, object) in tracker.engine.objects.iter() {
-        let class_name = tracker.objects_extra.get(object_id)
+pub fn draw_identifiers(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
+    let engine_objects = tracker.get_engine_objects();
+    let objects_extra = tracker.get_objects_extra();
+    for (object_id, object) in engine_objects.iter() {
+        let class_name = objects_extra.get(object_id)
             .map(|extra| extra.get_classname())
             .unwrap_or("unknown".to_string());
         let color = if object.get_no_match_times() > 1 {
@@ -91,13 +97,15 @@ pub fn draw_identifiers(img: &mut Mat, tracker: &Tracker, class_colors: &ClassCo
     }
 }
 
-pub fn draw_speeds(img: &mut Mat, tracker: &Tracker, class_colors: &ClassColors) {
-    for (object_id, object_extra) in tracker.objects_extra.iter() {
+pub fn draw_speeds(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
+    let engine_objects = tracker.get_engine_objects();
+    let objects_extra = tracker.get_objects_extra();
+    for (object_id, object_extra) in objects_extra.iter() {
         let spatial_info = match object_extra.spatial_info {
             Some(ref spatial_info) => spatial_info,
             None => continue,
         };
-        let object = tracker.engine.objects.get(&object_id).unwrap();
+        let object = engine_objects.get(&object_id).unwrap();
         let class_name = object_extra.get_classname();
         let color = if object.get_no_match_times() > 1 {
             class_colors.get_lost_color(&class_name)
@@ -115,8 +123,9 @@ pub fn draw_speeds(img: &mut Mat, tracker: &Tracker, class_colors: &ClassColors)
     }
 }
 
-pub fn draw_projections(img: &mut Mat, tracker: &Tracker, class_colors: &ClassColors) {
-    for (object_id, object_extra) in tracker.objects_extra.iter() {
+pub fn draw_projections(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
+    let objects_extra = tracker.get_objects_extra();
+    for (object_id, object_extra) in objects_extra.iter() {
         let spatial_info = match object_extra.spatial_info {
             Some(ref spatial_info) => spatial_info,
             None => continue,

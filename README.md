@@ -131,6 +131,27 @@ For the all user-defined vehicles' classes there are:
             enable = true
     ```
 
+7. Tracker configuration
+    It is possible to pick either iou_naive or bytetrack tracker for tracking objects.
+
+    It is not possible to adjust parameters of those trackers (but is planned in future works).
+    ```toml
+    [tracking]
+        # Either "bytetrack" or "iou_naive". Default is "iou_naive"
+        type = "iou_naive"
+    ```
+
+    Current parameters for IoU tracker:
+    - max_no_match = 15
+    - iou_treshold = 0.3
+
+    Current parameters for ByteTrack tracker:
+    - max_disappeared = 15
+    - min_iou = 0.3
+    - high_thresh = 0.7
+    - low_thresh = 0.3
+    - algorithm = Hungarian (matching algorithm)
+
 8. REST API
 
     If you want to do some REST calls you can do following (based on *rest_api* field in TOML configuration files)

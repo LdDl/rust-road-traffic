@@ -30,7 +30,8 @@ mod lib;
 use lib::data_storage::new_datastorage;
 use lib::draw;
 use lib::tracker::{
-    Tracker,
+    new_tracker_from_type,
+    TrackerTrait,
     SpatialInfo
 };
 use lib::detection::process_yolo_detections;
@@ -154,7 +155,7 @@ fn prepare_neural_net(mf: ModelFormat, mv: ModelVersion, weights: &str, configur
     Ok(neural_net)
 }
 
-fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neural_net: &mut dyn ModelTrait, verbose: bool) -> Result<(), AppError> {
+fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTrait, neural_net: &mut dyn ModelTrait, verbose: bool) -> Result<(), AppError> {
     println!("Verbose is '{}'", verbose);
     println!("REST API is '{}'", settings.rest_api.enable);
     println!("Redis publisher is '{}'", settings.redis_publisher.enable);
@@ -430,50 +431,70 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut Tracker, neur
             drop(zone);
         }
 
-        for (object_id, object_extra) in tracker.objects_extra.iter_mut() {
-            let object = tracker.engine.objects.get(object_id).unwrap();
+        let object_ids: Vec<uuid::Uuid> = tracker.get_engine_objects()
+            .iter()
+            .filter_map(|(id, obj)| {
+                if obj.get_no_match_times() <= 1 {
+                    Some(*id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        
+        for object_id in object_ids {
+            let object = tracker.get_object(&object_id).unwrap();
             if object.get_no_match_times() > 1 {
                 // Skip, since object is lost for a while
                 // println!("Object {} is lost for a while", object_id);
                 continue;
             }
+            let track: &Vec<mot_rs::utils::Point> = object.get_track();
+            let track_len = track.len();
+            let last_point = &track[track_len - 1];
+            let last_point_x = last_point.x;
+            let last_point_y = last_point.y;
 
+            let last_before_point = if track_len >= 2 {
+                let pt = &track[track_len - 2];
+                Some((pt.x, pt.y))
+            } else {
+                None
+            };
+
+            let object_extra = tracker.get_object_extra_mut(&object_id).unwrap();
             let times = &object_extra.times;
             let last_time = times[times.len() - 1];
-
-            let track: &Vec<mot_rs::utils::Point> = object.get_track();
-            let last_point = &track[track.len() - 1];
-
-            // Check if object is inside of any zone (optionally: check if it crossed the virtual line inside of it)
+            
             for (_, zone_guarded) in zones.iter() {
                 let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
-                if !zone.contains_point(last_point.x, last_point.y) {
+                if !zone.contains_point(last_point_x, last_point_y) {
                     continue
                 }
                 zone.current_statistics.occupancy += 1; // Increment current load to match number of objects in zone
 
-                let projected_pt = zone.project_to_skeleton(last_point.x, last_point.y);
+                let projected_pt = zone.project_to_skeleton(last_point_x, last_point_y);
                 let pixels_per_meters = zone.get_skeleton_ppm();
 
-                let crossed = if track.len() >= 2 {
-                    let last_before_point = &track[track.len() - 2];
-                    zone.crossed_virtual_line(last_point.x, last_point.y, last_before_point.x, last_before_point.y)
+                let crossed = if let Some(before_point) = last_before_point {
+                    zone.crossed_virtual_line(last_point_x, last_point_y, before_point.0, before_point.1)
                 } else {
                     false
                 };
                 match object_extra.spatial_info {
                     Some(ref mut spatial_info) => {
-                        spatial_info.update_avg(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1, pixels_per_meters);
-                        zone.register_or_update_object(*object_id, last_time, relative_time, spatial_info.speed, object_extra.get_classname(), crossed);
+                        spatial_info.update_avg(last_time, last_point_x, last_point_y, projected_pt.0, projected_pt.1, pixels_per_meters);
+                        zone.register_or_update_object(object_id, last_time, relative_time, spatial_info.speed, object_extra.get_classname(), crossed);
                     },
                     None => {
-                        object_extra.spatial_info = Some(SpatialInfo::new(last_time, last_point.x, last_point.y, projected_pt.0, projected_pt.1));
-                        zone.register_or_update_object(*object_id, last_time, relative_time, -1.0, object_extra.get_classname(), crossed);
+                        object_extra.spatial_info = Some(SpatialInfo::new(last_time, last_point_x, last_point_y, projected_pt.0, projected_pt.1));
+                        zone.register_or_update_object(object_id, last_time, relative_time, -1.0, object_extra.get_classname(), crossed);
                     }
                 }
                 drop(zone);
             }
         }
+        
         if enable_mjpeg || settings.output.enable {
             for (_, v) in zones.iter() {
                 let zone = v.lock().expect("Mutex poisoned");
@@ -544,7 +565,9 @@ fn main() {
     let app_settings = AppSettings::new(path_to_config);
     println!("Settings are:\n\t{}", app_settings);
 
-    let mut tracker = Tracker::new(15, 0.3);
+    let mut tracker = new_tracker_from_type(
+        &app_settings.tracking.typ.as_deref().unwrap_or("iou_naive")
+    );
     println!("Tracker is:\n\t{}", tracker);
 
     let model_format = match app_settings.detection.get_nn_format() {
@@ -576,7 +599,7 @@ fn main() {
         None => { false }
     };
     
-    match run(&app_settings, path_to_config, &mut tracker, &mut *neural_net, verbose) {
+    match run(&app_settings, path_to_config, &mut *tracker, &mut *neural_net, verbose) {
         Ok(_) => {},
         Err(_err) => {
             println!("Error in main thread: {}", _err);
