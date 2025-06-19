@@ -37,6 +37,7 @@ pub fn process_yolo_detections(nms_bboxes: &Vec<RectCV>, nms_classes_ids: Vec<us
     }
     let mut aggregated_data = vec![];
     let mut class_names: Vec<String> = Vec::with_capacity(nms_classes_ids.len());
+    let mut filtered_confidences: Vec<f32> = Vec::with_capacity(nms_confidences.len());
     for (i, bbox) in nms_bboxes.iter().enumerate() {
         let class_id = nms_classes_ids[i];
         if class_id >= net_classes.len() {
@@ -48,6 +49,7 @@ pub fn process_yolo_detections(nms_bboxes: &Vec<RectCV>, nms_classes_ids: Vec<us
             continue;
         }
         class_names.push(classname);
+        filtered_confidences.push(nms_confidences[i]);
         let center_x = (bbox.x as f32 + bbox.width as f32 / 2.0);
         let bottom_center_y = (bbox.y as f32 + bbox.height as f32);
         let kb: SimpleBlob = SimpleBlob::new_with_center_dt(Point::new(center_x, bottom_center_y), Rect::new(bbox.x as f32, bbox.y as f32, bbox.width as f32, bbox.height as f32), dt);
@@ -57,6 +59,6 @@ pub fn process_yolo_detections(nms_bboxes: &Vec<RectCV>, nms_classes_ids: Vec<us
     return Detections {
         blobs: aggregated_data,
         class_names: class_names,
-        confidences: nms_confidences,
+        confidences: filtered_confidences,
     }
 }
