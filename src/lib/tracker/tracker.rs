@@ -6,7 +6,8 @@ use std::collections::hash_map::Entry::{
 };
 use uuid::Uuid;
 use mot_rs::mot::{
-    IoUTracker
+    TrackerError,
+    IoUTracker,
 };
 
 use crate::lib::detection::Detections;
@@ -124,6 +125,7 @@ impl SpatialInfo {
         self.last_y = _y;
     }
 }
+
 impl Tracker {
     pub fn new(_max_no_match: usize, _iou_threshold: f32) -> Self {
         Self {
@@ -131,7 +133,7 @@ impl Tracker {
             objects_extra: HashMap::new(),
         }
     }
-    pub fn match_objects(&mut self, detections: &mut Detections, current_second: f32) -> Result<(), Box<dyn Error>>{
+    pub fn match_objects(&mut self, detections: &mut Detections, current_second: f32) -> Result<(), TrackerError>{
         match self.engine.match_objects(&mut detections.blobs) {
             Ok(_) => {
             }
