@@ -89,7 +89,7 @@ impl DetectionSettings {
 }
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TrackingSettings {
-    // Either "bytetrack" or "iou_naive". Default is "iou_naive"\
+    // Either "bytetrack" or "iou_naive". Default is "iou_naive"
     #[serde(alias = "type")]
     pub typ: Option<String>,
     pub max_points_in_track: usize,
