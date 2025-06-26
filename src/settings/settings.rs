@@ -89,6 +89,9 @@ impl DetectionSettings {
 }
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TrackingSettings {
+    // Either "bytetrack" or "iou_naive". Default is "iou_naive"
+    #[serde(alias = "type")]
+    pub typ: Option<String>,
     pub max_points_in_track: usize,
 }
 
@@ -212,6 +215,20 @@ impl AppSettings {
                 panic!("Can't parse TOML configuration file due the error: {:?}", err);
             }
         };
+        // Set default values
+        if app_settings.tracking.typ.is_none() {
+            app_settings.tracking.typ = Some("iou_naive".to_string());
+        }
+        // Check if tracker type is valid
+        if app_settings.tracking.typ.is_some() {
+            match app_settings.tracking.typ.as_ref().unwrap().as_str() {
+                "iou_naive" => { },
+                "bytetrack" => { },
+                _ => {
+                    panic!("Invalid tracker type: '{}'. Supported types are 'iou_naive' and 'bytetrack'.", app_settings.tracking.typ.as_ref().unwrap());
+                }
+            }
+        }
         match app_settings.debug {
             None => {
                 app_settings.debug = Some(DebugSettings{
@@ -246,11 +263,12 @@ impl AppSettings {
 
 impl fmt::Display for AppSettings {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Equipment ID: {}\n\tVideo input: {}\n\tNetwork weights:{}\n\tNetwork configuration:{:?}\n\tRefresh data (millis): {}\n\tBack-end host: {}\n\tBack-end port: {}",
+        write!(f, "Equipment ID: {}\n\tVideo input: {}\n\tNetwork weights:{}\n\tNetwork configuration:{:?}\n\tTracker type:{}\n\tRefresh data (millis): {}\n\tBack-end host: {}\n\tBack-end port: {}",
             self.equipment_info.id,
             self.input.video_src,
             self.detection.network_weights,
             self.detection.network_cfg,
+            self.tracking.typ.as_ref().unwrap_or(&"undefined".to_string()),
             self.worker.reset_data_milliseconds,
             self.rest_api.host,
             self.rest_api.back_end_port,

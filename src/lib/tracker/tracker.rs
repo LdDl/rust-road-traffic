@@ -1,3 +1,4 @@
+use std::fmt;
 use std::error::Error;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry::{
@@ -6,14 +7,41 @@ use std::collections::hash_map::Entry::{
 };
 use uuid::Uuid;
 use mot_rs::mot::{
-    IoUTracker
+    TrackerError,
+    IoUTracker,
+    ByteTracker,
 };
 
 use crate::lib::detection::Detections;
 use crate::lib::spatial::haversine;
 
-pub struct Tracker {
-    pub engine: IoUTracker,
+/// Trait that both IoUTracker and ByteTracker implement
+pub trait TrackerEngine {
+    fn match_objects(&mut self, detections: &mut Vec<mot_rs::mot::SimpleBlob>, confidences: &[f32]) -> Result<(), TrackerError>;
+    fn get_objects(&self) -> &HashMap<Uuid, mot_rs::mot::SimpleBlob>;
+}
+
+impl TrackerEngine for IoUTracker {
+    fn match_objects(&mut self, detections: &mut Vec<mot_rs::mot::SimpleBlob>, _confidences: &[f32]) -> Result<(), TrackerError> {
+        // Confidences are not used in IoUTracker, so we ignore them
+        self.match_objects(detections)
+    }
+    fn get_objects(&self) -> &HashMap<Uuid, mot_rs::mot::SimpleBlob> {
+        &self.objects
+    }
+}
+
+impl TrackerEngine for ByteTracker {
+    fn match_objects(&mut self, detections: &mut Vec<mot_rs::mot::SimpleBlob>, confidences: &[f32]) -> Result<(), TrackerError> {
+        self.match_objects(detections, &confidences)
+    }
+    fn get_objects(&self) -> &HashMap<Uuid, mot_rs::mot::SimpleBlob> {
+        &self.objects
+    }
+}
+
+pub struct Tracker<T: TrackerEngine> {
+    pub engine: T,
     pub objects_extra: HashMap<Uuid, ObjectExtra>,
 }
 
@@ -124,15 +152,30 @@ impl SpatialInfo {
         self.last_y = _y;
     }
 }
-impl Tracker {
-    pub fn new(_max_no_match: usize, _iou_threshold: f32) -> Self {
-        Self {
-            engine: IoUTracker::new(_max_no_match, _iou_threshold),
+
+impl<T: TrackerEngine> Tracker<T> {
+    pub fn new_iou(max_no_match: usize, iou_threshold: f32) -> Tracker<IoUTracker> {
+        Tracker {
+            engine: IoUTracker::new(max_no_match, iou_threshold),
             objects_extra: HashMap::new(),
         }
     }
-    pub fn match_objects(&mut self, detections: &mut Detections, current_second: f32) -> Result<(), Box<dyn Error>>{
-        match self.engine.match_objects(&mut detections.blobs) {
+    
+    pub fn new_bytetrack(
+        max_disappeared: usize,
+        min_iou: f32,
+        high_thresh: f32,
+        low_thresh: f32,
+        algorithm: mot_rs::mot::MatchingAlgorithm,
+    ) -> Tracker<ByteTracker> {
+        Tracker {
+            engine: ByteTracker::new(max_disappeared, min_iou, high_thresh, low_thresh, algorithm),
+            objects_extra: HashMap::new(),
+        }
+    }
+
+    pub fn match_objects(&mut self, detections: &mut Detections, current_second: f32) -> Result<(), TrackerError>{
+        match self.engine.match_objects(&mut detections.blobs, &detections.confidences) {
             Ok(_) => {
             }
             Err(err) => {
@@ -200,7 +243,7 @@ impl Tracker {
         }
 
         // Remove obsolete objects
-        let ref_engine_objects = &self.engine.objects;
+        let ref_engine_objects = &self.engine.get_objects();
         self.objects_extra.retain(|object_id, _| {
             let save = ref_engine_objects.contains_key(object_id);
             save
@@ -209,9 +252,61 @@ impl Tracker {
     }
 }
 
-use std::fmt;
-impl fmt::Display for Tracker {
+impl<T: TrackerEngine + fmt::Display> fmt::Display for Tracker<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.engine)
+    }
+}
+
+pub fn new_tracker_from_type(tracker_type: &str) -> Box<dyn TrackerTrait> {
+    match tracker_type {
+        "iou_naive" => Box::new(Tracker::<IoUTracker>::new_iou(15, 0.3)),
+        "bytetrack" => Box::new(Tracker::<ByteTracker>::new_bytetrack(
+            15,   // max_disappeared
+            0.3,  // min_iou
+            0.7,  // high_thresh
+            0.3,  // low_thresh
+            mot_rs::mot::MatchingAlgorithm::Hungarian
+        )),
+        _ => {
+            println!("Unknown tracker type '{}', falling back to iou_naive", tracker_type);
+            Box::new(Tracker::<IoUTracker>::new_iou(15, 0.3))
+        }
+    }
+}
+
+pub trait TrackerTrait {
+    fn match_objects(&mut self, detections: &mut Detections, current_second: f32) -> Result<(), TrackerError>;
+    fn get_objects_extra(&self) -> &HashMap<Uuid, ObjectExtra>;
+    fn get_object_extra_mut(&mut self, object_id: &Uuid) -> Option<&mut ObjectExtra>;
+    fn get_engine_objects(&self) -> &HashMap<Uuid, mot_rs::mot::SimpleBlob>;
+    fn get_object(&self, object_id: &Uuid) -> Option<&mot_rs::mot::SimpleBlob>;
+}
+
+impl<T: TrackerEngine> TrackerTrait for Tracker<T> {
+    fn match_objects(&mut self, detections: &mut Detections, current_second: f32) -> Result<(), TrackerError> {
+        self.match_objects(detections, current_second)
+    }
+    
+    fn get_objects_extra(&self) -> &HashMap<Uuid, ObjectExtra> {
+        &self.objects_extra
+    }
+    
+    fn get_object_extra_mut(&mut self, object_id: &Uuid) -> Option<&mut ObjectExtra> {
+        self.objects_extra.get_mut(object_id)
+    }
+
+    fn get_engine_objects(&self) -> &HashMap<Uuid, mot_rs::mot::SimpleBlob> {
+        self.engine.get_objects()
+    }
+
+    fn get_object(&self, object_id: &Uuid) -> Option<&mot_rs::mot::SimpleBlob> {
+        self.engine.get_objects().get(object_id)
+    }
+}
+
+impl fmt::Display for dyn TrackerTrait {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "TrackerTrait object")
     }
 }
