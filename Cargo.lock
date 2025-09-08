@@ -965,9 +965,9 @@ dependencies = [
 
 [[package]]
 name = "kalman-rust"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e3076c0a5b6b7454be78f5520822181e6adba1de9ad5115eaea9b118af80691"
+checksum = "e13e9773f94b84e47427a7f9e516b4005feac0a015d4719cfa7a5b77b8490211"
 dependencies = [
  "chrono",
  "nalgebra 0.32.3",
@@ -1108,9 +1108,9 @@ dependencies = [
 
 [[package]]
 name = "mot-rs"
-version = "0.2.0"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "605c3caf373c1b23603b021361e8dcb4293e2d18eb6fc00f9ce7e04a7f2830ed"
+checksum = "54408809de46b71692442b7da8826cca1a3f4758c2c934453861a287dd86b412"
 dependencies = [
  "chrono",
  "itertools 0.11.0",
