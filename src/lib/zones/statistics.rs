@@ -48,7 +48,7 @@ pub struct Statistics {
     pub period_start: DateTime<Utc>,
     pub period_end: DateTime<Utc>,
     pub vehicles_data: HashMap<String, VehicleTypeParameters>,
-    pub traffic_flow_parameters: TrafficFlowParameters
+    pub traffic_flow_parameters: TrafficFlowParameters,
 }
 
 impl Statistics {
@@ -57,7 +57,7 @@ impl Statistics {
             period_start: TimeZone::with_ymd_and_hms(&Utc, 1970, 1, 1, 0, 0, 0).unwrap(),
             period_end: TimeZone::with_ymd_and_hms(&Utc, 1970, 1, 1, 0, 0, 0).unwrap(),
             vehicles_data: HashMap::new(),
-            traffic_flow_parameters: TrafficFlowParameters::default()
+            traffic_flow_parameters: TrafficFlowParameters::default(),
         }
     }
 }
