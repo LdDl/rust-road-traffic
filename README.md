@@ -58,6 +58,12 @@ For the all user-defined vehicles' classes there are:
     You may ask: why average headway is not calculated for single class? 
     -- It does not make that much sense to estimate it because headway is not that representative for some specific classes (e.g. bus) due the nature of distribution of that classes among the popular ones (e.g. personal cars). It could be reconsidered in further for some edge cases (PR's are welcome).
 
+* __OD (origin-destination) matrix__ - connections between different zones. Each connection is represented as number of vehicles moved from origin zone to destination one.
+
+Locally you can access Swagger UI documentation via http://localhost:42001/api/docs:
+
+<img src="data/docs_1.png" width="720">
+
 ## Screenshots
 * imshow() output:
 

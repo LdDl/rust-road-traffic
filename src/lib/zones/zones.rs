@@ -46,6 +46,7 @@ pub struct Zone {
     spatial_converter: SpatialConverter,
     pub statistics: Statistics,
     objects_registered: Registered,
+    objects_crossed: HashSet<Uuid>,
     pub current_statistics: RealTimeStatistics,
     skeleton: Skeleton,
     virtual_line: Option<VirtualLine>,
@@ -57,6 +58,10 @@ pub struct RealTimeStatistics {
     pub last_time_relative: f32,
     pub last_time_registered: f32,
     pub occupancy: u16,
+    /// Information about how many vehicles traveled from other zones to the current one.
+    /// Key: zone_id_from
+    /// Value: number of vehicles arrived from that zone
+    pub income: HashMap<String, u32>,
 }
 
 impl Zone {
@@ -72,11 +77,13 @@ impl Zone {
             spatial_converter: SpatialConverter::default(),
             statistics: Statistics::default(),
             objects_registered: HashMap::new(),
+            objects_crossed: HashSet::new(),
             current_statistics: RealTimeStatistics {
                 last_time: 0,
                 last_time_relative: 0.0,
                 last_time_registered: 0.0,
                 occupancy: 0,
+                income: HashMap::new(),
             },
             skeleton: Skeleton::default(),
             virtual_line: None,
@@ -122,11 +129,13 @@ impl Zone {
             spatial_converter: converter,
             statistics: Statistics::default(),
             objects_registered: HashMap::new(),
+            objects_crossed: HashSet::new(),
             current_statistics: RealTimeStatistics {
                 last_time: 0,
                 last_time_relative: 0.0,
                 last_time_registered: 0.0,
                 occupancy: 0,
+                income: HashMap::new(),
             },
             skeleton: skeleton,
             virtual_line: _virtual_line,
@@ -272,6 +281,7 @@ impl Zone {
         _speed: f32,
         _classname: String,
         _crossed_virtual_line: bool,
+        _zone_id_from: Option<String>,
     ) {
         let register_as_crossed = match &self.virtual_line {
             Some(_) => _crossed_virtual_line,
@@ -279,10 +289,12 @@ impl Zone {
         };
         match self.objects_registered.entry(object_id) {
             Occupied(mut entry) => {
+                // println!("Object {} is already registered in zone {}", object_id, self.id);
                 entry.get_mut().classname = _classname;
                 entry.get_mut().speed = _speed;
                 // If object crossed virtual line then we should not reset this flag
-                if !entry.get().crossed_virtual_line {
+                let was_previously_crossed = entry.get().crossed_virtual_line;
+                if !was_previously_crossed {
                     entry.get_mut().crossed_virtual_line = register_as_crossed;
                 }
             }
@@ -296,9 +308,31 @@ impl Zone {
                 });
             }
         }
+        if !register_as_crossed {
+            return
+        }
+        // Check if this object has crossed the virtual line before
+        if !self.objects_crossed.contains(&object_id) {
+            // First time crossing - add to crossed objects and update OD matrix
+            self.objects_crossed.insert(object_id);
+            if let Some(zone_id_from) = _zone_id_from {
+                *self.current_statistics.income
+                    .entry(zone_id_from)
+                    .or_insert(0) += 1;
+            }
+        } else {
+            // Object has crossed before - this could be a U-turn
+            // For now, let's count every crossing (you can add time-based logic later)
+            if let Some(zone_id_from) = _zone_id_from {
+                *self.current_statistics.income
+                    .entry(zone_id_from)
+                    .or_insert(0) += 1;
+            }
+        }
     }
     pub fn reset_objects_registered(&mut self) {
         self.objects_registered.clear();
+        self.objects_crossed.clear();
     }
     pub fn reset_statistics(&mut self, _period_start: DateTime<Utc>, _period_end: DateTime<Utc>) {
         self.statistics.period_start = _period_start;
@@ -307,7 +341,9 @@ impl Zone {
             class_stats.sum_intensity = 0;
             class_stats.avg_speed = -1.0;
         }
-        self.statistics.traffic_flow_parameters = TrafficFlowParameters::default()
+        self.statistics.traffic_flow_parameters = TrafficFlowParameters::default();
+        // Clear real-time statistics for incoming vehicles from other zones
+        self.current_statistics.income.clear();
     }
     pub fn update_statistics(&mut self, _period_start: DateTime<Utc>, _period_end: DateTime<Utc>) {
         self.reset_statistics(_period_start, _period_end);
@@ -462,15 +498,21 @@ impl Zone {
             Some(vl) => {
                 let is_left_before = vl.is_left(x1, y1);
                 let is_left_after = vl.is_left(x2, y2);
-                if vl.direction == VirtualLineDirection::LeftToRightTopToBottom {
-                    if is_left_before && !is_left_after {
-                        return true;
-                    }
-                } else {
-                    if !is_left_before && is_left_after {
-                        return true;
-                    }
+                if is_left_before && !is_left_after {
+                    return true;
                 }
+                if !is_left_before && is_left_after {
+                    return true;
+                }
+                // if vl.direction == VirtualLineDirection::LeftToRightTopToBottom {
+                //     if is_left_before && !is_left_after {
+                //         return true;
+                //     }
+                // } else {
+                //     if !is_left_before && is_left_after {
+                //         return true;
+                //     }
+                // }
                 return false;
             }
             None => {
@@ -537,11 +579,7 @@ impl Zone {
             None => false,
         };
         let current_intensity = match register_via_virtual_line {
-            true => self
-                .objects_registered
-                .iter()
-                .filter(|x| x.1.crossed_virtual_line == true)
-                .count(),
+            true => self.objects_crossed.len(),
             false => self.objects_registered.len(),
         };
         let anchor = Point2i::new(

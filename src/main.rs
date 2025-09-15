@@ -462,10 +462,16 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 None
             };
 
+            // Get the vehicle's previous zone from tracking if possible
+            let previous_zone_id = {
+                let vehicle_zones = ds_guard.vehicle_last_zone_cross.read().expect("Vehicle zones is poisoned [RWLock]");
+                let result = vehicle_zones.get(&object_id).cloned();
+                drop(vehicle_zones);
+                result
+            };
             let object_extra = tracker.get_object_extra_mut(&object_id).unwrap();
             let times = &object_extra.times;
             let last_time = times[times.len() - 1];
-            
             for (_, zone_guarded) in zones.iter() {
                 let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
                 if !zone.contains_point(last_point_x, last_point_y) {
@@ -481,17 +487,31 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 } else {
                     false
                 };
+                // Only provide zone_id_from when vehicle actually crosses the virtual line
+                let zone_id_from = if crossed {
+                    previous_zone_id.clone()
+                } else {
+                    None
+                };
                 match object_extra.spatial_info {
                     Some(ref mut spatial_info) => {
                         spatial_info.update_avg(last_time, last_point_x, last_point_y, projected_pt.0, projected_pt.1, pixels_per_meters);
-                        zone.register_or_update_object(object_id, last_time, relative_time, spatial_info.speed, object_extra.get_classname(), crossed);
+                        zone.register_or_update_object(object_id, last_time, relative_time, spatial_info.speed, object_extra.get_classname(), crossed, zone_id_from);
                     },
                     None => {
                         object_extra.spatial_info = Some(SpatialInfo::new(last_time, last_point_x, last_point_y, projected_pt.0, projected_pt.1));
-                        zone.register_or_update_object(object_id, last_time, relative_time, -1.0, object_extra.get_classname(), crossed);
+                        zone.register_or_update_object(object_id, last_time, relative_time, -1.0, object_extra.get_classname(), crossed, zone_id_from);
                     }
                 }
+                // Only update vehicle zone tracking when vehicle crosses virtual line
+                if crossed {
+                    let mut vehicle_zones = ds_guard.vehicle_last_zone_cross.write().expect("Vehicle zones is poisoned [RWLock]");
+                    vehicle_zones.insert(object_id, zone.id.clone());
+                    drop(vehicle_zones);
+                }
                 drop(zone);
+                // Vehicle can only be in one zone at a time
+                break;
             }
         }
         

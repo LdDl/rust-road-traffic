@@ -14,6 +14,10 @@ pub struct AllZonesStats {
     pub equipment_id: String,
     /// Set of data with summary information about road traffic parameters for each detection zone
     pub data: Vec<ZoneStats>,
+    /// Origin-Destination matrix.
+    /// Key: "ld-{lane_direction}_ln-{lane_number}" (e.g. "ld-1_ln-2")
+    /// Value: HashMap where key is the same as for the main HashMap and value is number of vehicles that moved from
+    pub od_matrix: HashMap<String, HashMap<String, u32>>,
 }
 
 /// Summary information for each detection zone
@@ -47,9 +51,9 @@ pub struct VehicleTypeParameters {
     /// Summary road traffic flow (if it is needed could be extrapolated to the intensity: vehicles/hour)
     #[schema(example = 19)]
     pub estimated_sum_intensity: u32,
-    // The main difference between defined_sum_intensity and sum_intensity is in that fact
-    // that sum_intensity does not take into account whether vehicles have estimated speed, when
-    // defined_sum_intensity does. Could be less or equal to sum_intensity.
+    /// The main difference between defined_sum_intensity and sum_intensity is in that fact
+    /// that sum_intensity does not take into account whether vehicles have estimated speed, when
+    /// defined_sum_intensity does. Could be less or equal to sum_intensity.
     #[schema(example = 12)]
     pub estimated_defined_sum_intensity: u32
 }
@@ -63,9 +67,9 @@ pub struct TrafficFlowInfo {
     /// Total number of vehicles that passed throught the zone
     #[schema(example = 15)]
     pub sum_intensity: u32,
-    // The main difference between defined_sum_intensity and sum_intensity is in that fact
-    // that sum_intensity does not take into account whether vehicles have estimated speed, when
-    // defined_sum_intensity does. Could be less or equal to sum_intensity.
+    /// The main difference between defined_sum_intensity and sum_intensity is in that fact
+    /// that sum_intensity does not take into account whether vehicles have estimated speed, when
+    /// defined_sum_intensity does. Could be less or equal to sum_intensity.
     #[schema(example = 13)]
     pub defined_sum_intensity: u32,
     /// Average headway. Headway - number of seconds between arrival of leading vehicle and following vehicle
@@ -94,7 +98,29 @@ pub async fn all_zones_stats(data: web::Data<APIStorage>) -> Result<HttpResponse
     let mut ans: AllZonesStats = AllZonesStats {
         equipment_id: ds_guard.id.clone(),
         data: vec![],
+        od_matrix: HashMap::new(),
     };
+
+    // Collect all zone keys
+    let mut zone_id_to_key = HashMap::new();
+    let mut zone_keys = Vec::new();
+    for (_, zone_guarded) in zones.iter() {
+        let zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
+        let key = format!("ld-{}_ln-{}", zone.road_lane_direction, zone.road_lane_num);
+        zone_id_to_key.insert(zone.get_id(), key.clone()); // zone.id -> "ld-1_ln-2"
+        zone_keys.push(key);
+        drop(zone);
+    }
+
+    // Populate OD matrix with default empty HashMaps
+    for from_key in &zone_keys {
+        let mut inner: HashMap<String, u32> = HashMap::new();
+        for to_key in &zone_keys {
+            inner.insert(to_key.clone(), 0);
+        }
+        ans.od_matrix.insert(from_key.clone(), inner);
+    }
+
     for (_, zone_guarded) in zones.iter() {
         let zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
         let mut stats = ZoneStats {
@@ -121,6 +147,18 @@ pub async fn all_zones_stats(data: web::Data<APIStorage>) -> Result<HttpResponse
             );
         }
         ans.data.push(stats);
+        // Populate OD matrix based on real-time income statistics
+        let to_key = zone_id_to_key.get(&zone.get_id()).unwrap();
+        for (from_zone_id, flow_count) in zone.current_statistics.income.iter() {
+            // Convert from_zone_id (internal UUID) to OD matrix key format
+            if let Some(from_key) = zone_id_to_key.get(from_zone_id) {
+                // Update the OD matrix: from from_key TO to_key
+                if let Some(from_matrix) = ans.od_matrix.get_mut(from_key) {
+                    from_matrix.insert(to_key.clone(), *flow_count);
+                }
+            }
+        }
+        drop(zone);
     }
     drop(zones);
     drop(ds_guard);

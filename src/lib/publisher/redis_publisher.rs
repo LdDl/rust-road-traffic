@@ -74,6 +74,7 @@ impl RedisConnection {
         let mut prepared_message = AllZonesStats {
             equipment_id: ds_guard.id.clone(),
             data: vec![],
+            od_matrix: HashMap::new(),
         };
         for (_, v) in zones.iter() {
             let element = v.lock().expect("Mutex poisoned");
