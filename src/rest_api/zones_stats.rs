@@ -51,9 +51,9 @@ pub struct VehicleTypeParameters {
     /// Summary road traffic flow (if it is needed could be extrapolated to the intensity: vehicles/hour)
     #[schema(example = 19)]
     pub estimated_sum_intensity: u32,
-    // The main difference between defined_sum_intensity and sum_intensity is in that fact
-    // that sum_intensity does not take into account whether vehicles have estimated speed, when
-    // defined_sum_intensity does. Could be less or equal to sum_intensity.
+    /// The main difference between defined_sum_intensity and sum_intensity is in that fact
+    /// that sum_intensity does not take into account whether vehicles have estimated speed, when
+    /// defined_sum_intensity does. Could be less or equal to sum_intensity.
     #[schema(example = 12)]
     pub estimated_defined_sum_intensity: u32
 }
@@ -67,9 +67,9 @@ pub struct TrafficFlowInfo {
     /// Total number of vehicles that passed throught the zone
     #[schema(example = 15)]
     pub sum_intensity: u32,
-    // The main difference between defined_sum_intensity and sum_intensity is in that fact
-    // that sum_intensity does not take into account whether vehicles have estimated speed, when
-    // defined_sum_intensity does. Could be less or equal to sum_intensity.
+    /// The main difference between defined_sum_intensity and sum_intensity is in that fact
+    /// that sum_intensity does not take into account whether vehicles have estimated speed, when
+    /// defined_sum_intensity does. Could be less or equal to sum_intensity.
     #[schema(example = 13)]
     pub defined_sum_intensity: u32,
     /// Average headway. Headway - number of seconds between arrival of leading vehicle and following vehicle
