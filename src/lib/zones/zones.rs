@@ -406,7 +406,7 @@ impl Zone {
             }
             vehicle_type_parameters.avg_speed = vehicle_type_parameters.avg_speed + (speed - vehicle_type_parameters.avg_speed) / (vehicle_type_parameters.defined_sum_intensity as f32);
         }
-        self.statistics.traffic_flow_parameters.avg_speed = if total_sum_intensity > 0 {
+        self.statistics.traffic_flow_parameters.avg_speed = if total_defined_sum_intensity > 0 {
             // Could have non-estimated speed for some vehicle classes. Therefore it is needed to filter those
             let speeds = self.statistics.vehicles_data.iter()
                 .filter(|vt_param| vt_param.1.avg_speed > 0.0 && vt_param.1.avg_speed.is_finite())
