@@ -392,7 +392,7 @@ impl Zone {
             vehicle_type_parameters.sum_intensity += 1;
             total_sum_intensity += 1;
             // Ignore undefined vehicle speed (but keep it as counted in intensity parameter)
-            if speed < 0.0 {
+            if speed < 0.0 || !speed.is_finite() {
                 continue
             }
             vehicle_type_parameters.defined_sum_intensity += 1;
@@ -408,7 +408,10 @@ impl Zone {
         }
         self.statistics.traffic_flow_parameters.avg_speed = if total_sum_intensity > 0 {
             // Could have non-estimated speed for some vehicle classes. Therefore it is needed to filter those
-            let speeds = self.statistics.vehicles_data.iter().filter(|vt_param| vt_param.1.avg_speed > 0.0).map(|v| v.1.avg_speed).collect::<Vec<f32>>();
+            let speeds = self.statistics.vehicles_data.iter()
+                .filter(|vt_param| vt_param.1.avg_speed > 0.0 && vt_param.1.avg_speed.is_finite())
+                .map(|v| v.1.avg_speed)
+                .collect::<Vec<f32>>();
             if speeds.is_empty() {
                 -1.0
             } else {
