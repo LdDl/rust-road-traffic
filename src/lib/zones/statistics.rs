@@ -8,7 +8,7 @@ pub struct VehicleTypeParameters {
     // The main difference between defined_sum_intensity and sum_intensity is in that fact
     // that sum_intensity does not take into account whether vehicles have estimated speed, when
     // defined_sum_intensity does. Could be less or equal to sum_intensity.
-    pub defined_sum_intensity: u32
+    pub defined_sum_intensity: u32,
 }
 
 impl VehicleTypeParameters {
