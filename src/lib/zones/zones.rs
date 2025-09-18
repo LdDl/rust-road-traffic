@@ -339,6 +339,7 @@ impl Zone {
         self.statistics.period_end = _period_end;
         for (_, class_stats) in self.statistics.vehicles_data.iter_mut() {
             class_stats.sum_intensity = 0;
+            class_stats.defined_sum_intensity = 0;
             class_stats.avg_speed = -1.0;
         }
         self.statistics.traffic_flow_parameters = TrafficFlowParameters::default();
@@ -348,15 +349,31 @@ impl Zone {
     pub fn update_statistics(&mut self, _period_start: DateTime<Utc>, _period_end: DateTime<Utc>) {
         self.reset_statistics(_period_start, _period_end);
         let register_via_virtual_line = self.virtual_line.is_some();
-        // Are there better ways to sort hashmap (or btreemap) and extract just timestamps? 
-        let headway_avg = if self.objects_registered.len() > 1 { // For headway calculation two vehicles are needed at least
-            let mut sorted_by_time = self.objects_registered.values().map(|object_info| object_info.timestamp_registration).collect::<Vec<f32>>();
-            sorted_by_time.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            sorted_by_time.windows(2).map(|w| w[1] - w[0]).sum::<f32>() / (sorted_by_time.len() as f32 - 1.0)
-        } else {
-            0.0
+        let headway_avg = match register_via_virtual_line {
+            true => {
+                if self.objects_crossed.len() > 1 {
+                    let mut sorted_by_time = self.objects_crossed.iter()
+                        .filter_map(|&object_id| self.objects_registered.get(&object_id))
+                        .map(|object_info| object_info.timestamp_registration)
+                        .collect::<Vec<f32>>();
+                    sorted_by_time.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                    sorted_by_time.windows(2).map(|w| w[1] - w[0]).sum::<f32>() / (sorted_by_time.len() as f32 - 1.0)
+                } else {
+                    0.0
+                }
+            },
+            _ => {
+                if self.objects_registered.len() > 1 {
+                    let mut sorted_by_time = self.objects_registered.values()
+                        .map(|object_info| object_info.timestamp_registration)
+                        .collect::<Vec<f32>>();
+                    sorted_by_time.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                    sorted_by_time.windows(2).map(|w| w[1] - w[0]).sum::<f32>() / (sorted_by_time.len() as f32 - 1.0)
+                } else {
+                    0.0
+                }
+            }
         };
-        let mut total_avg_speed = 0.0;
         let mut total_sum_intensity = 0;
         let mut total_defined_sum_intensity: u32 = 0;
         for (_, object_info) in self.objects_registered.iter() {
@@ -383,13 +400,11 @@ impl Zone {
             // Iterative average calculation
             // https://math.stackexchange.com/questions/106700/incremental-averageing
             // Start calculate average speed calculation only when there are two vehicles atleast
-            if total_defined_sum_intensity < 2 {
+            if vehicle_type_parameters.defined_sum_intensity < 2 {
                 vehicle_type_parameters.avg_speed = speed;
-                total_avg_speed = speed;
                 continue;
             }
             vehicle_type_parameters.avg_speed = vehicle_type_parameters.avg_speed + (speed - vehicle_type_parameters.avg_speed) / (vehicle_type_parameters.defined_sum_intensity as f32);
-            total_avg_speed = total_avg_speed + (speed - total_avg_speed) / (total_defined_sum_intensity as f32);
         }
         self.statistics.traffic_flow_parameters.avg_speed = if total_sum_intensity > 0 {
             // Could have non-estimated speed for some vehicle classes. Therefore it is needed to filter those
