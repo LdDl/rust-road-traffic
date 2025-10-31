@@ -58,7 +58,7 @@ impl RedisConnection {
             }
         };
         let msg_string = msg.prepare_string()?;
-        redis_conn.publish(self.channel_name.to_owned(), msg_string)?;
+        let _: usize = redis_conn.publish(self.channel_name.to_owned(), msg_string)?;
         println!("...Success");
         Ok(())
     }
