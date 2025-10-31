@@ -1,7 +1,7 @@
 [package]
 name = "rust-road-traffic"
 version = "0.2.0"
-edition = "2018"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,11 +10,11 @@ name = "rust-road-traffic"
 path = "src/main.rs"
 
 [dependencies]
-opencv = { version = "0.94.2", default_features = false, features = ["dnn", "imgcodecs", "imgproc", "videoio", "highgui"] }
-uuid = { version = "1.3.1", features = ["serde", "v4"] }
-nalgebra = "0.29.0"
-toml = "0.5"
-toml_edit = "0.14.4"
+opencv = { version = "0.96.0", default-features = false, features = ["dnn", "imgcodecs", "imgproc", "videoio", "highgui"] }
+uuid = { version = "1.18.1", features = ["serde", "v4"] }
+nalgebra = "0.34.1"
+toml = "0.9.8"
+toml_edit = "0.23.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
@@ -23,14 +23,14 @@ actix-cors = "0.6.2"
 actix-web-static-files = "4.0"
 static-files = "0.2.1"
 ctrlc = { version = "3.0", features = ["termination"] }
-redis = "*"
+redis = { version = "0.32.7" }
 tokio = { version = "1.16.1", features = ["full"] }
 futures = "0.3.1"
 mot-rs = "0.2.2"
 utoipa = { version = "3", features = ["actix_extras"] }
 utoipa-rapidoc = { version = "0.1", features = ["actix-web"] }
-od_opencv = "0.1.8"
-rand = "0.9.1"
+od_opencv = "0.2.0"
+rand = "0.9.2"
 
 [build-dependencies]
 static-files = "0.2.1"
