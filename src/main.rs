@@ -162,12 +162,15 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
     println!("REST API is '{}'", settings.rest_api.enable);
     println!("Redis publisher is '{}'", settings.redis_publisher.enable);
 
-    let enable_mjpeg = match &settings.rest_api.mjpeg_streaming {
-        Some(v) => { v.enable & settings.rest_api.enable} // Logical 'And' to prevent MJPEG when API is disabled
-        None => { false }
+    let (enable_mjpeg, mjpeg_quality) = match &settings.rest_api.mjpeg_streaming {
+        Some(v) => {
+            let enabled = v.enable & settings.rest_api.enable; // Logical 'And' to prevent MJPEG when API is disabled
+            (enabled, v.quality)
+        }
+        None => (false, 80)
     };
 
-    println!("MJPEG is '{}'", enable_mjpeg);
+    println!("MJPEG is '{}' (quality: {})", enable_mjpeg, mjpeg_quality);
 
     /* Preprocess spatial data */
     let data_storage = new_datastorage(settings.equipment_info.id.clone(), verbose);
@@ -612,7 +615,8 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         }
         if enable_mjpeg {
             let mut buffer = Vector::<u8>::new();
-            let params = Vector::<i32>::new();
+            // IMWRITE_JPEG_QUALITY = 1, quality value 0-100
+            let params = Vector::<i32>::from_slice(&[1, mjpeg_quality]);
             let encoded = imencode(".jpg", &frame, &mut buffer, &params).unwrap();
             if !encoded {
                 println!("image has not been encoded");
