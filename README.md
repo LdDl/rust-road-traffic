@@ -279,6 +279,7 @@ Example label file:
 - Set higher `min_track_age` (e.g., 20-30) for cleaner samples
 - Review collected data before training — auto-labels may contain errors
 - Class IDs in labels correspond to `net_classes` order in `[detection]` section
+- You can use https://github.com/LdDl/yolo-ann tool to visualize and manage collected dataset
 
 ## ROADMAP
 Please see [this](ROADMAP.md) file
