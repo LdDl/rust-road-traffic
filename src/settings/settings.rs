@@ -20,6 +20,7 @@ pub struct AppSettings {
     pub worker: WorkerSettings,
     pub rest_api: RestAPISettings,
     pub redis_publisher: RedisPublisherSettings,
+    pub dataset_collector: Option<DatasetCollectorSettings>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -148,6 +149,37 @@ pub struct MJPEGStreamingSettings {
     pub enable: bool,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DatasetCollectorSettings {
+    pub enabled: bool,
+    pub output_dir: String,
+    /// Label format: "yolo" for standard YOLO format (class_id center_x center_y width height)
+    #[serde(default = "default_label_format")]
+    pub label_format: String,
+    /// Minimum number of frames a track must exist before capturing
+    #[serde(default = "default_min_track_age")]
+    pub min_track_age: u32,
+    /// Skip objects whose bounding box touches frame edges
+    #[serde(default = "default_skip_edge_objects")]
+    pub skip_edge_objects: bool,
+    /// Margin in pixels to consider as "edge"
+    #[serde(default = "default_edge_margin_pixels")]
+    pub edge_margin_pixels: u32,
+    /// Maximum number of captures per unique track ID
+    #[serde(default = "default_max_captures_per_track")]
+    pub max_captures_per_track: u32,
+    /// Frames between captures for the same track (when max_captures_per_track > 1)
+    #[serde(default = "default_capture_interval")]
+    pub capture_interval: u32,
+}
+
+fn default_label_format() -> String { "yolo".to_string() }
+fn default_min_track_age() -> u32 { 15 }
+fn default_skip_edge_objects() -> bool { true }
+fn default_edge_margin_pixels() -> u32 { 5 }
+fn default_max_captures_per_track() -> u32 { 1 }
+fn default_capture_interval() -> u32 { 30 }
+
 use crate::lib::zones::Zone;
 use crate::lib::zones::{VirtualLineDirection, VirtualLine};
 use crate::lib::spatial::epsg::lonlat_to_meters;
@@ -257,6 +289,7 @@ impl AppSettings {
             worker: self.worker.clone(),
             rest_api: self.rest_api.clone(),
             redis_publisher: self.redis_publisher.clone(),
+            dataset_collector: self.dataset_collector.clone(),
         }
     }
 }

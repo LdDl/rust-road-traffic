@@ -12,7 +12,7 @@
 
 [output]
     # Define attributes for imshow() if needed
-    enable = true
+    enable = false
     width = 1024
     height = 720
     window_name = "Toy GUI"
@@ -115,3 +115,24 @@
     password = ""
     db_index = 0
     channel_name = "DETECTORS_STATISTICS"
+
+# Dataset collector - auto-labeling feature for collecting training data
+# This section is optional - if not present, the feature is disabled
+[dataset_collector]
+    # Enable/disable dataset collection
+    enabled = true
+    # Output directory for images/ and labels/ folders
+    output_dir = "./collected_dataset"
+    # Label format: "yolo" for standard YOLO format (class_id center_x center_y width height)
+    # Currently only "yolo" is supported
+    label_format = "yolo"
+    # Minimum number of frames a track must exist before capturing (avoids partially visible objects)
+    min_track_age = 15
+    # Skip objects whose bounding box touches or is near frame edges
+    skip_edge_objects = true
+    # Margin in pixels to consider as "edge"
+    edge_margin_pixels = 5
+    # Maximum number of captures per unique track ID (1 = capture once per vehicle)
+    max_captures_per_track = 1
+    # Frames between captures for the same track (only used when max_captures_per_track > 1)
+    capture_interval = 30

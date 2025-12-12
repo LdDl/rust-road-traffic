@@ -5,6 +5,7 @@ use opencv::{
     core::Size,
     core::Mat,
     core::Vector,
+    core::Rect as RectCV,
     core::get_cuda_enabled_device_count,
     highgui::named_window,
     highgui::resize_window,
@@ -36,6 +37,7 @@ use lib::tracker::{
 };
 use lib::detection::process_yolo_detections;
 use lib::zones::Zone;
+use lib::dataset_collector::DatasetCollector;
 
 mod settings;
 use settings::AppSettings;
@@ -179,7 +181,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         zone.set_target_classes(if !target_classes.is_empty() {
             &target_classes
         } else {
-            &net_classes_set 
+            &net_classes_set
         });
         match data_storage.write().unwrap().insert_zone(zone) {
             Ok(_) => {},
@@ -188,6 +190,20 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             }
         };
     }
+
+    /* Initialize dataset collector if enabled */
+    let mut dataset_collector: Option<DatasetCollector> = match &settings.dataset_collector {
+        Some(dc_settings) if dc_settings.enabled => {
+            match DatasetCollector::new(dc_settings.clone(), &net_classes) {
+                Ok(collector) => Some(collector),
+                Err(err) => {
+                    println!("[WARNING] Can't initialize DatasetCollector: {}. Feature disabled.", err);
+                    None
+                }
+            }
+        },
+        _ => None
+    };
 
     // let data_storage_threaded = data_storage.clone();
 
@@ -417,6 +433,50 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 continue;
             }
         };
+
+        /* Dataset collection - save raw frame and annotations */
+        if let Some(ref mut collector) = dataset_collector {
+            // Gather data from matched detections
+            let mut dc_bboxes: Vec<RectCV> = Vec::with_capacity(tmp_detections.blobs.len());
+            let mut dc_track_ids: Vec<uuid::Uuid> = Vec::with_capacity(tmp_detections.blobs.len());
+            let mut dc_track_ages: Vec<usize> = Vec::with_capacity(tmp_detections.blobs.len());
+            let mut dc_class_names: Vec<String> = Vec::with_capacity(tmp_detections.blobs.len());
+
+            // Get track ages from the tracker's internal objects (not from detection blobs)
+            let tracker_objects = tracker.get_engine_objects();
+
+            for (i, blob) in tmp_detections.blobs.iter().enumerate() {
+                let track_id = blob.get_id();
+
+                // Get the actual track age from the tracker
+                let track_age = tracker_objects
+                    .get(&track_id)
+                    .map(|obj| obj.get_track().len())
+                    .unwrap_or(0);
+
+                let bbox = blob.get_bbox();
+                dc_bboxes.push(RectCV::new(
+                    bbox.x as i32,
+                    bbox.y as i32,
+                    bbox.width as i32,
+                    bbox.height as i32,
+                ));
+                dc_track_ids.push(track_id);
+                dc_track_ages.push(track_age);
+                dc_class_names.push(tmp_detections.class_names[i].clone());
+            }
+
+            // Use raw frame (before any drawing) for dataset
+            if let Err(err) = collector.process_frame(
+                &received.frame,
+                &dc_bboxes,
+                &dc_class_names,
+                &dc_track_ids,
+                &dc_track_ages,
+            ) {
+                println!("[DatasetCollector] Error processing frame: {}", err);
+            }
+        }
 
         let ds_guard = ds_tracker.read().expect("DataStorage is poisoned [RWLock]");
         let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
