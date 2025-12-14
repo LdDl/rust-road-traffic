@@ -14,7 +14,7 @@ use mot_rs::mot::{
 };
 
 use crate::lib::detection::{Detections, DetectionBlobs, KalmanFilterType};
-use super::tracked_blob::TrackedBlob;
+use super::tracked_blob::{TrackedBlob, TrackedBlobRef};
 use super::object_extra::ObjectExtra;
 
 /// Trait for SimpleBlob trackers
@@ -226,8 +226,14 @@ pub trait TrackerTrait {
     fn get_objects_extra(&self) -> &HashMap<Uuid, ObjectExtra>;
     fn get_object_extra_mut(&mut self, object_id: &Uuid) -> Option<&mut ObjectExtra>;
     /// Returns tracked objects as TrackedBlob enum (works for both centroid and bbox tracking)
+    /// DEPRECATED: Use iter_tracked_objects() for zero-copy iteration
     fn get_tracked_objects(&self) -> HashMap<Uuid, TrackedBlob>;
+    /// DEPRECATED: Use get_tracked_object_ref() for zero-copy lookup
     fn get_tracked_object(&self, object_id: &Uuid) -> Option<TrackedBlob>;
+    /// Zero-copy iteration over tracked objects - avoids cloning trajectory history
+    fn iter_tracked_objects(&self) -> Box<dyn Iterator<Item = (Uuid, TrackedBlobRef<'_>)> + '_>;
+    /// Zero-copy lookup of a single tracked object by ID
+    fn get_tracked_object_ref(&self, object_id: &Uuid) -> Option<TrackedBlobRef<'_>>;
     /// Returns a human-readable description of the tracker configuration
     fn description(&self) -> String;
 }
@@ -254,6 +260,18 @@ impl<T: TrackerEngineSimple> TrackerTrait for TrackerSimple<T> {
     fn get_tracked_object(&self, object_id: &Uuid) -> Option<TrackedBlob> {
         self.engine.get_objects().get(object_id)
             .map(|blob| TrackedBlob::Simple(blob.clone()))
+    }
+
+    fn iter_tracked_objects(&self) -> Box<dyn Iterator<Item = (Uuid, TrackedBlobRef<'_>)> + '_> {
+        Box::new(
+            self.engine.get_objects().iter()
+                .map(|(id, blob)| (*id, TrackedBlobRef::Simple(blob)))
+        )
+    }
+
+    fn get_tracked_object_ref(&self, object_id: &Uuid) -> Option<TrackedBlobRef<'_>> {
+        self.engine.get_objects().get(object_id)
+            .map(|blob| TrackedBlobRef::Simple(blob))
     }
 
     fn description(&self) -> String {
@@ -287,6 +305,18 @@ impl<T: TrackerEngineBBox> TrackerTrait for TrackerBBox<T> {
     fn get_tracked_object(&self, object_id: &Uuid) -> Option<TrackedBlob> {
         self.engine.get_objects().get(object_id)
             .map(|blob| TrackedBlob::BBox(blob.clone()))
+    }
+
+    fn iter_tracked_objects(&self) -> Box<dyn Iterator<Item = (Uuid, TrackedBlobRef<'_>)> + '_> {
+        Box::new(
+            self.engine.get_objects().iter()
+                .map(|(id, blob)| (*id, TrackedBlobRef::BBox(blob)))
+        )
+    }
+
+    fn get_tracked_object_ref(&self, object_id: &Uuid) -> Option<TrackedBlobRef<'_>> {
+        self.engine.get_objects().get(object_id)
+            .map(|blob| TrackedBlobRef::BBox(blob))
     }
 
     fn description(&self) -> String {

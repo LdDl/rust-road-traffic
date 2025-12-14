@@ -455,9 +455,6 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             let mut dc_track_ages: Vec<usize> = Vec::with_capacity(tmp_detections.blobs.len());
             let mut dc_class_names: Vec<String> = Vec::with_capacity(tmp_detections.blobs.len());
 
-            // Get track ages from the tracker's internal objects (not from detection blobs)
-            let tracker_objects = tracker.get_tracked_objects();
-
             // Extract blob info based on the detection type
             let blob_info: Vec<(Uuid, Rect)> = match &tmp_detections.blobs {
                 Simple(blobs) => blobs.iter().map(|b| (b.get_id(), b.get_bbox())).collect(),
@@ -465,9 +462,8 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             };
 
             for (i, (track_id, bbox)) in blob_info.iter().enumerate() {
-                // Get the actual track age from the tracker
-                let track_age = tracker_objects
-                    .get(track_id)
+                // Get the actual track age from the tracker (zero-copy lookup)
+                let track_age = tracker.get_tracked_object_ref(track_id)
                     .map(|obj| obj.get_track().len())
                     .unwrap_or(0);
 
@@ -507,12 +503,11 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             drop(zone);
         }
 
-        let tracked_objects = tracker.get_tracked_objects();
-        let object_ids: Vec<Uuid> = tracked_objects
-            .iter()
+        // Zero-copy filtering: collect IDs of active objects
+        let object_ids: Vec<Uuid> = tracker.iter_tracked_objects()
             .filter_map(|(id, obj)| {
                 if obj.get_no_match_times() <= 1 {
-                    Some(*id)
+                    Some(id)
                 } else {
                     None
                 }
@@ -520,7 +515,8 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             .collect();
 
         for object_id in object_ids {
-            let object = match tracker.get_tracked_object(&object_id) {
+            // Zero-copy lookup for each object
+            let object = match tracker.get_tracked_object_ref(&object_id) {
                 Some(obj) => obj,
                 None => continue,
             };
