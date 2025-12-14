@@ -1,7 +1,8 @@
 use opencv::{
     core::Point2f
 };
-const EARTH_RADIUS_KM: f32 = 6371.0;
+// WGS84 semi-major axis. Same as in epsg.rs
+const EARTH_RADIUS_KM: f32 = 6378.137;
 
 // haversine_cv
 // 
