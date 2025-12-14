@@ -41,6 +41,9 @@
     type = "iou_naive"
     # Adjust number of points for each object in its track
     max_points_in_track = 100
+    # Kalman filter type: "4d" (centroid tracking, x/y/vx/vy) or "8d" (full bbox tracking, x/y/w/h/vx/vy/vw/vh)
+    # Default is "4d". Use "8d" for better tracking when object size/aspect ratio changes significantly.
+    kalman_filter = "8d"
 
 [equipment_info]
     # Just field for future identification of application. Could be any string.
