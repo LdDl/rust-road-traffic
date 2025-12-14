@@ -1,45 +1,45 @@
 use opencv::core::Point2f;
 
-use std::f32::consts::E;
-use std::f32::consts::PI;
+use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
+
+// WGS84 semi-major axis (equatorial radius)
 const EARTH_RADIUS_M: f32 = 6378137.0;
-const EARTH_RADIUS_KM: f32 = 6378.137;
-const f: f32 = 298.257223563;
 
+#[inline]
 pub fn lonlat_to_meters_cv(lon_lat: &Point2f) -> Point2f {
-    let lon = lon_lat.x;
-    let lat = lon_lat.y;
-    let x = lon2x(lon);
-    let y = lat2y(lat);
-    Point2f::new(x, y)
+    Point2f::new(lon2x(lon_lat.x), lat2y(lon_lat.y))
 }
 
+#[inline]
 pub fn lon2x(lon: f32) -> f32 {
-    EARTH_RADIUS_KM * 1000. * lon.to_radians()
+    EARTH_RADIUS_M * lon.to_radians()
 }
 
+#[inline]
 pub fn x2lon(x: f32) -> f32 {
-    (x / (EARTH_RADIUS_KM * 1000.)).to_degrees()
+    (x / EARTH_RADIUS_M).to_degrees()
 }
 
+#[inline]
 pub fn lat2y(lat: f32) -> f32 {
-    ((lat.to_radians() / 2. + PI / 4.).tan()).log(E) * EARTH_RADIUS_KM * 1000.
+    // Web Mercator: y = R * ln(tan(π/4 + lat/2))
+    (lat.to_radians() * 0.5 + FRAC_PI_4).tan().ln() * EARTH_RADIUS_M
 }
 
+#[inline]
 pub fn y2lat(y: f32) -> f32 {
-    (2. * ((y / (EARTH_RADIUS_KM * 1000.)).exp()).atan() - PI / 2.).to_degrees()
+    // Inverse: lat = 2 * atan(exp(y/R)) - π/2
+    (2.0 * (y / EARTH_RADIUS_M).exp().atan() - FRAC_PI_2).to_degrees()
 }
 
+#[inline]
 pub fn lonlat_to_meters(lon: f32, lat: f32) -> (f32, f32) {
-    let x = lon2x(lon);
-    let y = lat2y(lat);
-    (x, y)
+    (lon2x(lon), lat2y(lat))
 }
 
+#[inline]
 pub fn meters_to_lonlat(x: f32, y: f32) -> (f32, f32) {
-    let lon = x2lon(x);
-    let lat = y2lat(y);
-    (lon, lat)
+    (x2lon(x), y2lat(y))
 }
 
 #[cfg(test)]
