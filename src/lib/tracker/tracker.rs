@@ -71,7 +71,7 @@ pub struct TrackerSimple<T: TrackerEngineSimple> {
     pub objects_extra: HashMap<Uuid, ObjectExtra>,
 }
 
-/// Tracker for BlobBBox (8D Kalman filter)
+/// Tracker for BlobBBox (Kalman filter for bbox tracking)
 pub struct TrackerBBox<T: TrackerEngineBBox> {
     pub engine: T,
     pub objects_extra: HashMap<Uuid, ObjectExtra>,
@@ -158,7 +158,7 @@ impl<T: TrackerEngineBBox> TrackerBBox<T> {
     pub fn match_objects(&mut self, detections: &mut Detections, current_second: f32) -> Result<(), TrackerError> {
         let blobs = match &mut detections.blobs {
             DetectionBlobs::BBox(b) => b,
-            DetectionBlobs::Simple(_) => return Err(TrackerError::BadSize("Expected BlobBBox detections for 8D tracker".to_string())),
+            DetectionBlobs::Simple(_) => return Err(TrackerError::BadSize("Expected BlobBBox detections for bbox tracker".to_string())),
         };
 
         self.engine.match_objects(blobs, &detections.confidences)?;
