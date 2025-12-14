@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::lib::spatial::haversine;
 use crate::lib::constants::EPSILON;
 
@@ -5,7 +7,7 @@ pub struct ObjectExtra {
     class_name: String,
     confidence: f32,
     // Timestamps along the whole track
-    pub times: Vec<f32>,
+    pub times: VecDeque<f32>,
     pub estimated_velocity: f32,
     pub spatial_info: Option<SpatialInfo>,
 }
@@ -15,7 +17,7 @@ impl ObjectExtra {
         Self {
             class_name,
             confidence,
-            times: Vec::with_capacity(max_track_len),
+            times: VecDeque::with_capacity(max_track_len),
             estimated_velocity: -1.0,
             spatial_info: None,
         }

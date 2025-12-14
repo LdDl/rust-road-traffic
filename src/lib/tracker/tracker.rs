@@ -111,9 +111,9 @@ impl<T: TrackerEngineSimple> TrackerSimple<T> {
             let object_id = detection.get_id();
             match self.objects_extra.entry(object_id) {
                 Occupied(mut entry) => {
-                    entry.get_mut().times.push(current_second);
+                    entry.get_mut().times.push_back(current_second);
                     if entry.get().times.len() > detection.get_max_track_len() {
-                        entry.get_mut().times = entry.get_mut().times[1..].to_vec();
+                        entry.get_mut().times.pop_front();
                     }
                 }
                 Vacant(entry) => {
@@ -122,7 +122,7 @@ impl<T: TrackerEngineSimple> TrackerSimple<T> {
                         detections.confidences[idx],
                         detection.get_max_track_len(),
                     );
-                    object_extra.times.push(current_second);
+                    object_extra.times.push_back(current_second);
                     entry.insert(object_extra);
                 }
             }
@@ -168,9 +168,9 @@ impl<T: TrackerEngineBBox> TrackerBBox<T> {
             let object_id = detection.get_id();
             match self.objects_extra.entry(object_id) {
                 Occupied(mut entry) => {
-                    entry.get_mut().times.push(current_second);
+                    entry.get_mut().times.push_back(current_second);
                     if entry.get().times.len() > detection.get_max_track_len() {
-                        entry.get_mut().times = entry.get_mut().times[1..].to_vec();
+                        entry.get_mut().times.pop_front();
                     }
                 }
                 Vacant(entry) => {
@@ -179,7 +179,7 @@ impl<T: TrackerEngineBBox> TrackerBBox<T> {
                         detections.confidences[idx],
                         detection.get_max_track_len(),
                     );
-                    object_extra.times.push(current_second);
+                    object_extra.times.push_back(current_second);
                     entry.insert(object_extra);
                 }
             }
