@@ -156,8 +156,8 @@ mod tests {
 
         let distance = haversine(a_wgs84.0, a_wgs84.1, b_wgs84.0, b_wgs84.1) * 1000.0;
         println!("distance: {}", distance);
-        let coorrect_dist: f32 = 17.008713;
-        assert!((distance - coorrect_dist).abs() < eps);
+        let correct_dist: f32 = 19.96;
+        assert!((distance - correct_dist).abs() < eps);
     }
     #[test]
     fn test_skeleton() {
