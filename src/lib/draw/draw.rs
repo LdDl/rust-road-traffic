@@ -26,10 +26,9 @@ pub fn draw_track(
 }
 
 pub fn draw_trajectories(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
-    let tracked_objects = tracker.get_tracked_objects();
     let objects_extra = tracker.get_objects_extra();
-    for (object_id, object) in tracked_objects.iter() {
-        let class_name = objects_extra.get(object_id)
+    for (object_id, object) in tracker.iter_tracked_objects() {
+        let class_name = objects_extra.get(&object_id)
             .map(|extra| extra.get_classname())
             .unwrap_or("unknown".to_string());
         let color = if object.get_no_match_times() > 1 {
@@ -50,10 +49,9 @@ pub fn draw_trajectories(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors
 }
 
 pub fn draw_bboxes(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
-    let tracked_objects = tracker.get_tracked_objects();
     let objects_extra = tracker.get_objects_extra();
-    for (object_id, object) in tracked_objects.iter() {
-        let class_name = objects_extra.get(object_id)
+    for (object_id, object) in tracker.iter_tracked_objects() {
+        let class_name = objects_extra.get(&object_id)
             .map(|extra| extra.get_classname())
             .unwrap_or("unknown".to_string());
         let color = if object.get_no_match_times() > 1 {
@@ -74,10 +72,9 @@ pub fn draw_bboxes(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &Cla
 }
 
 pub fn draw_identifiers(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
-    let tracked_objects = tracker.get_tracked_objects();
     let objects_extra = tracker.get_objects_extra();
-    for (object_id, object) in tracked_objects.iter() {
-        let class_name = objects_extra.get(object_id)
+    for (object_id, object) in tracker.iter_tracked_objects() {
+        let class_name = objects_extra.get(&object_id)
             .map(|extra| extra.get_classname())
             .unwrap_or("unknown".to_string());
         let color = if object.get_no_match_times() > 1 {
@@ -98,14 +95,13 @@ pub fn draw_identifiers(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors:
 }
 
 pub fn draw_speeds(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
-    let tracked_objects = tracker.get_tracked_objects();
     let objects_extra = tracker.get_objects_extra();
     for (object_id, object_extra) in objects_extra.iter() {
         let spatial_info = match object_extra.spatial_info {
             Some(ref spatial_info) => spatial_info,
             None => continue,
         };
-        let object = match tracked_objects.get(&object_id) {
+        let object = match tracker.get_tracked_object_ref(object_id) {
             Some(obj) => obj,
             None => continue,
         };

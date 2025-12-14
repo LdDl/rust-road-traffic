@@ -9,6 +9,40 @@ pub enum TrackedBlob {
     BBox(BlobBBox),
 }
 
+/// Zero-copy reference wrapper for tracked objects
+/// Use this for iteration to avoid cloning trajectory history
+pub enum TrackedBlobRef<'a> {
+    Simple(&'a SimpleBlob),
+    BBox(&'a BlobBBox),
+}
+
+impl<'a> TrackedBlobRef<'a> {
+    pub fn get_id(&self) -> Uuid {
+        match self {
+            TrackedBlobRef::Simple(b) => b.get_id(),
+            TrackedBlobRef::BBox(b) => b.get_id(),
+        }
+    }
+    pub fn get_track(&self) -> &Vec<Point> {
+        match self {
+            TrackedBlobRef::Simple(b) => b.get_track(),
+            TrackedBlobRef::BBox(b) => b.get_track(),
+        }
+    }
+    pub fn get_bbox(&self) -> Rect {
+        match self {
+            TrackedBlobRef::Simple(b) => b.get_bbox(),
+            TrackedBlobRef::BBox(b) => b.get_bbox(),
+        }
+    }
+    pub fn get_no_match_times(&self) -> usize {
+        match self {
+            TrackedBlobRef::Simple(b) => b.get_no_match_times(),
+            TrackedBlobRef::BBox(b) => b.get_no_match_times(),
+        }
+    }
+}
+
 impl TrackedBlob {
     pub fn get_id(&self) -> Uuid {
         match self {
