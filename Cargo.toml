@@ -26,7 +26,7 @@ ctrlc = { version = "3.0", features = ["termination"] }
 redis = { version = "0.32.7" }
 tokio = { version = "1.16.1", features = ["full"] }
 futures = "0.3.1"
-mot-rs = "0.2.2"
+mot-rs = "0.5.0"
 utoipa = { version = "3", features = ["actix_extras"] }
 utoipa-rapidoc = { version = "0.1", features = ["actix-web"] }
 od_opencv = "0.2.0"

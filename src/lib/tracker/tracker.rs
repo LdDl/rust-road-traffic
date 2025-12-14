@@ -1,5 +1,4 @@
 use std::fmt;
-use std::error::Error;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry::{
     Occupied,
@@ -10,6 +9,7 @@ use mot_rs::mot::{
     TrackerError,
     IoUTracker,
     ByteTracker,
+    SimpleBlob,
 };
 
 use crate::lib::detection::Detections;
@@ -21,7 +21,7 @@ pub trait TrackerEngine {
     fn get_objects(&self) -> &HashMap<Uuid, mot_rs::mot::SimpleBlob>;
 }
 
-impl TrackerEngine for IoUTracker {
+impl TrackerEngine for IoUTracker<SimpleBlob> {
     fn match_objects(&mut self, detections: &mut Vec<mot_rs::mot::SimpleBlob>, _confidences: &[f32]) -> Result<(), TrackerError> {
         // Confidences are not used in IoUTracker, so we ignore them
         self.match_objects(detections)
@@ -31,7 +31,7 @@ impl TrackerEngine for IoUTracker {
     }
 }
 
-impl TrackerEngine for ByteTracker {
+impl TrackerEngine for ByteTracker<SimpleBlob> {
     fn match_objects(&mut self, detections: &mut Vec<mot_rs::mot::SimpleBlob>, confidences: &[f32]) -> Result<(), TrackerError> {
         self.match_objects(detections, &confidences)
     }
@@ -154,7 +154,7 @@ impl SpatialInfo {
 }
 
 impl<T: TrackerEngine> Tracker<T> {
-    pub fn new_iou(max_no_match: usize, iou_threshold: f32) -> Tracker<IoUTracker> {
+    pub fn new_iou(max_no_match: usize, iou_threshold: f32) -> Tracker<IoUTracker<SimpleBlob>> {
         Tracker {
             engine: IoUTracker::new(max_no_match, iou_threshold),
             objects_extra: HashMap::new(),
@@ -167,7 +167,7 @@ impl<T: TrackerEngine> Tracker<T> {
         high_thresh: f32,
         low_thresh: f32,
         algorithm: mot_rs::mot::MatchingAlgorithm,
-    ) -> Tracker<ByteTracker> {
+    ) -> Tracker<ByteTracker<SimpleBlob>> {
         Tracker {
             engine: ByteTracker::new(max_disappeared, min_iou, high_thresh, low_thresh, algorithm),
             objects_extra: HashMap::new(),
@@ -260,8 +260,8 @@ impl<T: TrackerEngine + fmt::Display> fmt::Display for Tracker<T> {
 
 pub fn new_tracker_from_type(tracker_type: &str) -> Box<dyn TrackerTrait> {
     match tracker_type {
-        "iou_naive" => Box::new(Tracker::<IoUTracker>::new_iou(15, 0.3)),
-        "bytetrack" => Box::new(Tracker::<ByteTracker>::new_bytetrack(
+        "iou_naive" => Box::new(Tracker::<IoUTracker<SimpleBlob>>::new_iou(15, 0.3)),
+        "bytetrack" => Box::new(Tracker::<ByteTracker<SimpleBlob>>::new_bytetrack(
             15,   // max_disappeared
             0.3,  // min_iou
             0.7,  // high_thresh
@@ -270,7 +270,7 @@ pub fn new_tracker_from_type(tracker_type: &str) -> Box<dyn TrackerTrait> {
         )),
         _ => {
             println!("Unknown tracker type '{}', falling back to iou_naive", tracker_type);
-            Box::new(Tracker::<IoUTracker>::new_iou(15, 0.3))
+            Box::new(Tracker::<IoUTracker<SimpleBlob>>::new_iou(15, 0.3))
         }
     }
 }
