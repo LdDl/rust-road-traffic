@@ -257,7 +257,11 @@ impl<T: TrackerEngineSimple> TrackerTrait for TrackerSimple<T> {
     }
 
     fn description(&self) -> String {
-        format!("Centroid tracker (4D Kalman: x, y, vx, vy) with {} engine", std::any::type_name::<T>().split("::").last().unwrap_or("unknown"))
+        let type_name = std::any::type_name::<T>();
+        let engine_name = type_name
+            .split('<').next().unwrap_or(type_name)  // Get part before generic <
+            .split("::").last().unwrap_or("unknown"); // Get last path segment
+        format!("Centroid tracker (4D Kalman: x, y, vx, vy) with {} engine", engine_name)
     }
 }
 
@@ -286,7 +290,11 @@ impl<T: TrackerEngineBBox> TrackerTrait for TrackerBBox<T> {
     }
 
     fn description(&self) -> String {
-        format!("BBox tracker (8D Kalman: x, y, w, h, vx, vy, vw, vh) with {} engine", std::any::type_name::<T>().split("::").last().unwrap_or("unknown"))
+        let type_name = std::any::type_name::<T>();
+        let engine_name = type_name
+            .split('<').next().unwrap_or(type_name)  // Get part before generic <
+            .split("::").last().unwrap_or("unknown"); // Get last path segment
+        format!("BBox tracker (8D Kalman: x, y, w, h, vx, vy, vw, vh) with {} engine", engine_name)
     }
 }
 
