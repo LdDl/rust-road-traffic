@@ -415,8 +415,8 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
     /* Can't create colors as const/static currently */
     for received in rx_capture {
         // println!("Received frame from capture thread: {}", received.current_second);
-        let mut frame = received.frame.clone();
-        let (nms_bboxes, nms_classes_ids, nms_confidences) = match neural_net.forward(&frame, conf_threshold, nms_threshold) {
+        // Note: frame clone is deferred to only displaying
+        let (nms_bboxes, nms_classes_ids, nms_confidences) = match neural_net.forward(&received.frame, conf_threshold, nms_threshold) {
             Ok((a, b, c)) => { (a, b, c) },
             Err(err) => {
                 println!("Can't process input of neural network due the error {:?}", err);
@@ -595,7 +595,11 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             }
         }
         
+        /* Imshow + re-stream input video as MJPEG */
+        // Clone frame only when visualization is needed
         if enable_mjpeg || settings.output.enable {
+            let mut frame = received.frame.clone();
+
             for (_, v) in zones.iter() {
                 let zone = v.lock().expect("Mutex poisoned");
                 zone.draw_geom(&mut frame);
@@ -604,16 +608,11 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 zone.draw_virtual_line(&mut frame);
                 drop(zone);
             }
-        }
 
-        // We need drop here explicitly, since we need to release lock on zones for MJPEG / REST API / Redis publisher and statistics threads
-        drop(zones);
-        drop(ds_guard);
-        
-        /* Imshow + re-stream input video as MJPEG */
-        if enable_mjpeg || settings.output.enable {
+            // We need drop here explicitly, since we need to release lock on zones for MJPEG / REST API / Redis publisher and statistics threads
+            drop(zones);
+            drop(ds_guard);
             draw::draw_track(&mut frame, tracker, &class_colors);
-            
             if settings.output.enable {
                 match resize(&frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
                     Ok(_) => {},
@@ -629,22 +628,27 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                     break;
                 }
             }
-        }
-        if enable_mjpeg {
-            let mut buffer = Vector::<u8>::new();
-            // IMWRITE_JPEG_QUALITY = 1, quality value 0-100
-            let params = Vector::<i32>::from_slice(&[1, mjpeg_quality]);
-            let encoded = imencode(".jpg", &frame, &mut buffer, &params).unwrap();
-            if !encoded {
-                println!("image has not been encoded");
-                continue;
-            }
-            match tx_mjpeg.send(buffer) {
-                Ok(_)=>{},
-                Err(_err) => {
-                    println!("Error on send frame to MJPEG thread: {}", _err)
+
+            if enable_mjpeg {
+                let mut buffer = Vector::<u8>::new();
+                // IMWRITE_JPEG_QUALITY = 1, quality value 0-100
+                let params = Vector::<i32>::from_slice(&[1, mjpeg_quality]);
+                let encoded = imencode(".jpg", &frame, &mut buffer, &params).unwrap();
+                if !encoded {
+                    println!("image has not been encoded");
+                    continue;
                 }
-            };
+                match tx_mjpeg.send(buffer) {
+                    Ok(_)=>{},
+                    Err(_err) => {
+                        println!("Error on send frame to MJPEG thread: {}", _err)
+                    }
+                };
+            }
+        } else {
+            // No visualization, but need release still
+            drop(zones);
+            drop(ds_guard);
         }
 
         
