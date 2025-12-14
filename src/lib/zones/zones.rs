@@ -446,7 +446,7 @@ impl Zone {
     pub fn contains_point(&self, x: f32, y: f32) -> bool {
         let n = self.pixel_coordinates.len();
         // @todo: math.maxInt could lead to overflow obviously. Need good workaround. PRs are welcome
-        let extreme_point = vec![99999.0, y as f32];
+        let extreme_point: [f32; 2] = [99999.0, y];
         let mut intersections_cnt = 0;
         let mut previous = 0;
         loop {
