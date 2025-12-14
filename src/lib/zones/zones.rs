@@ -12,6 +12,7 @@ use geometry::{get_orientation, is_intersects, is_on_segment};
 
 use geojson::{GeoPolygon, VirtualLineFeature, ZoneFeature, ZonePropertiesGeoJSON};
 
+use crate::lib::constants::EPSILON;
 use crate::{lib::{spatial::compute_center}};
 use crate::lib::spatial::epsg::lonlat_to_meters;
 use crate::lib::spatial::haversine;
@@ -113,7 +114,12 @@ impl Zone {
             let length_meters =
                 haversine(ab_center.0, ab_center.1, cd_center.0, cd_center.1) * 1000.0;
             skeleton.length_meters = length_meters;
-            skeleton.pixels_per_meter = skeleton.length_pixels / skeleton.length_meters;
+            // Guard against division by zero when skeleton endpoints are at same location
+            skeleton.pixels_per_meter = if length_meters > EPSILON {
+                skeleton.length_pixels / skeleton.length_meters
+            } else {
+                0.0  // Invalid - will be filtered in speed calculations
+            };
             SpatialConverter::new_from(coordinates.clone(), spatial_coordinates_epsg3857.clone())
         } else {
             SpatialConverter::default()
@@ -203,7 +209,12 @@ impl Zone {
         let skeleton_line = find_skeleton_line(&self.pixel_coordinates, 0, 2); // 0-1 is first segment of polygon, 2-3 is second segment
         let mut skeleton = Skeleton::new(skeleton_line[0], skeleton_line[1]);
         skeleton.length_meters = length_meters;
-        skeleton.pixels_per_meter = skeleton.length_pixels / skeleton.length_meters;
+        // Guard against division by zero when skeleton endpoints are at same location
+        skeleton.pixels_per_meter = if length_meters > EPSILON {
+            skeleton.length_pixels / skeleton.length_meters
+        } else {
+            0.0  // Invalid - will be filtered in speed calculations
+        };
         self.skeleton = skeleton;
     }
     pub fn update_pixel_map_cv(&mut self, pixel_src_points: Vec<Point2f>) {
@@ -351,24 +362,28 @@ impl Zone {
         let register_via_virtual_line = self.virtual_line.is_some();
         let headway_avg = match register_via_virtual_line {
             true => {
-                if self.objects_crossed.len() > 1 {
-                    let mut sorted_by_time = self.objects_crossed.iter()
-                        .filter_map(|&object_id| self.objects_registered.get(&object_id))
-                        .map(|object_info| object_info.timestamp_registration)
-                        .collect::<Vec<f32>>();
+                let mut sorted_by_time = self.objects_crossed.iter()
+                    .filter_map(|&object_id| self.objects_registered.get(&object_id))
+                    .map(|object_info| object_info.timestamp_registration)
+                    .collect::<Vec<f32>>();
+                // Need at least 2 timestamps to compute headway
+                if sorted_by_time.len() >= 2 {
                     sorted_by_time.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                    sorted_by_time.windows(2).map(|w| w[1] - w[0]).sum::<f32>() / (sorted_by_time.len() as f32 - 1.0)
+                    let sum: f32 = sorted_by_time.windows(2).map(|w| w[1] - w[0]).sum();
+                    sum / (sorted_by_time.len() - 1) as f32
                 } else {
                     0.0
                 }
             },
             _ => {
-                if self.objects_registered.len() > 1 {
-                    let mut sorted_by_time = self.objects_registered.values()
+                // Need at least 2 objects to compute headway
+                if self.objects_registered.len() >= 2 {
+                    let mut sorted_by_time: Vec<f32> = self.objects_registered.values()
                         .map(|object_info| object_info.timestamp_registration)
-                        .collect::<Vec<f32>>();
+                        .collect();
                     sorted_by_time.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                    sorted_by_time.windows(2).map(|w| w[1] - w[0]).sum::<f32>() / (sorted_by_time.len() as f32 - 1.0)
+                    let sum: f32 = sorted_by_time.windows(2).map(|w| w[1] - w[0]).sum();
+                    sum / (sorted_by_time.len() - 1) as f32
                 } else {
                     0.0
                 }

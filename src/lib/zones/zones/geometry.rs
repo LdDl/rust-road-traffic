@@ -1,3 +1,5 @@
+use crate::lib::constants::EPSILON;
+
 #[derive(Copy, Clone, PartialEq)]
 pub enum PointsOrientation {
     Collinear,
@@ -9,14 +11,14 @@ pub enum PointsOrientation {
 // Possible output values: Collinear / Clockwise or CounterClockwise
 // Input: points P, Q and R in provided order
 pub fn get_orientation(px: f32, py: f32, qx: f32, qy: f32, rx: f32, ry: f32) -> PointsOrientation {
-    let val = (qy-py)*(rx-qx) - (qx-px)*(ry-qy);
-	if val == 0.0 {
-		return PointsOrientation::Collinear;
-	}
-	if val > 0.0 {
-		return PointsOrientation::Clockwise;
-	}
-    return PointsOrientation::CounterClockwise; // if it's neither collinear nor clockwise
+    let val = (qy - py) * (rx - qx) - (qx - px) * (ry - qy);
+    if val.abs() < EPSILON {
+        return PointsOrientation::Collinear;
+    }
+    if val > 0.0 {
+        return PointsOrientation::Clockwise;
+    }
+    PointsOrientation::CounterClockwise
 }
 
 // is_on_segment Checks if point Q lies on segment PR

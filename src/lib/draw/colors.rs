@@ -1,5 +1,5 @@
 //! Color management system for object tracking visualization.
-//! 
+//!
 //! This module provides functionality to generate distinct colors for different object classes
 //! and create faded versions for lost/untracked objects. The color generation uses HSV color
 //! space to ensure good visual distribution and readability.
@@ -9,6 +9,8 @@ use rand::Rng;
 use opencv::{
     core::Scalar,
 };
+
+use crate::lib::constants::EPSILON;
 
 /// A color management system that assigns distinct colors to object classes.
 /// 
@@ -154,11 +156,11 @@ impl ClassColors {
         let min = r.min(g).min(b);
         let delta = max - min;
         
-        let h = if delta == 0.0 {
+        let h = if delta < EPSILON {
             0.0
-        } else if max == r {
+        } else if (max - r).abs() < EPSILON {
             60.0 * (((g - b) / delta) % 6.0)
-        } else if max == g {
+        } else if (max - g).abs() < EPSILON {
             60.0 * ((b - r) / delta + 2.0)
         } else {
             60.0 * ((r - g) / delta + 4.0)

@@ -9,6 +9,8 @@ use opencv::{
     imgproc::get_perspective_transform
 };
 
+use crate::lib::constants::EPSILON_TINY;
+
 // Spatial converter around transform matrix.
 // It helps to transform coordinates from Euclidean space to WGS84 projection
 #[derive(Debug)]
@@ -77,7 +79,11 @@ impl SpatialConverter {
         let scale = answ_ptr[2];
         let xattr = answ_ptr[0];
         let yattr = answ_ptr[1];
-        return Point2f::new(xattr / scale, yattr / scale);
+        // Guard against degenerate perspective transform (scale ≈ 0)
+        if scale.abs() < EPSILON_TINY {
+            return Point2f::new(f32::NAN, f32::NAN);
+        }
+        Point2f::new(xattr / scale, yattr / scale)
     }
     pub fn transform_to_epsg(&self, src_x: f32, src_y: f32) -> (f32, f32) {
         let pmat_data = vec![
@@ -91,7 +97,11 @@ impl SpatialConverter {
         let scale = answ_ptr[2];
         let xattr = answ_ptr[0];
         let yattr = answ_ptr[1];
-        return (xattr / scale, yattr / scale);
+        // Guard against degenerate perspective transform (scale ≈ 0)
+        if scale.abs() < EPSILON_TINY {
+            return (f32::NAN, f32::NAN);
+        }
+        (xattr / scale, yattr / scale)
     }
 }
 
