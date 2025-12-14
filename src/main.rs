@@ -460,10 +460,10 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         /* Dataset collection - save raw frame and annotations */
         if let Some(ref mut collector) = dataset_collector {
             // Gather data from matched detections
-            let mut dc_bboxes: Vec<RectCV> = Vec::with_capacity(tmp_detections.blobs.len());
-            let mut dc_track_ids: Vec<Uuid> = Vec::with_capacity(tmp_detections.blobs.len());
-            let mut dc_track_ages: Vec<usize> = Vec::with_capacity(tmp_detections.blobs.len());
-            let mut dc_class_names: Vec<String> = Vec::with_capacity(tmp_detections.blobs.len());
+            let blob_count = tmp_detections.blobs.len();
+            let mut dc_bboxes: Vec<RectCV> = Vec::with_capacity(blob_count);
+            let mut dc_track_ids: Vec<Uuid> = Vec::with_capacity(blob_count);
+            let mut dc_track_ages: Vec<usize> = Vec::with_capacity(blob_count);
 
             // Extract blob info based on the detection type
             let blob_info: Vec<(Uuid, Rect)> = match &tmp_detections.blobs {
@@ -471,7 +471,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 BBox(blobs) => blobs.iter().map(|b| (b.get_id(), b.get_bbox())).collect(),
             };
 
-            for (i, (track_id, bbox)) in blob_info.iter().enumerate() {
+            for (track_id, bbox) in blob_info.iter() {
                 // Get the actual track age from the tracker (zero-copy lookup)
                 let track_age = tracker.get_tracked_object_ref(track_id)
                     .map(|obj| obj.get_track().len())
@@ -485,14 +485,13 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 ));
                 dc_track_ids.push(*track_id);
                 dc_track_ages.push(track_age);
-                dc_class_names.push(tmp_detections.class_names[i].clone());
             }
 
             // Use raw frame (before any drawing) for dataset
             if let Err(err) = collector.process_frame(
                 &received.frame,
                 &dc_bboxes,
-                &dc_class_names,
+                &tmp_detections.class_names,
                 &dc_track_ids,
                 &dc_track_ages,
             ) {
