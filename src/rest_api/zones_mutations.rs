@@ -147,6 +147,12 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Zo
     }
 
     drop(zone_guarded);
+    drop(zones);
+
+    // Rebuild zone grid if pixel coordinates changed
+    if _update_zone.pixel_points.is_some() {
+        let _ = ds_guard.rebuild_zone_grid();
+    }
 
     return Ok(HttpResponse::Ok().json(ZoneUpdateResponse{
         message: "ok"
@@ -190,6 +196,8 @@ pub async fn delete_zone(data: web::Data<APIStorage>, _delete_zone: web::Json<Zo
             }));
         }
     }
+    // Rebuild zone grid after deletion
+    let _ = ds_guard.rebuild_zone_grid();
     drop(ds_guard);
     return Ok(HttpResponse::NoContent().json(ZoneDeleteResponse{
         message: "ok"
@@ -321,6 +329,8 @@ pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<ZoneC
         }
     }
 
+    // Rebuild zone grid after creation
+    let _ = ds_guard.rebuild_zone_grid();
     drop(ds_guard);
 
     return Ok(HttpResponse::Created().json(ZoneCreateResponse{
@@ -454,6 +464,9 @@ pub async fn replace_all(data: web::Data<APIStorage>, _new_zones: web::Json<Zone
             }
         }
     }
+
+    // Rebuild zone grid once after all changes
+    let _ = ds_guard.rebuild_zone_grid();
 
     return Ok(HttpResponse::Created().json(ZonesOverwriteAllResponse{
         zones_ids: response
