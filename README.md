@@ -148,18 +148,49 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
     [tracking]
         # Either "bytetrack" or "iou_naive". Default is "iou_naive"
         type = "iou_naive"
+        # Adjust number of points for each object in its track
+        max_points_in_track = 100
+        # Kalman filter type: "centroid" or "bbox"
+        # Default is "centroid"
+        kalman_filter = "centroid"
     ```
 
-    Current parameters for IoU tracker:
+    Current CONSTANT parameters for IoU tracker:
     - max_no_match = 15
     - iou_treshold = 0.3
 
-    Current parameters for ByteTrack tracker:
+    Current CONSTANT parameters for ByteTrack tracker:
     - max_disappeared = 15
     - min_iou = 0.3
     - high_thresh = 0.7
     - low_thresh = 0.3
     - algorithm = Hungarian (matching algorithm)
+
+    In future works I plan to make those parameters adjustable via configuration file.
+    
+    ### Kalman Filter Types
+
+    The `kalman_filter` option selects the internal Kalman filter used for state prediction:
+
+    | Feature | `centroid` | `bbox` |
+    |---------|------------|--------|
+    | State vector | $(x, y, v_x, v_y)$ | $(x, y, w, h, v_x, v_y, v_w, v_h)$ |
+    | State dimensions | 4D | 8D |
+    | Tracks position | v | v |
+    | Tracks velocity | v | v |
+    | Tracks size (width/height) | no | v |
+    | Best for | Objects with stable size | Objects changing size/aspect ratio |
+    | Computational cost | Lower | Higher |
+
+    **When to use `bbox`:**
+    - Objects moving towards/away from camera (size changes)
+    - Varying aspect ratios during movement
+    - Better bounding box stability during occlusions
+
+    **When to use `centroid` (default):**
+    - Side-view cameras where object size is relatively stable
+    - Lower computational requirements
+    - Simpler tracking scenarios
 
 8. REST API
 
