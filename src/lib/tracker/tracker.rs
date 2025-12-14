@@ -228,6 +228,8 @@ pub trait TrackerTrait {
     /// Returns tracked objects as TrackedBlob enum (works for both centroid and bbox tracking)
     fn get_tracked_objects(&self) -> HashMap<Uuid, TrackedBlob>;
     fn get_tracked_object(&self, object_id: &Uuid) -> Option<TrackedBlob>;
+    /// Returns a human-readable description of the tracker configuration
+    fn description(&self) -> String;
 }
 
 impl<T: TrackerEngineSimple> TrackerTrait for TrackerSimple<T> {
@@ -252,6 +254,10 @@ impl<T: TrackerEngineSimple> TrackerTrait for TrackerSimple<T> {
     fn get_tracked_object(&self, object_id: &Uuid) -> Option<TrackedBlob> {
         self.engine.get_objects().get(object_id)
             .map(|blob| TrackedBlob::Simple(blob.clone()))
+    }
+
+    fn description(&self) -> String {
+        format!("Centroid tracker (4D Kalman: x, y, vx, vy) with {} engine", std::any::type_name::<T>().split("::").last().unwrap_or("unknown"))
     }
 }
 
@@ -278,10 +284,14 @@ impl<T: TrackerEngineBBox> TrackerTrait for TrackerBBox<T> {
         self.engine.get_objects().get(object_id)
             .map(|blob| TrackedBlob::BBox(blob.clone()))
     }
+
+    fn description(&self) -> String {
+        format!("BBox tracker (8D Kalman: x, y, w, h, vx, vy, vw, vh) with {} engine", std::any::type_name::<T>().split("::").last().unwrap_or("unknown"))
+    }
 }
 
 impl fmt::Display for dyn TrackerTrait {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "TrackerTrait object")
+        write!(f, "{}", self.description())
     }
 }
