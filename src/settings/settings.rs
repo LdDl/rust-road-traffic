@@ -94,6 +94,8 @@ pub struct TrackingSettings {
     #[serde(alias = "type")]
     pub typ: Option<String>,
     pub max_points_in_track: usize,
+    // Either "4d" or "8d". Default is "4d"
+    pub kalman_filter: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -257,6 +259,9 @@ impl AppSettings {
         if app_settings.tracking.typ.is_none() {
             app_settings.tracking.typ = Some("iou_naive".to_string());
         }
+        if app_settings.tracking.kalman_filter.is_none() {
+            app_settings.tracking.kalman_filter = Some("4d".to_string());
+        }
         // Check if tracker type is valid
         if app_settings.tracking.typ.is_some() {
             match app_settings.tracking.typ.as_ref().unwrap().as_str() {
@@ -264,6 +269,16 @@ impl AppSettings {
                 "bytetrack" => { },
                 _ => {
                     panic!("Invalid tracker type: '{}'. Supported types are 'iou_naive' and 'bytetrack'.", app_settings.tracking.typ.as_ref().unwrap());
+                }
+            }
+        }
+        // Check if kalman filter type is valid
+        if app_settings.tracking.kalman_filter.is_some() {
+            match app_settings.tracking.kalman_filter.as_ref().unwrap().as_str() {
+                "4d" => { },
+                "8d" => { },
+                _ => {
+                    panic!("Invalid kalman filter type: '{}'. Supported types are '4d' (SimpleBlob) and '8d' (BlobBBox).", app_settings.tracking.kalman_filter.as_ref().unwrap());
                 }
             }
         }
