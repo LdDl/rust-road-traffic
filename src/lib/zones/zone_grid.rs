@@ -168,3 +168,242 @@ pub struct ZoneGridStats {
     pub cell_size: f32,
     pub grid_dimensions: (usize, usize),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_zone(id: &str, points: Vec<(f32, f32)>) -> Zone {
+        let mut zone = Zone::default();
+        zone.id = id.to_string();
+        zone.pixel_coordinates = points.into_iter()
+            .map(|(x, y)| Point2f::new(x, y))
+            .collect();
+        zone
+    }
+
+    #[test]
+    fn test_uninitialized_grid() {
+        let grid = ZoneGrid::uninitialized();
+        assert!(!grid.is_initialized());
+        assert_eq!(grid.get_candidate_zones(100.0, 100.0), &[] as &[String]);
+    }
+
+    #[test]
+    fn test_initialize_grid() {
+        let mut grid = ZoneGrid::uninitialized();
+        grid.initialize(640.0, 480.0, 32.0);
+
+        assert!(grid.is_initialized());
+        // 640/32 = 20
+        assert_eq!(grid.width_cells, 20);
+        // 480/32 = 15
+        assert_eq!(grid.height_cells, 15);
+        // 20 * 15
+        assert_eq!(grid.cells.len(), 300);
+    }
+
+    #[test]
+    fn test_get_candidate_zones_out_of_bounds() {
+        let mut grid = ZoneGrid::uninitialized();
+        grid.initialize(640.0, 480.0, 32.0);
+
+        // Negative coordinates
+        assert_eq!(grid.get_candidate_zones(-1.0, 100.0), &[] as &[String]);
+        assert_eq!(grid.get_candidate_zones(100.0, -1.0), &[] as &[String]);
+
+        // Beyond frame bounds
+        assert_eq!(grid.get_candidate_zones(640.0, 100.0), &[] as &[String]);
+        assert_eq!(grid.get_candidate_zones(100.0, 480.0), &[] as &[String]);
+        assert_eq!(grid.get_candidate_zones(1000.0, 1000.0), &[] as &[String]);
+    }
+
+    #[test]
+    fn test_get_candidate_zones_empty_grid() {
+        let mut grid = ZoneGrid::uninitialized();
+        grid.initialize(640.0, 480.0, 32.0);
+
+        // Valid point but no zones registered
+        assert_eq!(grid.get_candidate_zones(100.0, 100.0), &[] as &[String]);
+    }
+
+    #[test]
+    fn test_rebuild_single_zone() {
+        let mut grid = ZoneGrid::uninitialized();
+        grid.initialize(640.0, 480.0, 32.0);
+
+        // Create zone covering cells (0,0) to (2,2) - roughly 0-64px in both dimensions
+        let zone = create_test_zone("zone1", vec![
+            (10.0, 10.0), (60.0, 10.0), (60.0, 60.0), (10.0, 60.0)
+        ]);
+
+        let mut zones = HashMap::new();
+        zones.insert("zone1".to_string(), Mutex::new(zone));
+
+        grid.rebuild(&zones);
+
+        // Point inside zone's bounding box
+        let candidates = grid.get_candidate_zones(30.0, 30.0);
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0], "zone1");
+
+        // Point outside zone's bounding box
+        let candidates = grid.get_candidate_zones(200.0, 200.0);
+        assert_eq!(candidates.len(), 0);
+    }
+
+    #[test]
+    fn test_rebuild_multiple_zones() {
+        let mut grid = ZoneGrid::uninitialized();
+        grid.initialize(640.0, 480.0, 32.0);
+
+        // Zone 1: top-left area
+        let zone1 = create_test_zone("zone1", vec![
+            (0.0, 0.0), (64.0, 0.0), (64.0, 64.0), (0.0, 64.0)
+        ]);
+
+        // Zone 2: overlapping with zone1
+        let zone2 = create_test_zone("zone2", vec![
+            (32.0, 32.0), (128.0, 32.0), (128.0, 128.0), (32.0, 128.0)
+        ]);
+
+        // Zone 3: separate area
+        let zone3 = create_test_zone("zone3", vec![
+            (400.0, 300.0), (500.0, 300.0), (500.0, 400.0), (400.0, 400.0)
+        ]);
+
+        let mut zones = HashMap::new();
+        zones.insert("zone1".to_string(), Mutex::new(zone1));
+        zones.insert("zone2".to_string(), Mutex::new(zone2));
+        zones.insert("zone3".to_string(), Mutex::new(zone3));
+
+        grid.rebuild(&zones);
+
+        // Point only in zone1
+        let candidates = grid.get_candidate_zones(16.0, 16.0);
+        assert_eq!(candidates.len(), 1);
+        assert!(candidates.contains(&"zone1".to_string()));
+
+        // Point in overlap area (both zone1 and zone2)
+        let candidates = grid.get_candidate_zones(48.0, 48.0);
+        assert_eq!(candidates.len(), 2);
+        assert!(candidates.contains(&"zone1".to_string()));
+        assert!(candidates.contains(&"zone2".to_string()));
+
+        // Point only in zone3
+        let candidates = grid.get_candidate_zones(450.0, 350.0);
+        assert_eq!(candidates.len(), 1);
+        assert!(candidates.contains(&"zone3".to_string()));
+    }
+
+    #[test]
+    fn test_rebuild_clears_previous_data() {
+        let mut grid = ZoneGrid::uninitialized();
+        grid.initialize(640.0, 480.0, 32.0);
+
+        // First rebuild with zone1
+        let zone1 = create_test_zone("zone1", vec![
+            (0.0, 0.0), (64.0, 0.0), (64.0, 64.0), (0.0, 64.0)
+        ]);
+        let mut zones = HashMap::new();
+        zones.insert("zone1".to_string(), Mutex::new(zone1));
+        grid.rebuild(&zones);
+
+        assert_eq!(grid.get_candidate_zones(16.0, 16.0).len(), 1);
+
+        // Second rebuild with different zone
+        let zone2 = create_test_zone("zone2", vec![
+            (200.0, 200.0), (300.0, 200.0), (300.0, 300.0), (200.0, 300.0)
+        ]);
+        let mut zones = HashMap::new();
+        zones.insert("zone2".to_string(), Mutex::new(zone2));
+        grid.rebuild(&zones);
+
+        // Old zone should be gone
+        assert_eq!(grid.get_candidate_zones(16.0, 16.0).len(), 0);
+        // New zone should be present
+        assert_eq!(grid.get_candidate_zones(250.0, 250.0).len(), 1);
+    }
+
+    #[test]
+    fn test_rebuild_uninitialized_grid_no_panic() {
+        let mut grid = ZoneGrid::uninitialized();
+
+        let zone = create_test_zone("zone1", vec![
+            (10.0, 10.0), (60.0, 10.0), (60.0, 60.0), (10.0, 60.0)
+        ]);
+        let mut zones = HashMap::new();
+        zones.insert("zone1".to_string(), Mutex::new(zone));
+
+        // Should not panic
+        grid.rebuild(&zones);
+        assert!(!grid.is_initialized());
+    }
+
+    #[test]
+    fn test_stats() {
+        let mut grid = ZoneGrid::uninitialized();
+        // 4x4 grid = 16 cells
+        grid.initialize(128.0, 128.0, 32.0);
+
+        let zone = create_test_zone("zone1", vec![
+            (0.0, 0.0), (64.0, 0.0), (64.0, 64.0), (0.0, 64.0)
+        ]);
+        let mut zones = HashMap::new();
+        zones.insert("zone1".to_string(), Mutex::new(zone));
+        grid.rebuild(&zones);
+
+        let stats = grid.stats();
+        assert_eq!(stats.total_cells, 16);
+        // 2x2 cells covered
+        assert_eq!(stats.non_empty_cells, 4);
+        assert_eq!(stats.max_zones_per_cell, 1);
+        assert_eq!(stats.grid_dimensions, (4, 4));
+    }
+
+    #[test]
+    fn test_edge_of_frame() {
+        let mut grid = ZoneGrid::uninitialized();
+        grid.initialize(640.0, 480.0, 32.0);
+
+        // Zone at the edge of frame
+        let zone = create_test_zone("edge_zone", vec![
+            (600.0, 440.0), (640.0, 440.0), (640.0, 480.0), (600.0, 480.0)
+        ]);
+        let mut zones = HashMap::new();
+        zones.insert("edge_zone".to_string(), Mutex::new(zone));
+        grid.rebuild(&zones);
+
+        // Point just inside the edge
+        let candidates = grid.get_candidate_zones(620.0, 460.0);
+        assert_eq!(candidates.len(), 1);
+
+        // Point at exact edge (should be out of bounds)
+        let candidates = grid.get_candidate_zones(640.0, 480.0);
+        assert_eq!(candidates.len(), 0);
+    }
+
+    #[test]
+    fn test_compute_bbox_empty() {
+        let result = ZoneGrid::compute_bbox(&[]);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_compute_bbox_single_point() {
+        let points = vec![Point2f::new(100.0, 200.0)];
+        let result = ZoneGrid::compute_bbox(&points);
+        assert_eq!(result, Some((100.0, 200.0, 100.0, 200.0)));
+    }
+
+    #[test]
+    fn test_compute_bbox_multiple_points() {
+        let points = vec![
+            Point2f::new(10.0, 20.0),
+            Point2f::new(50.0, 30.0),
+            Point2f::new(30.0, 60.0),
+        ];
+        let result = ZoneGrid::compute_bbox(&points);
+        assert_eq!(result, Some((10.0, 20.0, 50.0, 60.0)));
+    }
+}
