@@ -136,6 +136,8 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
         api_scope = "/api"
         [rest_api.mjpeg_streaming]
             enable = true
+            # 0-100
+            quality = 80
     ```
 
 7. Tracker configuration

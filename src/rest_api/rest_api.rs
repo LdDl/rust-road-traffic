@@ -35,7 +35,7 @@ pub async fn start_rest_api(server_host: String, server_port: i32, data_storage:
     };
 
     /* Enable MJPEG streaming server if needed */
-    if enable_mjpeg == true {
+    if enable_mjpeg {
         Broadcaster::spawn_reciever(storage.mjpeg_broadcaster.clone(), rx_frames_data);
     }
 

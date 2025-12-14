@@ -105,6 +105,8 @@
     [rest_api.mjpeg_streaming]
         # Do no forget to enable MJPEG streaming to see videooutput in browser
         enable = true
+        # JPEG quality (0-100). Lower = smaller files, faster streaming. Default is 80.
+        quality = 80
 
 [redis_publisher]
     # Right before reset analytics worker is done it could dump data to Redis

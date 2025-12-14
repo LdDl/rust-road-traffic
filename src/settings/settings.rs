@@ -147,7 +147,13 @@ pub struct RedisPublisherSettings {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MJPEGStreamingSettings {
     pub enable: bool,
+    /// JPEG quality for streaming (0-100). Lower = smaller files, faster streaming.
+    /// Default is 80
+    #[serde(default = "default_mjpeg_quality")]
+    pub quality: i32,
 }
+
+fn default_mjpeg_quality() -> i32 { 80 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DatasetCollectorSettings {
