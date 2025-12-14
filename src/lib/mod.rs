@@ -6,3 +6,4 @@ pub mod draw;
 pub mod data_storage;
 pub mod mjpeg_streaming;
 pub mod publisher;
+pub mod dataset_collector;

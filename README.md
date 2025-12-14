@@ -6,6 +6,7 @@
 - [Traffic flow parameters](#traffic-flow-parameters)
 - [Installation and usage](#installation-and-usage)
 - [Virtual lines](#virtual-lines)
+- [Dataset collection](#dataset-collection-auto-labeling)
 - [ROADMAP](#roadmap)
   - [Support](#support)
 
@@ -219,6 +220,66 @@ You can configure virtual lines via configuration file or via UI (look at [showc
         # rtbt - right->left or bottom->top object registration
         direction = "lrtb"
 ```
+
+## Dataset Collection (Auto-labeling)
+
+This utility can also automatically collect training datasets from video streams using a strong detection model. Useful for preparing YOLO training data on your specific use case.
+
+### How it works
+1. Run software with a reliable detection model (e.g., traditional YOLOv7 or Ultralytics YOLOv8)
+2. Use static video file (I mean you can prepare dataset from RTSP stream, but it is recommended to use video file for reproducibility and also could be use to retrain model and check results on same video again)
+2. Software tracks detected vehicles over time
+3. When a track is "mature" (visible for N frames, not touching frame edges), it saves:
+   - Raw image (no overlays/drawings) to `output_dir/images/`
+   - YOLO format annotations to `output_dir/labels/`
+
+### Configuration
+```toml
+# Dataset collector - auto-labeling feature for collecting training data
+# This section is optional - if not present, the feature is disabled
+[dataset_collector]
+    # Enable/disable dataset collection
+    enabled = true
+    # Output directory for images/ and labels/ folders
+    output_dir = "./collected_dataset"
+    # Label format: "yolo" for standard YOLO format (class_id center_x center_y width height)
+    # Currently only "yolo" is supported
+    label_format = "yolo"
+    # Minimum number of frames a track must exist before capturing (avoids partially visible objects)
+    min_track_age = 15
+    # Skip objects whose bounding box touches or is near frame edges
+    skip_edge_objects = true
+    # Margin in pixels to consider as "edge"
+    edge_margin_pixels = 5
+    # Maximum number of captures per unique track ID (1 = capture once per vehicle)
+    max_captures_per_track = 1
+    # Frames between captures for the same track (only used when max_captures_per_track > 1)
+    capture_interval = 30
+```
+
+### Output format
+```
+collected_dataset/
+├── images/
+│   └── 20251212_143052_123456_42.jpg
+└── labels/
+    └── 20251212_143052_123456_42.txt
+```
+
+Label format (YOLO): `class_id center_x center_y width height` (all values normalized 0-1)
+
+Example label file:
+```
+2 0.453125 0.621528 0.089844 0.156944
+7 0.712500 0.534722 0.125000 0.180556
+```
+
+### Tips
+- Use a strong/accurate model for better pseudo-labels quality
+- Set higher `min_track_age` (e.g., 20-30) for cleaner samples
+- Review collected data before training — auto-labels may contain errors
+- Class IDs in labels correspond to `net_classes` order in `[detection]` section
+- You can use https://github.com/LdDl/yolo-ann tool to visualize and manage collected dataset
 
 ## ROADMAP
 Please see [this](ROADMAP.md) file
