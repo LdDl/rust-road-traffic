@@ -38,7 +38,7 @@ type Registered = HashMap<Uuid, ObjectInfo>;
 #[derive(Debug)]
 pub struct Zone {
     pub id: String,
-    pixel_coordinates: Vec<Point2f>,
+    pub pixel_coordinates: Vec<Point2f>,
     spatial_coordinates_epsg4326: Vec<Point2f>,
     spatial_coordinates_epsg3857: Vec<Point2f>,
     pub color: Scalar,

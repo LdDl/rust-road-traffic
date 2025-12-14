@@ -280,6 +280,16 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
     }
     let (width, height, fps) = probe_video(&mut video_capture)?;
     println!("Video probe: {{Width: {width}px | Height: {height}px | FPS: {fps}}}");
+
+    // Initialize zone grid with frame dimensions
+    {
+        let ds_guard = data_storage.read().expect("DataStorage is poisoned [RWLock]");
+        match ds_guard.initialize_zone_grid(width, height) {
+            Ok(_) => println!("Zone grid initialized: {}x{} with 32px cells", (width / 32.0).ceil() as u32, (height / 32.0).ceil() as u32),
+            Err(e) => println!("Warning: Failed to initialize zone grid: {}", e),
+        }
+    }
+
     // Create imshow() if needed
     let window = &settings.output.window_name;
     let output_width: i32 = settings.output.width;
@@ -492,6 +502,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
 
         let ds_guard = ds_tracker.read().expect("DataStorage is poisoned [RWLock]");
         let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
+        let zone_grid = ds_guard.zone_grid.read().expect("Zone grid is poisoned [RWLock]");
         
         // Reset current occupancy for zones 
         let current_ut = get_sys_time_in_secs();
@@ -548,7 +559,14 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             let object_extra = tracker.get_object_extra_mut(&object_id).unwrap();
             let times = &object_extra.times;
             let last_time = times[times.len() - 1];
-            for (_, zone_guarded) in zones.iter() {
+
+            // Use zone grid for O(1) candidate lookup instead of O(m) iteration
+            let candidate_zone_ids = zone_grid.get_candidate_zones(last_point_x, last_point_y);
+            for zone_id in candidate_zone_ids {
+                let zone_guarded = match zones.get(zone_id) {
+                    Some(z) => z,
+                    None => continue,
+                };
                 let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
                 if !zone.contains_point(last_point_x, last_point_y) {
                     continue
@@ -606,6 +624,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             }
 
             // We need drop here explicitly, since we need to release lock on zones for MJPEG / REST API / Redis publisher and statistics threads
+            drop(zone_grid);
             drop(zones);
             drop(ds_guard);
             draw::draw_track(&mut frame, tracker, &class_colors);
@@ -643,6 +662,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             }
         } else {
             // No visualization, but need release still
+            drop(zone_grid);
             drop(zones);
             drop(ds_guard);
         }
