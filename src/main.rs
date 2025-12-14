@@ -27,6 +27,9 @@ use od_opencv::{
     model::ModelTrait,
 };
 
+use uuid::Uuid;
+use mot_rs::utils::Rect;
+
 mod lib;
 use lib::data_storage::new_datastorage;
 use lib::draw;
@@ -35,6 +38,9 @@ use lib::tracker::{
     TrackerTrait,
     SpatialInfo
 };
+use lib::detection::KalmanFilterType;
+use lib::detection::DetectionBlobs::Simple;
+use lib::detection::DetectionBlobs::BBox;
 use lib::detection::process_yolo_detections;
 use lib::zones::Zone;
 use lib::dataset_collector::DatasetCollector;
@@ -395,6 +401,11 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
     let conf_threshold: f32 = settings.detection.conf_threshold;
     let nms_threshold: f32 = settings.detection.nms_threshold;
     let max_points_in_track: usize = settings.tracking.max_points_in_track;
+    let kalman_filter: KalmanFilterType = settings.tracking.kalman_filter
+        .as_deref()
+        .unwrap_or("centroid")
+        .parse()
+        .unwrap_or_default();
     let mut resized_frame = Mat::default();
 
     let ds_tracker = data_storage.clone();
@@ -402,8 +413,6 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
     let tracker_dt = 1.0/fps;
 
     /* Can't create colors as const/static currently */
-    let trajectory_scalar: Scalar = Scalar::from((0.0, 255.0, 0.0));
-    let trajectory_scalar_inverse: Scalar = draw::invert_color(&trajectory_scalar);
     for received in rx_capture {
         // println!("Received frame from capture thread: {}", received.current_second);
         let mut frame = received.frame.clone();
@@ -426,6 +435,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             &net_classes,
             &target_classes,
             tracker_dt,
+            kalman_filter,
         );
 
         let relative_time = received.overall_seconds;
@@ -441,30 +451,33 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         if let Some(ref mut collector) = dataset_collector {
             // Gather data from matched detections
             let mut dc_bboxes: Vec<RectCV> = Vec::with_capacity(tmp_detections.blobs.len());
-            let mut dc_track_ids: Vec<uuid::Uuid> = Vec::with_capacity(tmp_detections.blobs.len());
+            let mut dc_track_ids: Vec<Uuid> = Vec::with_capacity(tmp_detections.blobs.len());
             let mut dc_track_ages: Vec<usize> = Vec::with_capacity(tmp_detections.blobs.len());
             let mut dc_class_names: Vec<String> = Vec::with_capacity(tmp_detections.blobs.len());
 
             // Get track ages from the tracker's internal objects (not from detection blobs)
-            let tracker_objects = tracker.get_engine_objects();
+            let tracker_objects = tracker.get_tracked_objects();
 
-            for (i, blob) in tmp_detections.blobs.iter().enumerate() {
-                let track_id = blob.get_id();
+            // Extract blob info based on the detection type
+            let blob_info: Vec<(Uuid, Rect)> = match &tmp_detections.blobs {
+                Simple(blobs) => blobs.iter().map(|b| (b.get_id(), b.get_bbox())).collect(),
+                BBox(blobs) => blobs.iter().map(|b| (b.get_id(), b.get_bbox())).collect(),
+            };
 
+            for (i, (track_id, bbox)) in blob_info.iter().enumerate() {
                 // Get the actual track age from the tracker
                 let track_age = tracker_objects
-                    .get(&track_id)
+                    .get(track_id)
                     .map(|obj| obj.get_track().len())
                     .unwrap_or(0);
 
-                let bbox = blob.get_bbox();
                 dc_bboxes.push(RectCV::new(
                     bbox.x as i32,
                     bbox.y as i32,
                     bbox.width as i32,
                     bbox.height as i32,
                 ));
-                dc_track_ids.push(track_id);
+                dc_track_ids.push(*track_id);
                 dc_track_ages.push(track_age);
                 dc_class_names.push(tmp_detections.class_names[i].clone());
             }
@@ -494,7 +507,8 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             drop(zone);
         }
 
-        let object_ids: Vec<uuid::Uuid> = tracker.get_engine_objects()
+        let tracked_objects = tracker.get_tracked_objects();
+        let object_ids: Vec<Uuid> = tracked_objects
             .iter()
             .filter_map(|(id, obj)| {
                 if obj.get_no_match_times() <= 1 {
@@ -504,9 +518,12 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 }
             })
             .collect();
-        
+
         for object_id in object_ids {
-            let object = tracker.get_object(&object_id).unwrap();
+            let object = match tracker.get_tracked_object(&object_id) {
+                Some(obj) => obj,
+                None => continue,
+            };
             if object.get_no_match_times() > 1 {
                 // Skip, since object is lost for a while
                 // println!("Object {} is lost for a while", object_id);
@@ -649,8 +666,14 @@ fn main() {
     let app_settings = AppSettings::new(path_to_config);
     println!("Settings are:\n\t{}", app_settings);
 
+    let kalman_filter: KalmanFilterType = app_settings.tracking.kalman_filter
+        .as_deref()
+        .unwrap_or("centroid")
+        .parse()
+        .unwrap_or_default();
     let mut tracker = new_tracker_from_type(
-        &app_settings.tracking.typ.as_deref().unwrap_or("iou_naive")
+        &app_settings.tracking.typ.as_deref().unwrap_or("iou_naive"),
+        kalman_filter
     );
     println!("Tracker is:\n\t{}", tracker);
 

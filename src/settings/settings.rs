@@ -94,6 +94,8 @@ pub struct TrackingSettings {
     #[serde(alias = "type")]
     pub typ: Option<String>,
     pub max_points_in_track: usize,
+    // Either "centroid" or "bbox". Default is "centroid"
+    pub kalman_filter: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -257,6 +259,9 @@ impl AppSettings {
         if app_settings.tracking.typ.is_none() {
             app_settings.tracking.typ = Some("iou_naive".to_string());
         }
+        if app_settings.tracking.kalman_filter.is_none() {
+            app_settings.tracking.kalman_filter = Some("centroid".to_string());
+        }
         // Check if tracker type is valid
         if app_settings.tracking.typ.is_some() {
             match app_settings.tracking.typ.as_ref().unwrap().as_str() {
@@ -264,6 +269,16 @@ impl AppSettings {
                 "bytetrack" => { },
                 _ => {
                     panic!("Invalid tracker type: '{}'. Supported types are 'iou_naive' and 'bytetrack'.", app_settings.tracking.typ.as_ref().unwrap());
+                }
+            }
+        }
+        // Check if kalman filter type is valid
+        if app_settings.tracking.kalman_filter.is_some() {
+            match app_settings.tracking.kalman_filter.as_ref().unwrap().as_str() {
+                "centroid" => { },
+                "bbox" => { },
+                _ => {
+                    panic!("Invalid kalman filter type: '{}'. Supported types are 'centroid' and 'bbox'.", app_settings.tracking.kalman_filter.as_ref().unwrap());
                 }
             }
         }
