@@ -65,11 +65,11 @@ impl Broadcaster {
         msg
     }
 
-    fn send_image(&mut self, msg: &[u8]) {
+    fn send_image(&mut self, msg: Vec<u8>) {
         if self.clients.is_empty() {
             return;
         }
-        let bytes = web::Bytes::from(msg.to_vec());
+        let bytes = web::Bytes::from(msg);
         // Update failure counts and remove clients that exceeded max failures
         self.clients.retain_mut(|client| {
             match client.sender.try_send(bytes.clone()) {
@@ -100,7 +100,7 @@ impl Broadcaster {
         thread::spawn(move || {
             for received in rx_frames_data {
                 let msg = Broadcaster::make_message_block(&received);
-                _self.lock().unwrap().send_image(&msg);
+                _self.lock().unwrap().send_image(msg);
             }
         });
     }
