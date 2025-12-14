@@ -7,6 +7,8 @@ use opencv::{
     imgproc::LINE_8,
 };
 
+use crate::lib::constants::EPSILON_TINY;
+
 #[derive(Debug)]
 pub struct Skeleton {
     line_cvf: [Point2f; 2],
@@ -60,9 +62,13 @@ impl Skeleton {
         // Calculate the magnitude of AB squared
         let ab_squared = ab_x.powi(2) + ab_y.powi(2);
 
+        // Guard against degenerate skeleton (A and B at same point)
+        if ab_squared < EPSILON_TINY {
+            return (a.x, a.y);
+        }
+
         // Calculate the scalar projection of P onto AB
         let scalar_projection = dot_product / ab_squared;
-        
         if scalar_projection < 0.0 {
             // P is closest to point A, so use A as the projection point
             (a.x, a.y)

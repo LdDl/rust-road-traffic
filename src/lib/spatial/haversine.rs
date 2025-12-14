@@ -33,6 +33,8 @@ pub fn haversine(src_lon: f32, src_lat: f32, dst_lon: f32, dst_lat: f32) -> f32 
 
     let a = sin_dlat_half * sin_dlat_half
           + lat1.cos() * lat2.cos() * sin_dlon_half * sin_dlon_half;
+    // Clamp to [0, 1] to prevent NaN from floating-point rounding errors
+    let a = a.clamp(0.0, 1.0);
     let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
 
     c * EARTH_RADIUS_KM

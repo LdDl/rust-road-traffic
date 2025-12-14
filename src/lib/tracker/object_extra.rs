@@ -1,4 +1,5 @@
 use crate::lib::spatial::haversine;
+use crate::lib::constants::EPSILON;
 
 pub struct ObjectExtra {
     class_name: String,
@@ -78,30 +79,54 @@ impl SpatialInfo {
     // Same as update(), but calculations are done between first and last points
     // This approach helps to avoid situation when distance between two points is approx. 0
     pub fn update_avg(&mut self, _time: f32, _x: f32, _y: f32, _x_projected: f32, _y_projected: f32, pixels_per_meter: f32) {
-        let distance_pixels = ((_x_projected - self.first_x_projected).powi(2) + (_y_projected - self.first_y_projected).powi(2)).sqrt();
-        let distance_meters = distance_pixels / pixels_per_meter;
-        let time_diff = (_time - self.first_time).abs();
-        let velocity = distance_meters / time_diff; // meters per second
-        self.speed = velocity * 3.6; // convert m/s to km/h
+        // Update position tracking regardless of speed calculation validity
         self.last_time = _time;
         self.last_x = _x;
         self.last_y = _y;
         self.last_x_projected = _x_projected;
         self.last_y_projected = _y_projected;
+
+        // Guard against invalid pixels_per_meter (uninitialized or zero)
+        if pixels_per_meter <= 0.0 {
+            return;
+        }
+        let time_diff = (_time - self.first_time).abs();
+        // Guard against zero time difference
+        if time_diff < EPSILON {
+            return;
+        }
+        let distance_pixels = ((_x_projected - self.first_x_projected).powi(2) + (_y_projected - self.first_y_projected).powi(2)).sqrt();
+        let distance_meters = distance_pixels / pixels_per_meter;
+        let velocity = distance_meters / time_diff; // meters per second
+        self.speed = velocity * 3.6; // convert m/s to km/h
     }
 
     pub fn update(&mut self, _time: f32, _x: f32, _y: f32, _x_projected: f32, _y_projected: f32, pixels_per_meter: f32) {
-        let distance_pixels = ((_x_projected - self.last_x_projected).powi(2) + (_y_projected - self.last_y_projected).powi(2)).sqrt();
-        let distance_meters = distance_pixels / pixels_per_meter;
-        let time_diff = _time - self.last_time;
-        let velocity = distance_meters / time_diff; // meters per second
-        self.speed = velocity * 3.6; // convert m/s to km/h
+        // Capture previous position before updating
+        let prev_x_projected = self.last_x_projected;
+        let prev_y_projected = self.last_y_projected;
+        let prev_time = self.last_time;
 
+        // Update position tracking
         self.last_time = _time;
         self.last_x = _x;
         self.last_y = _y;
         self.last_x_projected = _x_projected;
         self.last_y_projected = _y_projected;
+
+        // Guard against invalid pixels_per_meter (uninitialized or zero)
+        if pixels_per_meter <= 0.0 {
+            return;
+        }
+        let time_diff = _time - prev_time;
+        // Guard against zero or negative time difference
+        if time_diff < EPSILON {
+            return;
+        }
+        let distance_pixels = ((_x_projected - prev_x_projected).powi(2) + (_y_projected - prev_y_projected).powi(2)).sqrt();
+        let distance_meters = distance_pixels / pixels_per_meter;
+        let velocity = distance_meters / time_diff; // meters per second
+        self.speed = velocity * 3.6; // convert m/s to km/h
     }
 
     fn update_by_wgs84(&mut self, _time: f32, _lon: f32, _lat: f32, _x: f32, _y: f32) {

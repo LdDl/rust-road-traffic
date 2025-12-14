@@ -9,6 +9,8 @@ use opencv::{
     imgproc::LINE_8,
 };
 
+use crate::lib::constants::EPSILON;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum VirtualLineDirection {
     LeftToRightTopToBottom,
@@ -77,10 +79,13 @@ impl VirtualLine {
         self.color = [r, g, b];
     }
     // is_left returns true if the given point is to the left side of the vertical AB or if the given point is above of the horizontal AB
+    // Points exactly on the line (within epsilon) are treated as "not left" for consistency
     pub fn is_left(&self, cx: f32, cy: f32) -> bool {
         let a = self.line_cvf[0];
         let b = self.line_cvf[1];
-        (b.x - a.x)*(cy - a.y) - (b.y - a.y)*(cx - a.x) > 0.0
+        let cross = (b.x - a.x) * (cy - a.y) - (b.y - a.y) * (cx - a.x);
+        // Use small epsilon to handle floating-point imprecision on boundary
+        cross > EPSILON
     }
     pub fn clone(&self) -> Self {
         VirtualLine {
