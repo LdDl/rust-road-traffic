@@ -20,7 +20,8 @@ use chrono::{
 };
 
 use crate::lib::zones::{
-    Zone
+    Zone,
+    ZoneGrid,
 };
 
 #[derive(Debug)]
@@ -41,9 +42,12 @@ impl std::fmt::Display for DataStorageError {
     }
 }
 
+const GRID_CELL_SIZE: f32 = 32.0;
+
 #[derive(Clone)]
 pub struct DataStorage {
     pub zones: Arc<RwLock<HashMap<String, Mutex<Zone>>>>,
+    pub zone_grid: Arc<RwLock<ZoneGrid>>,
     pub vehicle_last_zone_cross:  Arc<RwLock<HashMap<uuid::Uuid, String>>>,
     pub period_start: DateTime<Utc>,
     pub period_end: DateTime<Utc>,
@@ -55,6 +59,7 @@ impl DataStorage {
     pub fn new_with_id(_id: String, _verbose: bool) -> Self {
         return DataStorage {
             zones: Arc::new(RwLock::new(HashMap::<String, Mutex<Zone>>::new())),
+            zone_grid: Arc::new(RwLock::new(ZoneGrid::uninitialized())),
             vehicle_last_zone_cross: Arc::new(RwLock::new(HashMap::<uuid::Uuid, String>::new())),
             period_start: TimeZone::with_ymd_and_hms(&Utc, 1970, 1, 1, 0, 0, 0).unwrap(),
             period_end: TimeZone::with_ymd_and_hms(&Utc, 1970, 1, 1, 0, 0, 0).unwrap(),
@@ -62,6 +67,24 @@ impl DataStorage {
             verbose: _verbose
         };
     }
+
+    /// Initialize zone grid with frame dimensions (call once when frame size is known)
+    pub fn initialize_zone_grid(&self, frame_width: f32, frame_height: f32) -> Result<(), DataStorageError> {
+        let mut grid = self.zone_grid.write()?;
+        // 32x32 pixel cells
+        grid.initialize(frame_width, frame_height, GRID_CELL_SIZE);
+        drop(grid);
+        self.rebuild_zone_grid()
+    }
+
+    /// Rebuild zone grid from current zones (call after any zone mutation)
+    pub fn rebuild_zone_grid(&self) -> Result<(), DataStorageError> {
+        let zones = self.zones.read()?;
+        let mut grid = self.zone_grid.write()?;
+        grid.rebuild(&zones);
+        Ok(())
+    }
+
     pub fn insert_zone(&self, zone: Zone) -> Result<(), DataStorageError> {
         let zones = Arc::clone(&self.zones);
         match zones.write() {
