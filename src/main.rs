@@ -44,6 +44,7 @@ use lib::detection::DetectionBlobs::BBox;
 use lib::detection::process_yolo_detections;
 use lib::zones::Zone;
 use lib::dataset_collector::DatasetCollector;
+use lib::perf_stats::{PerfStats, Timer};
 
 mod settings;
 use settings::AppSettings;
@@ -419,13 +420,24 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
     let mut resized_frame = Mat::default();
 
     let ds_tracker = data_storage.clone();
-    
+
     let tracker_dt = 1.0/fps;
+
+    /* Performance stats (optional) */
+    let perf_stats_interval = settings.detection.perf_stats_interval;
+    let mut perf_stats = if perf_stats_interval > 0 {
+        Some(PerfStats::new(perf_stats_interval))
+    } else {
+        None
+    };
 
     /* Can't create colors as const/static currently */
     for received in rx_capture {
         // println!("Received frame from capture thread: {}", received.current_second);
         // Note: frame clone is deferred to only displaying
+
+        /* Inference (preprocessing + forward pass + NMS) */
+        let t_inference = Timer::start();
         let (nms_bboxes, nms_classes_ids, nms_confidences) = match neural_net.forward(&received.frame, conf_threshold, nms_threshold) {
             Ok((a, b, c)) => { (a, b, c) },
             Err(err) => {
@@ -433,8 +445,10 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 continue;
             }
         };
-        
-        /* Process detected objects and match them to existing ones */
+        let inference_time = t_inference.elapsed();
+
+        /* Postprocessing: create detection blobs */
+        let t_postprocess = Timer::start();
         let mut tmp_detections = process_yolo_detections(
             &nms_bboxes,
             nms_classes_ids,
@@ -447,7 +461,10 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             tracker_dt,
             kalman_filter,
         );
+        let postprocess_time = t_postprocess.elapsed();
 
+        /* Tracking: match detections to existing tracks */
+        let t_tracking = Timer::start();
         let relative_time = received.overall_seconds;
         match tracker.match_objects(&mut tmp_detections, relative_time) {
             Ok(_) => {},
@@ -456,6 +473,12 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 continue;
             }
         };
+        let tracking_time = t_tracking.elapsed();
+
+        /* Record performance stats */
+        if let Some(ref mut stats) = perf_stats {
+            stats.record(inference_time, postprocess_time, tracking_time);
+        }
 
         /* Dataset collection - save raw frame and annotations */
         if let Some(ref mut collector) = dataset_collector {

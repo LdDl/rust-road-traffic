@@ -54,6 +54,9 @@ pub struct DetectionSettings {
     pub net_height: i32,
     pub net_classes: Vec<String>,
     pub target_classes: Option<Vec<String>>,
+    /// Print performance stats every N frames. 0 = disabled.
+    #[serde(default)]
+    pub perf_stats_interval: u32,
 }
 
 impl DetectionSettings {
