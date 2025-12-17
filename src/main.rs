@@ -14,16 +14,13 @@ use opencv::{
     videoio::VideoCapture,
     imgproc::resize,
     imgcodecs::imencode,
-    dnn::DNN_BACKEND_CUDA,
-    dnn::DNN_TARGET_CUDA,
-    dnn::DNN_BACKEND_OPENCV,
-    dnn::DNN_TARGET_CPU,
 };
 
 use od_opencv::{
+    Model,
+    DnnBackend,
+    DnnTarget,
     model_format::ModelFormat,
-    model_format::ModelVersion,
-    model::new_from_file,
     model::ModelTrait,
 };
 
@@ -135,31 +132,33 @@ fn probe_video(capture: &mut VideoCapture) ->  Result<(f32, f32, f32), AppError>
     Ok((frame_cols, frame_rows, fps))
 }
 
-fn prepare_neural_net(mf: ModelFormat, mv: ModelVersion, weights: &str, configuration: Option<String>, net_size: (i32, i32)) -> Result<Box<dyn ModelTrait>, AppError> {
+fn prepare_neural_net(mf: ModelFormat, weights: &str, configuration: Option<String>, net_size: (i32, i32)) -> Result<Box<dyn ModelTrait>, AppError> {
 
     /* Check if CUDA is an option at all */
     let cuda_count = get_cuda_enabled_device_count()?;
     let cuda_available = cuda_count > 0;
     println!("CUDA is {}", if cuda_available { "'available'" } else { "'not available'" });
     println!("Model format is '{:?}'", mf);
-    println!("Model type is '{:?}'", mv);
 
-    // Hacky way to convert Option<String> to Option<&str>
-    let configuration_str = configuration.as_deref();
+    let backend = if cuda_available { DnnBackend::Cuda } else { DnnBackend::OpenCV };
+    let target = if cuda_available { DnnTarget::Cuda } else { DnnTarget::Cpu };
 
-    let neural_net = match new_from_file(
-        weights,
-        configuration_str,
-        (net_size.0, net_size.1),
-        mf, mv,
-        if cuda_available { DNN_BACKEND_CUDA } else { DNN_BACKEND_OPENCV },
-        if cuda_available { DNN_TARGET_CUDA } else { DNN_TARGET_CPU },
-        vec![]
-    ) {
-        Ok(result) => result,
-        Err(err) => {
-            panic!("Can't read network '{}' (with cfg '{:?}') due the error: {:?}", weights, configuration, err);
-        }
+    let neural_net: Box<dyn ModelTrait> = match mf {
+        // Darknet format - v3/v4/v7
+        ModelFormat::Darknet => {
+            let cfg = configuration.as_deref().expect("Darknet format requires .cfg file");
+            match Model::darknet(cfg, weights, net_size, backend, target) {
+                Ok(model) => Box::new(model),
+                Err(err) => panic!("Can't read Darknet network '{}' (with cfg '{}') due the error: {:?}", weights, cfg, err),
+            }
+        },
+        // ONNX format - Ultralytics v8/v9/v11
+        ModelFormat::ONNX => {
+            match Model::opencv(weights, net_size, backend, target) {
+                Ok(model) => Box::new(model),
+                Err(err) => panic!("Can't read ONNX network '{}' due the error: {:?}", weights, err),
+            }
+        },
     };
     Ok(neural_net)
 }
@@ -727,15 +726,7 @@ fn main() {
         }
     };
 
-    let model_version = match app_settings.detection.get_nn_version() {
-        Ok(mf) => mf,
-        Err(err) => {
-            println!("Can't get model version due the error: {}", err);
-            return
-        }
-    };
-
-    let mut neural_net = match prepare_neural_net(model_format, model_version, &app_settings.detection.network_weights, app_settings.detection.network_cfg.clone(), (app_settings.detection.net_width, app_settings.detection.net_height)) {
+    let mut neural_net = match prepare_neural_net(model_format, &app_settings.detection.network_weights, app_settings.detection.network_cfg.clone(), (app_settings.detection.net_width, app_settings.detection.net_height)) {
         Ok(nn) => nn,
         Err(err) => {
             println!("Can't prepare neural network due the error: {}", err);
