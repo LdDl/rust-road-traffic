@@ -9,8 +9,18 @@ edition = "2024"
 name = "rust-road-traffic"
 path = "src/main.rs"
 
+[features]
+default = ["opencv-backend"]
+# Use OpenCV DNN for inference (default)
+opencv-backend = ["opencv/dnn", "od_opencv/opencv-backend"]
+# Use ONNX Runtime for inference (no OpenCV DNN to avoid conflicts)
+ort-backend = ["od_opencv/ort-backend", "od_opencv/ort-opencv-compat"]
+# CUDA acceleration for ORT backend
+ort-cuda = ["ort-backend", "od_opencv/ort-cuda-backend"]
+
 [dependencies]
-opencv = { version = "0.96.0", default-features = false, features = ["dnn", "imgcodecs", "imgproc", "videoio", "highgui"] }
+# OpenCV for video I/O, drawing, etc. DNN feature is conditional via features above
+opencv = { version = "0.96.0", default-features = false, features = ["imgcodecs", "imgproc", "videoio", "highgui"] }
 uuid = { version = "1.18.1", features = ["serde", "v4"] }
 nalgebra = "0.34.1"
 toml = "0.9.8"
@@ -29,7 +39,8 @@ futures = "0.3.1"
 mot-rs = "0.5.0"
 utoipa = { version = "3", features = ["actix_extras"] }
 utoipa-rapidoc = { version = "0.1", features = ["actix-web"] }
-od_opencv = { version = "0.4", default-features = false, features = ["opencv-backend", "letterbox"] }
+# Object detection with YOLO models
+od_opencv = { version = "0.4.1", default-features = false, features = ["letterbox"] }
 rand = "0.9.2"
 
 [build-dependencies]

@@ -6,6 +6,9 @@ use toml;
 use std::error::Error;
 use std::fmt;
 use std::str::FromStr;
+
+// model_format is only available with opencv-backend
+#[cfg(feature = "opencv-backend")]
 use od_opencv::model_format::{ModelFormat, ModelVersion};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -54,11 +57,16 @@ pub struct DetectionSettings {
     pub net_height: i32,
     pub net_classes: Vec<String>,
     pub target_classes: Option<Vec<String>>,
+    /// Inference backend: "ort" for ONNX Runtime, "opencv" for OpenCV DNN.
+    /// Default is "opencv".
+    pub inference_backend: Option<String>,
     /// Print performance stats every N frames. 0 = disabled.
     #[serde(default)]
     pub perf_stats_interval: u32,
 }
 
+// These methods are only available with opencv-backend
+#[cfg(feature = "opencv-backend")]
 impl DetectionSettings {
     pub fn get_nn_format(&self) -> Result<ModelFormat,  Box<dyn Error>> {
         match self.network_format.clone() {
@@ -66,7 +74,7 @@ impl DetectionSettings {
                 match mf.to_lowercase().as_str() {
                     "darknet" => { Ok(ModelFormat::Darknet) },
                     "onnx" => { Ok(ModelFormat::ONNX) },
-                    _ => { 
+                    _ => {
                         return Err(format!("Can't prepare neural network due the unhandled format: {}", mf).into());
                     }
                 }
@@ -82,7 +90,7 @@ impl DetectionSettings {
                     4 => { Ok(ModelVersion::V4) },
                     7 => { Ok(ModelVersion::V7) },
                     8 => { Ok(ModelVersion::V8) },
-                    _ => { 
+                    _ => {
                         return Err(format!("Can't prepare neural network due the unhandled version: {}", mv).into());
                     }
                 }

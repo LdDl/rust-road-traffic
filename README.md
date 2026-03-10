@@ -3,6 +3,7 @@
 ## Table of Contents
 - [Video showcase](#video-showcase)
 - [About](#about)
+- [Inference Backends](#inference-backends)
 - [Traffic flow parameters](#traffic-flow-parameters)
 - [Installation and usage](#installation-and-usage)
 - [Virtual lines](#virtual-lines)
@@ -27,6 +28,39 @@ Vehicle detection/tracking and speed estimation via next instruments:
 Notice:
 
 UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic-ui. Prepared `static` directory after `npm run build` is [here](src/lib/rest_api/static/)' 
+
+## Inference Backends
+
+This project supports two inference backends via compile-time feature flags:
+
+| Backend | Feature Flag | Models Supported | GPU Support |
+|---------|--------------|------------------|-------------|
+| OpenCV DNN | `opencv-backend` (default) | YOLOv3/v4/v7 (Darknet), YOLOv8/v9/v11 (ONNX) | CUDA, OpenCL |
+| ONNX Runtime | `ort-backend` | YOLOv8/v9/v11 (ONNX only) | CUDA 12.x |
+
+**How `ort-backend` works:** Uses ONNX Runtime for inference but still requires OpenCV for video I/O, drawing, and preprocessing. This is achieved via the `ort-opencv-compat` adapter from `od_opencv` crate, which allows ORT models to accept OpenCV `Mat` directly without enabling OpenCV's DNN module (avoiding static linking conflicts).
+
+**Important:** The `ort-backend` does NOT support Darknet weights (`.cfg` + `.weights` files). If you need YOLOv3/v4/v7 with Darknet format, use `opencv-backend`.
+
+### Build Commands
+
+```bash
+# OpenCV backend (default) - supports all YOLO versions
+cargo build --release
+
+# ORT backend - YOLOv8/v9/v11 ONNX only
+cargo build --release --no-default-features --features ort-backend
+```
+
+### Run Commands
+
+```bash
+# OpenCV backend
+cargo run --release -- path-to-toml-file
+
+# ORT backend
+cargo run --release --no-default-features --features ort-backend -- path-to-toml-file
+```
 
 ## Traffic flow parameters
 
