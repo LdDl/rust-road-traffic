@@ -114,10 +114,11 @@ impl From<opencv::Error> for AppError {
     }
 }
 
-fn probe_video(capture: &mut VideoCapture) ->  Result<(f32, f32, f32), AppError> {
+fn probe_video(capture: &mut VideoCapture) ->  Result<(f32, f32, f32, f32), AppError> {
     let fps = capture.get(opencv::videoio::CAP_PROP_FPS)? as f32;
     let frame_cols = capture.get(opencv::videoio::CAP_PROP_FRAME_WIDTH)? as f32;
     let frame_rows = capture.get(opencv::videoio::CAP_PROP_FRAME_HEIGHT)? as f32;
+    let total_frames = capture.get(opencv::videoio::CAP_PROP_FRAME_COUNT)? as f32;
 
     // Is it better to get width/height from frame information?
     // let mut frame = Mat::default();
@@ -129,7 +130,7 @@ fn probe_video(capture: &mut VideoCapture) ->  Result<(f32, f32, f32), AppError>
     // };
     // let frame_cols = frame.cols() as f32;
     // let frame_rows = frame.rows() as f32;
-    Ok((frame_cols, frame_rows, fps))
+    Ok((frame_cols, frame_rows, fps, total_frames))
 }
 
 // OpenCV DNN backend (compile-time)
@@ -206,15 +207,25 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
     println!("REST API is '{}'", settings.rest_api.enable);
     println!("Redis publisher is '{}'", settings.redis_publisher.enable);
 
+    let report_mode = settings.is_report_mode();
+    if report_mode && !std::path::Path::new(&settings.input.video_src).is_file() {
+        println!("Report mode is not available for RTSP streams or cameras. Only video files are supported.");
+        return Ok(());
+    }
+
     let (enable_mjpeg, mjpeg_quality) = match &settings.rest_api.mjpeg_streaming {
         Some(v) => {
-            let enabled = v.enable & settings.rest_api.enable; // Logical 'And' to prevent MJPEG when API is disabled
+            let enabled = v.enable & settings.rest_api.enable & !report_mode;
             (enabled, v.quality)
         }
         None => (false, 80)
     };
+    let output_enable = settings.output.enable & !report_mode;
 
     println!("MJPEG is '{}' (quality: {})", enable_mjpeg, mjpeg_quality);
+    if report_mode {
+        println!("Report mode is enabled");
+    }
 
     /* Preprocess spatial data */
     let data_storage = new_datastorage(settings.equipment_info.id.clone(), verbose);
@@ -223,19 +234,21 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
     let net_classes_set = HashSet::from_iter(net_classes.clone());
     let class_colors = draw::ClassColors::new(&net_classes);
 
-    for road_lane in settings.road_lanes.iter() {
-        let mut zone = Zone::from(road_lane);
-        zone.set_target_classes(if !target_classes.is_empty() {
-            &target_classes
-        } else {
-            &net_classes_set
-        });
-        match data_storage.write().unwrap().insert_zone(zone) {
-            Ok(_) => {},
-            Err(err) => {
-                panic!("Can't insert zone due the error {:?}", err);
-            }
-        };
+    if let Some(road_lanes) = &settings.road_lanes {
+        for road_lane in road_lanes.iter() {
+            let mut zone = Zone::from(road_lane);
+            zone.set_target_classes(if !target_classes.is_empty() {
+                &target_classes
+            } else {
+                &net_classes_set
+            });
+            match data_storage.write().unwrap().insert_zone(zone) {
+                Ok(_) => {},
+                Err(err) => {
+                    panic!("Can't insert zone due the error {:?}", err);
+                }
+            };
+        }
     }
 
     /* Initialize dataset collector if enabled */
@@ -263,7 +276,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
 
     /* Start statistics ("threading" is obsolete because of business-logic error) */
     let reset_time = settings.worker.reset_data_milliseconds;
-    let next_reset = reset_time as f32 / 1000.0;
+    let next_reset = if report_mode { f32::MAX } else { reset_time as f32 / 1000.0 };
     let ds_worker = data_storage.clone();
     
     /* Redis publisher */
@@ -297,7 +310,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
     /* Start REST API if needed */ 
     let overwrite_file = path_to_config.to_string();
     let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(0);
-    if settings.rest_api.enable {
+    if settings.rest_api.enable && !report_mode {
         let settings_clone = settings.clone();
         let ds_api = data_storage.clone();
         thread::spawn(move || {
@@ -316,8 +329,8 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
     if !opened {
         return Err(AppError::VideoError(AppVideoError{typ: 1}))
     }
-    let (width, height, fps) = probe_video(&mut video_capture)?;
-    println!("Video probe: {{Width: {width}px | Height: {height}px | FPS: {fps}}}");
+    let (width, height, fps, total_frames) = probe_video(&mut video_capture)?;
+    println!("Video probe: {{Width: {width}px | Height: {height}px | FPS: {fps} | Total frames: {total_frames}}}");
 
     // Initialize zone grid with frame dimensions
     {
@@ -332,7 +345,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
     let window = &settings.output.window_name;
     let output_width: i32 = settings.output.width;
     let output_height: i32 = settings.output.height;
-    if settings.output.enable {
+    if output_enable {
         match named_window(window, 1) {
             Ok(_) => {},
         Err(err) =>{
@@ -354,6 +367,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         let mut total_seconds: f32 = 0.0;
         let mut overall_seconds: f32 = 0.0;
         let mut empty_frames_countrer: u16 = 0;
+        let mut processed_frames: u32 = 0;
         // @experimental
         let skip_every_n_frame = 2;
         // @todo: remove hardcode
@@ -405,6 +419,12 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                     // println!("Error on send frame to detection thread: {}", _err)
                 }
             };
+
+            processed_frames += 1;
+            if report_mode && total_frames > 0.0 && processed_frames % 100 == 0 {
+                let progress = (processed_frames as f32 / total_frames) * 100.0;
+                println!("[Report] Progress: {}/{} frames ({:.1}%)", processed_frames, total_frames as u32, progress);
+            }
 
             // println!("Total seconds: {}", total_seconds);
             if total_seconds >= next_reset {
@@ -469,7 +489,11 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
     };
 
     /* Can't create colors as const/static currently */
+    let mut first_frame: Option<Mat> = None;
     for received in rx_capture {
+        if report_mode && first_frame.is_none() {
+            first_frame = Some(received.frame.clone());
+        }
         // println!("Received frame from capture thread: {}", received.current_second);
         // Note: frame clone is deferred to only displaying
 
@@ -649,11 +673,11 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 match object_extra.spatial_info {
                     Some(ref mut spatial_info) => {
                         spatial_info.update_avg(last_time, last_point_x, last_point_y, projected_pt.0, projected_pt.1, pixels_per_meters);
-                        zone.register_or_update_object(object_id, last_time, relative_time, spatial_info.speed, object_extra.get_classname(), crossed, zone_id_from);
+                        zone.register_or_update_object(object_id, last_time, relative_time, spatial_info.speed, object_extra.get_classname(), crossed, zone_id_from.clone());
                     },
                     None => {
                         object_extra.spatial_info = Some(SpatialInfo::new(last_time, last_point_x, last_point_y, projected_pt.0, projected_pt.1));
-                        zone.register_or_update_object(object_id, last_time, relative_time, -1.0, object_extra.get_classname(), crossed, zone_id_from);
+                        zone.register_or_update_object(object_id, last_time, relative_time, -1.0, object_extra.get_classname(), crossed, zone_id_from.clone());
                     }
                 }
                 // Only update vehicle zone tracking when vehicle crosses virtual line
@@ -670,7 +694,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         
         /* Imshow + re-stream input video as MJPEG */
         // Clone frame only when visualization is needed
-        if enable_mjpeg || settings.output.enable {
+        if enable_mjpeg || output_enable {
             let mut frame = received.frame.clone();
 
             for (_, v) in zones.iter() {
@@ -687,7 +711,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             drop(zones);
             drop(ds_guard);
             draw::draw_track(&mut frame, tracker, &class_colors);
-            if settings.output.enable {
+            if output_enable {
                 match resize(&frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
                     Ok(_) => {},
                     Err(err) => {
@@ -726,8 +750,36 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             drop(ds_guard);
         }
 
-        
+
     }
+
+    if report_mode {
+        println!("Video processing complete. Generating report...");
+        let report_settings = settings.report.as_ref().unwrap();
+        {
+            let mut ds_writer = data_storage.write().expect("DataStorage is poisoned [RWLock]");
+            ds_writer.period_end = Utc::now();
+            match ds_writer.update_statistics() {
+                Ok(_) => {},
+                Err(err) => {
+                    println!("Can't compute final statistics due the error: {}", err);
+                }
+            }
+        }
+        let ds_reader = data_storage.read().expect("DataStorage is poisoned [RWLock]");
+        match first_frame {
+            Some(ref frame) => {
+                match lib::report::generate_report(&ds_reader, &settings.input.video_src, &report_settings.output_path, frame) {
+                    Ok(zip_path) => println!("Report saved to: {}", zip_path),
+                    Err(err) => println!("Can't generate report due the error: {}", err),
+                }
+            },
+            None => {
+                println!("Can't generate report: no frames were captured from video");
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -752,7 +804,9 @@ fn main() {
         .unwrap_or_default();
     let mut tracker = new_tracker_from_type(
         &app_settings.tracking.typ.as_deref().unwrap_or("iou_naive"),
-        kalman_filter
+        kalman_filter,
+        app_settings.tracking.max_no_match,
+        app_settings.tracking.iou_threshold
     );
     println!("Tracker is:\n\t{}", tracker);
 

@@ -19,11 +19,12 @@ pub struct AppSettings {
     pub detection: DetectionSettings,
     pub tracking: TrackingSettings,
     pub equipment_info: EquipmentInfo,
-    pub road_lanes: Vec<RoadLanesSettings>,
+    pub road_lanes: Option<Vec<RoadLanesSettings>>,
     pub worker: WorkerSettings,
     pub rest_api: RestAPISettings,
     pub redis_publisher: RedisPublisherSettings,
     pub dataset_collector: Option<DatasetCollectorSettings>,
+    pub report: Option<ReportSettings>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -107,6 +108,10 @@ pub struct TrackingSettings {
     pub max_points_in_track: usize,
     // Either "centroid" or "bbox". Default is "centroid"
     pub kalman_filter: Option<String>,
+    // Maximum number of frames to keep tracking an object without new detections. Default is 60
+    pub max_no_match: Option<usize>,
+    // IoU threshold for matching detections to tracks. Default is 0.3
+    pub iou_threshold: Option<f32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -128,8 +133,8 @@ pub struct RoadLanesSettings {
 pub struct VirtualLineSettings {
     pub geometry: [[i32; 2]; 2],
     pub color_rgb: [i16; 3],
-    // 'lrtb' stands for "left->right, top->bottom"
-    // 'rlbt' stands for "right->left, bottom->top"
+    // 'inbound' - inbound traffic (towards target side)
+    // 'outbound' - outbound traffic (away from target side)
     pub direction: String,
 }
 
@@ -198,6 +203,12 @@ fn default_skip_edge_objects() -> bool { true }
 fn default_edge_margin_pixels() -> u32 { 5 }
 fn default_max_captures_per_track() -> u32 { 1 }
 fn default_capture_interval() -> u32 { 30 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ReportSettings {
+    pub enabled: bool,
+    pub output_path: String,
+}
 
 use crate::lib::zones::Zone;
 use crate::lib::zones::{VirtualLineDirection, VirtualLine};
@@ -317,12 +328,16 @@ impl AppSettings {
             detection: self.detection.clone(),
             tracking: self.tracking.clone(),
             equipment_info: self.equipment_info.clone(),
-            road_lanes: Vec::new(),
+            road_lanes: Some(Vec::new()),
             worker: self.worker.clone(),
             rest_api: self.rest_api.clone(),
             redis_publisher: self.redis_publisher.clone(),
             dataset_collector: self.dataset_collector.clone(),
+            report: self.report.clone(),
         }
+    }
+    pub fn is_report_mode(&self) -> bool {
+        self.report.as_ref().map_or(false, |r| r.enabled)
     }
 }
 

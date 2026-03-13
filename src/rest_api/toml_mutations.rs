@@ -35,9 +35,10 @@ pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Erro
     let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
     let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
     let mut setting_cloned = data.app_settings.get_copy_no_roads();
+    let road_lanes = setting_cloned.road_lanes.get_or_insert_with(Vec::new);
     for (_, zone_guarded) in zones.iter() {
         let zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
-        setting_cloned.road_lanes.push(RoadLanesSettings{
+        road_lanes.push(RoadLanesSettings{
             color_rgb: [zone.color[2] as i16, zone.color[1] as i16, zone.color[0] as i16], // BGR -> RGB
             geometry: zone.get_pixel_coordinates().iter().map(|pt| [pt.x as i32, pt.y as i32]).collect(),
             geometry_wgs84: zone.get_spatial_coordinates_epsg4326().iter().map(|pt| [pt.x, pt.y]).collect(),

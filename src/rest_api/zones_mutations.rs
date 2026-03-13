@@ -237,9 +237,9 @@ pub struct VirtualLineRequestData {
     #[schema(example = json!([130, 70, 0]))]
     pub color_rgb: Option<[i16; 3]>,
     /// Direction. Possible values:
-    /// 'lrtb' stands for "left->right, top->bottom"
-    /// 'rlbt' stands for "right->left, bottom->top"
-    #[schema(example = "lrtb")]
+    /// 'inbound' - inbound traffic (towards target side)
+    /// 'outbound' - outbound traffic (away from target side)
+    #[schema(example = "inbound")]
     pub direction: String,
 }
 

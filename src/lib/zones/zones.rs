@@ -358,6 +358,8 @@ impl Zone {
         self.current_statistics.income.clear();
     }
     pub fn update_statistics(&mut self, _period_start: DateTime<Utc>, _period_end: DateTime<Utc>) {
+        // Save OD matrix data before resetting
+        self.statistics.income = self.current_statistics.income.clone();
         self.reset_statistics(_period_start, _period_end);
         let register_via_virtual_line = self.virtual_line.is_some();
         let headway_avg = match register_via_virtual_line {
