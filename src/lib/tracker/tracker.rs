@@ -199,23 +199,31 @@ impl<T: TrackerEngineSimple + fmt::Display> fmt::Display for TrackerSimple<T> {
 }
 
 /// Create tracker based on tracker type and Kalman filter type
-pub fn new_tracker_from_type(tracker_type: &str, kalman_filter: KalmanFilterType) -> Box<dyn TrackerTrait> {
+pub fn new_tracker_from_type(
+    tracker_type: &str,
+    kalman_filter: KalmanFilterType,
+    max_no_match: Option<usize>,
+    iou_threshold: Option<f32>
+) -> Box<dyn TrackerTrait> {
+    let max_no_match = max_no_match.unwrap_or(60);
+    let iou_threshold = iou_threshold.unwrap_or(0.3);
+
     match (tracker_type, kalman_filter) {
-        ("iou_naive", KalmanFilterType::BBox) => Box::new(TrackerBBox::<IoUTracker<BlobBBox>>::new_iou(15, 0.3)),
+        ("iou_naive", KalmanFilterType::BBox) => Box::new(TrackerBBox::<IoUTracker<BlobBBox>>::new_iou(max_no_match, iou_threshold)),
         ("bytetrack", KalmanFilterType::BBox) => Box::new(TrackerBBox::<ByteTracker<BlobBBox>>::new_bytetrack(
-            15, 0.3, 0.7, 0.3, mot_rs::mot::MatchingAlgorithm::Hungarian
+            max_no_match, iou_threshold, 0.7, 0.3, mot_rs::mot::MatchingAlgorithm::Hungarian
         )),
-        ("iou_naive", KalmanFilterType::Centroid) => Box::new(TrackerSimple::<IoUTracker<SimpleBlob>>::new_iou(15, 0.3)),
+        ("iou_naive", KalmanFilterType::Centroid) => Box::new(TrackerSimple::<IoUTracker<SimpleBlob>>::new_iou(max_no_match, iou_threshold)),
         ("bytetrack", KalmanFilterType::Centroid) => Box::new(TrackerSimple::<ByteTracker<SimpleBlob>>::new_bytetrack(
-            15, 0.3, 0.7, 0.3, mot_rs::mot::MatchingAlgorithm::Hungarian
+            max_no_match, iou_threshold, 0.7, 0.3, mot_rs::mot::MatchingAlgorithm::Hungarian
         )),
         (_, KalmanFilterType::BBox) => {
             println!("Unknown tracker type '{}', falling back to iou_naive", tracker_type);
-            Box::new(TrackerBBox::<IoUTracker<BlobBBox>>::new_iou(15, 0.3))
+            Box::new(TrackerBBox::<IoUTracker<BlobBBox>>::new_iou(max_no_match, iou_threshold))
         }
         _ => {
             println!("Unknown tracker type '{}', falling back to iou_naive", tracker_type);
-            Box::new(TrackerSimple::<IoUTracker<SimpleBlob>>::new_iou(15, 0.3))
+            Box::new(TrackerSimple::<IoUTracker<SimpleBlob>>::new_iou(max_no_match, iou_threshold))
         }
     }
 }

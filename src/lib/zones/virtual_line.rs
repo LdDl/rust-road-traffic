@@ -13,22 +13,22 @@ use crate::lib::constants::EPSILON;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum VirtualLineDirection {
-    LeftToRightTopToBottom,
-    RightToLeftBottomToTop,
+    Inbound,
+    Outbound,
 }
 
 impl fmt::Display for VirtualLineDirection {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            VirtualLineDirection::LeftToRightTopToBottom => write!(f, "lrtb"),
-            VirtualLineDirection::RightToLeftBottomToTop => write!(f, "rlbt"),
+            VirtualLineDirection::Inbound => write!(f, "inbound"),
+            VirtualLineDirection::Outbound => write!(f, "outbound"),
         }
     }
 }
 
 impl Default for  VirtualLineDirection {
     fn default() -> Self {
-        VirtualLineDirection::LeftToRightTopToBottom
+        VirtualLineDirection::Inbound
     }
 }
 
@@ -36,8 +36,11 @@ impl FromStr for VirtualLineDirection {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "lrtb" => Ok(VirtualLineDirection::LeftToRightTopToBottom),
-            "rlbt" => Ok(VirtualLineDirection::RightToLeftBottomToTop),
+            "inbound" => Ok(VirtualLineDirection::Inbound),
+            "outbound" => Ok(VirtualLineDirection::Outbound),
+            // Legacy support for old config files
+            "lrtb" => Ok(VirtualLineDirection::Inbound),
+            "rlbt" => Ok(VirtualLineDirection::Outbound),
             _ => Err(()),
         }
     }
@@ -112,7 +115,7 @@ mod tests {
     use super::*;
     #[test]
     fn test_vertical_line() {
-        let vertical_line = VirtualLine::new_from_cv(Point2f::new(4.0, 3.0), Point2f::new(5.0, 10.0), VirtualLineDirection::LeftToRightTopToBottom);
+        let vertical_line = VirtualLine::new_from_cv(Point2f::new(4.0, 3.0), Point2f::new(5.0, 10.0), VirtualLineDirection::Inbound);
         let c = Point2f::new(3.0, 8.0);
         let is_left = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_left);
@@ -151,7 +154,7 @@ mod tests {
     }
     #[test]
     fn test_horizontal_line() {
-        let vertical_line = VirtualLine::new_from_cv(Point2f::new(4.0, 6.0), Point2f::new(9.0, 6.4), VirtualLineDirection::LeftToRightTopToBottom);
+        let vertical_line = VirtualLine::new_from_cv(Point2f::new(4.0, 6.0), Point2f::new(9.0, 6.4), VirtualLineDirection::Inbound);
         let c = Point2f::new(3.0, 8.0);
         let is_above = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_above);

@@ -9,3 +9,4 @@ pub mod mjpeg_streaming;
 pub mod publisher;
 pub mod dataset_collector;
 pub mod perf_stats;
+pub mod report;

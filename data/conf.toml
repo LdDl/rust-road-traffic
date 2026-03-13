@@ -71,7 +71,7 @@
         color_rgb = [255, 0, 0]
         # lrtb - left->right or top-bottom object registration
         # rtbt - right->left or bottom->top object registration
-        direction = "lrtb"
+        direction = "outbound"
 
 [[road_lanes]]
     lane_number = 1
@@ -82,7 +82,7 @@
     [road_lanes.virtual_line]
         geometry = [[84, 315], [357, 380]]
         color_rgb = [0, 255, 0]
-        direction = "lrtb"
+        direction = "outbound"
 
 [[road_lanes]]
     lane_number = 0
@@ -93,7 +93,7 @@
     [road_lanes.virtual_line]
         geometry = [[704, 321], [1078, 271]]
         color_rgb = [0, 0, 255]
-        direction = "rlbt"
+        direction = "inbound"
 
 
 [worker]

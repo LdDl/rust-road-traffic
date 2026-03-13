@@ -358,6 +358,8 @@ impl Zone {
         self.current_statistics.income.clear();
     }
     pub fn update_statistics(&mut self, _period_start: DateTime<Utc>, _period_end: DateTime<Utc>) {
+        // Save OD matrix data before resetting
+        self.statistics.income = self.current_statistics.income.clone();
         self.reset_statistics(_period_start, _period_end);
         let register_via_virtual_line = self.virtual_line.is_some();
         let headway_avg = match register_via_virtual_line {
@@ -531,21 +533,19 @@ impl Zone {
             Some(vl) => {
                 let is_left_before = vl.is_left(x1, y1);
                 let is_left_after = vl.is_left(x2, y2);
-                if is_left_before && !is_left_after {
-                    return true;
+
+                // Check direction-specific crossing
+                if vl.direction == VirtualLineDirection::Inbound {
+                    // Inbound: crossing from right to left (or bottom to top)
+                    if !is_left_before && is_left_after {
+                        return true;
+                    }
+                } else {
+                    // Outbound: crossing from left to right (or top to bottom)
+                    if is_left_before && !is_left_after {
+                        return true;
+                    }
                 }
-                if !is_left_before && is_left_after {
-                    return true;
-                }
-                // if vl.direction == VirtualLineDirection::LeftToRightTopToBottom {
-                //     if is_left_before && !is_left_after {
-                //         return true;
-                //     }
-                // } else {
-                //     if !is_left_before && is_left_after {
-                //         return true;
-                //     }
-                // }
                 return false;
             }
             None => {

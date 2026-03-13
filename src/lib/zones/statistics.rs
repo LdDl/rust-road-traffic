@@ -49,6 +49,9 @@ pub struct Statistics {
     pub period_end: DateTime<Utc>,
     pub vehicles_data: HashMap<String, VehicleTypeParameters>,
     pub traffic_flow_parameters: TrafficFlowParameters,
+    /// OD matrix: tracks vehicle flows between zones
+    /// Key: zone_id_from, Value: number of vehicles that came from that zone
+    pub income: HashMap<String, u32>,
 }
 
 impl Statistics {
@@ -58,6 +61,7 @@ impl Statistics {
             period_end: TimeZone::with_ymd_and_hms(&Utc, 1970, 1, 1, 0, 0, 0).unwrap(),
             vehicles_data: HashMap::new(),
             traffic_flow_parameters: TrafficFlowParameters::default(),
+            income: HashMap::new(),
         }
     }
 }

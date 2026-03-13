@@ -8,6 +8,7 @@
 - [Installation and usage](#installation-and-usage)
 - [Virtual lines](#virtual-lines)
 - [Dataset collection](#dataset-collection-auto-labeling)
+- [Report mode](#report-mode)
 - [ROADMAP](#roadmap)
   - [Support](#support)
 
@@ -177,7 +178,6 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
 7. Tracker configuration
     It is possible to pick either iou_naive or bytetrack tracker for tracking objects.
 
-    It is not possible to adjust parameters of those trackers (but is planned in future works).
     ```toml
     [tracking]
         # Either "bytetrack" or "iou_naive". Default is "iou_naive"
@@ -187,20 +187,22 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
         # Kalman filter type: "centroid" or "bbox"
         # Default is "centroid"
         kalman_filter = "centroid"
+        # Maximum number of frames to keep tracking an object without new detections. Default is 60.
+        # Increase this value (e.g., 90-120) for better OD matrix results when objects need to traverse between distant zones.
+        max_no_match = 60
+        # IoU threshold for matching detections to existing tracks. Default is 0.3.
+        # Lower values (0.2-0.25) make matching stricter, higher values (0.4-0.5) make it more permissive.
+        iou_threshold = 0.3
     ```
 
-    Current CONSTANT parameters for IoU tracker:
-    - max_no_match = 15
-    - iou_treshold = 0.3
+    **Configurable parameters:**
+    - `max_no_match` (default: 60): Maximum consecutive frames without detection before dropping a track. Increase for better OD matrix tracking across distant zones.
+    - `iou_threshold` (default: 0.3): IoU threshold for matching detections to tracks. Lower = stricter matching.
 
-    Current CONSTANT parameters for ByteTrack tracker:
-    - max_disappeared = 15
-    - min_iou = 0.3
+    **Fixed parameters for ByteTrack:**
     - high_thresh = 0.7
     - low_thresh = 0.3
     - algorithm = Hungarian (matching algorithm)
-
-    In future works I plan to make those parameters adjustable via configuration file.
     
     ### Kalman Filter Types
 
@@ -283,9 +285,9 @@ You can configure virtual lines via configuration file or via UI (look at [showc
     [road_lanes.virtual_line]
         geometry = [[254, 456], [456, 475]]
         color_rgb = [255, 0, 0]
-        # lrtb - left->right or top-bottom object registration
-        # rtbt - right->left or bottom->top object registration
-        direction = "lrtb"
+        # inbound - inbound traffic (towards target side)
+        # outbound - outbound traffic (away from target side)
+        direction = "inbound"
 ```
 
 ## Dataset Collection (Auto-labeling)
@@ -347,6 +349,54 @@ Example label file:
 - Review collected data before training — auto-labels may contain errors
 - Class IDs in labels correspond to `net_classes` order in `[detection]` section
 - You can use https://github.com/LdDl/yolo-ann tool to visualize and manage collected dataset
+
+## Report mode
+
+This utility can generate a ZIP report after processing a video file. Report mode processes the entire video, accumulates all traffic statistics (no periodic resets) and produces a ZIP archive.
+
+**Note:** Report mode is only available for video files, not for RTSP streams or cameras.
+
+When report mode is enabled it automatically disables REST API, MJPEG streaming, imshow output and periodic statistics reset.
+
+### Configuration
+```toml
+[report]
+    enabled = true
+    output_path = "./reports"
+```
+
+### Output
+
+ZIP archive `{video_name}_report.zip` in configured `output_path` directory containing:
+
+| File | Description |
+|------|-------------|
+| `traffic_counts.csv` | Vehicle counts per type per zone |
+| `zones.csv` | Zone polygon coordinates (4 vertices) |
+| `od_matrix.csv` | Origin-Destination matrix (zone movements) |
+| `{video_name}_zones.png` | First frame with zones drawn, IDs and coordinates labeled |
+
+CSV files use semicolon (`;`) as delimiter.
+
+`traffic_counts.csv` example:
+```
+vehicle_type;zone_id;count
+car;dir_0_lane_0;42
+truck;dir_0_lane_0;15
+```
+
+`zones.csv` example:
+```
+zone_id;x1;y1;x2;y2;x3;y3;x4;y4
+dir_0_lane_0;204;542;398;558;506;325;402;318
+```
+
+`od_matrix.csv` example:
+```
+zone_from;zone_to;count
+dir_0_lane_0;dir_0_lane_1;15
+dir_0_lane_1;dir_1_lane_0;8
+```
 
 ## ROADMAP
 Please see [this](ROADMAP.md) file
