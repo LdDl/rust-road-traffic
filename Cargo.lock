@@ -2454,7 +2454,7 @@ checksum = "0c6a884d2998352bb4daf0183589aec883f16a6da1f4dde84d8e2e9a5409a1ce"
 
 [[package]]
 name = "rust-road-traffic"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "actix-cors",
  "actix-web",
