@@ -22,7 +22,7 @@ tensorrt-backend = ["od_opencv/tensorrt-opencv-compat"]
 
 [dependencies]
 # OpenCV for video I/O, drawing, etc. DNN feature is conditional via features above
-opencv = { version = "0.96.0", default-features = false, features = ["imgcodecs", "imgproc", "videoio", "highgui"] }
+opencv = { version = "0.96.0", default-features = false, features = ["imgcodecs", "imgproc", "videoio"] }
 uuid = { version = "1.18.1", features = ["serde", "v4"] }
 nalgebra = "0.34.1"
 toml = "0.9.8"

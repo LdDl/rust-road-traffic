@@ -2,17 +2,11 @@ use chrono::Utc;
 use opencv::{
     prelude::*,
     core::Scalar,
-    core::Size,
     core::Mat,
     core::Vector,
     core::Rect as RectCV,
     core::get_cuda_enabled_device_count,
-    highgui::named_window,
-    highgui::resize_window,
-    highgui::imshow,
-    highgui::wait_key,
     videoio::VideoCapture,
-    imgproc::resize,
     imgcodecs::imencode,
 };
 
@@ -240,7 +234,9 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         }
         None => (false, 80)
     };
-    let output_enable = settings.output.enable & !report_mode;
+    if settings.output.enable {
+        println!("Warning: 'output.enable' is deprecated and ignored. Use MJPEG streaming via REST API instead.");
+    }
 
     println!("MJPEG is '{}' (quality: {})", enable_mjpeg, mjpeg_quality);
     if report_mode {
@@ -361,25 +357,6 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         }
     }
 
-    // Create imshow() if needed
-    let window = &settings.output.window_name;
-    let output_width: i32 = settings.output.width;
-    let output_height: i32 = settings.output.height;
-    if output_enable {
-        match named_window(window, 1) {
-            Ok(_) => {},
-        Err(err) =>{
-                panic!("Can't give a name to output window due the error: {:?}", err)
-            }
-        };
-        match resize_window(window, output_width, output_height) {
-            Ok(_) => {},
-            Err(err) =>{
-                panic!("Can't resize output window due the error: {:?}", err)
-            }
-        }
-    }
-
     /* Start capture loop */
     let (tx_capture, rx_capture): (mpsc::SyncSender<ThreadedFrame>, mpsc::Receiver<ThreadedFrame>) = mpsc::sync_channel(0);
     thread::spawn(move || {
@@ -494,7 +471,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         .unwrap_or("centroid")
         .parse()
         .unwrap_or_default();
-    let mut resized_frame = Mat::default();
+
 
     let ds_tracker = data_storage.clone();
 
@@ -712,9 +689,8 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             }
         }
         
-        /* Imshow + re-stream input video as MJPEG */
-        // Clone frame only when visualization is needed
-        if enable_mjpeg || output_enable {
+        /* Re-stream input video as MJPEG */
+        if enable_mjpeg {
             let mut frame = received.frame.clone();
 
             for (_, v) in zones.iter() {
@@ -731,38 +707,21 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             drop(zones);
             drop(ds_guard);
             draw::draw_track(&mut frame, tracker, &class_colors);
-            if output_enable {
-                match resize(&frame, &mut resized_frame, Size::new(output_width, output_height), 1.0, 1.0, 1) {
-                    Ok(_) => {},
-                    Err(err) => {
-                        panic!("Can't resize output frame due the error {:?}", err);
-                    }
-                }
-                if resized_frame.size()?.width > 0 {
-                    imshow(window, &resized_frame)?;
-                }
-                let key = wait_key(10)?;
-                if key == 27 /* esc */ || key == 115 /* s */ || key == 83 /* S */ {
-                    break;
-                }
-            }
 
-            if enable_mjpeg {
-                let mut buffer = Vector::<u8>::new();
-                // IMWRITE_JPEG_QUALITY = 1, quality value 0-100
-                let params = Vector::<i32>::from_slice(&[1, mjpeg_quality]);
-                let encoded = imencode(".jpg", &frame, &mut buffer, &params).unwrap();
-                if !encoded {
-                    println!("image has not been encoded");
-                    continue;
-                }
-                match tx_mjpeg.send(buffer) {
-                    Ok(_)=>{},
-                    Err(_err) => {
-                        println!("Error on send frame to MJPEG thread: {}", _err)
-                    }
-                };
+            let mut buffer = Vector::<u8>::new();
+            // IMWRITE_JPEG_QUALITY = 1, quality value 0-100
+            let params = Vector::<i32>::from_slice(&[1, mjpeg_quality]);
+            let encoded = imencode(".jpg", &frame, &mut buffer, &params).unwrap();
+            if !encoded {
+                println!("image has not been encoded");
+                continue;
             }
+            match tx_mjpeg.send(buffer) {
+                Ok(_)=>{},
+                Err(_err) => {
+                    println!("Error on send frame to MJPEG thread: {}", _err)
+                }
+            };
         } else {
             // No visualization, but need release still
             drop(zone_grid);
