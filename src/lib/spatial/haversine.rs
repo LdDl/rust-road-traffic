@@ -1,19 +1,5 @@
-use opencv::{
-    core::Point2f
-};
 // WGS84 semi-major axis. Same as in epsg.rs
 const EARTH_RADIUS_KM: f32 = 6378.137;
-
-// haversine_cv
-// 
-// See ref. https://en.wikipedia.org/wiki/Great-circle_distance#:~:text=The%20great%2Dcircle%20distance%2C%20orthodromic,line%20through%20the%20sphere's%20interior). [OpenCV version]
-// src - source point containing longitude/latitude [x;y]
-// dst - target point containing longitude/latitude [x;y]
-// 
-#[inline]
-pub fn haversine_cv(src: Point2f, dst: Point2f) -> f32 {
-    haversine(src.x, src.y, dst.x, dst.y)
-}
 
 // haversine
 //
@@ -38,16 +24,6 @@ pub fn haversine(src_lon: f32, src_lat: f32, dst_lon: f32, dst_lat: f32) -> f32 
     let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
 
     c * EARTH_RADIUS_KM
-}
-
-// compute_center_cv
-//
-// Computes center between two points on a sphere [OpenCV version]
-//
-#[inline]
-pub fn compute_center_cv(a: Point2f, b: Point2f) -> Point2f {
-    let center = compute_center(a.x, a.y, b.x, b.y);
-    Point2f::new(center.0, center.1)
 }
 
 // compute_center
@@ -86,15 +62,6 @@ pub fn compute_center(lon1: f32, lat1: f32, lon2: f32, lat2: f32) -> (f32, f32) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn test_haversine_cv() {
-        let src = Point2f::new(6.602018, 52.036769);
-        let dst = Point2f::new(6.603560, 52.036730);
-        let dist = haversine_cv(src, dst);
-        let correct_great_circle_distance = 0.10568606 as f32;
-        let eps = 0.000001;
-        assert!((dist - correct_great_circle_distance).abs() < eps);
-    }
     #[test]
     fn test_haversine() {
         let src: (f32, f32) = (6.602018, 52.036769);

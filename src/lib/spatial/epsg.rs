@@ -1,14 +1,7 @@
-use opencv::core::Point2f;
-
 use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
 
 // WGS84 semi-major axis (equatorial radius)
 const EARTH_RADIUS_M: f32 = 6378137.0;
-
-#[inline]
-pub fn lonlat_to_meters_cv(lon_lat: &Point2f) -> Point2f {
-    Point2f::new(lon2x(lon_lat.x), lat2y(lon_lat.y))
-}
 
 #[inline]
 pub fn lon2x(lon: f32) -> f32 {
