@@ -1,7 +1,6 @@
 use chrono::Utc;
 use opencv::{
     prelude::*,
-    core::Scalar,
     core::Mat,
     core::Vector,
     core::Rect as RectCV,
