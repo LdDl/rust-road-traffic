@@ -1,4 +1,5 @@
 pub mod constants;
+pub mod cv;
 pub mod detection;
 pub mod zones;
 pub mod spatial;

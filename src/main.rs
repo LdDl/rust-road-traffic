@@ -3,11 +3,12 @@ use opencv::{
     prelude::*,
     core::Mat,
     core::Vector,
-    core::Rect as RectCV,
     core::get_cuda_enabled_device_count,
     videoio::VideoCapture,
     imgcodecs::imencode,
 };
+
+use lib::cv::Rect as RectCV;
 
 // Conditional imports based on backend feature
 #[cfg(feature = "opencv-backend")]
@@ -492,7 +493,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
 
         /* Inference (preprocessing + forward pass + NMS) */
         let t_inference = Timer::start();
-        let (nms_bboxes, nms_classes_ids, nms_confidences) = match neural_net.forward(&received.frame, conf_threshold, nms_threshold) {
+        let (nms_bboxes_cv, nms_classes_ids, nms_confidences) = match neural_net.forward(&received.frame, conf_threshold, nms_threshold) {
             Ok((a, b, c)) => { (a, b, c) },
             Err(err) => {
                 println!("Can't process input of neural network due the error {:?}", err);
@@ -500,6 +501,9 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             }
         };
         let inference_time = t_inference.elapsed();
+
+        // Convert opencv::core::Rect to own Rect at the boundary
+        let nms_bboxes: Vec<RectCV> = nms_bboxes_cv.iter().map(|r| RectCV::new(r.x, r.y, r.width, r.height)).collect();
 
         /* Postprocessing: create detection blobs */
         let t_postprocess = Timer::start();
@@ -704,15 +708,15 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             drop(ds_guard);
             draw::draw_track(&mut frame, tracker, &class_colors);
 
-            let mut buffer = Vector::<u8>::new();
+            let mut buffer_cv = Vector::<u8>::new();
             // IMWRITE_JPEG_QUALITY = 1, quality value 0-100
             let params = Vector::<i32>::from_slice(&[1, mjpeg_quality]);
-            let encoded = imencode(".jpg", &frame, &mut buffer, &params).unwrap();
+            let encoded = imencode(".jpg", &frame, &mut buffer_cv, &params).unwrap();
             if !encoded {
                 println!("image has not been encoded");
                 continue;
             }
-            match tx_mjpeg.send(buffer) {
+            match tx_mjpeg.send(buffer_cv.to_vec()) {
                 Ok(_)=>{},
                 Err(_err) => {
                     println!("Error on send frame to MJPEG thread: {}", _err)

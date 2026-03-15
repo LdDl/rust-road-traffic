@@ -204,8 +204,8 @@ pub struct ReportSettings {
 use crate::lib::zones::Zone;
 use crate::lib::zones::{VirtualLineDirection, VirtualLine};
 use crate::lib::spatial::epsg::lonlat_to_meters;
-use opencv::core::Point2f;
-use opencv::core::Scalar;
+use crate::lib::spatial::Point2f;
+use crate::lib::cv::Scalar;
 use std::convert::From;
 
 impl From<&RoadLanesSettings> for Zone {

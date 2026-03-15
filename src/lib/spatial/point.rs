@@ -18,31 +18,6 @@ impl<T> Point_<T> {
 	}
 }
 
-// Conversions between our Point_ and opencv::core::Point_
-impl From<opencv::core::Point2f> for Point_<f32> {
-    fn from(p: opencv::core::Point2f) -> Self {
-        Self { x: p.x, y: p.y }
-    }
-}
-
-impl From<Point_<f32>> for opencv::core::Point2f {
-    fn from(p: Point_<f32>) -> Self {
-        opencv::core::Point2f::new(p.x, p.y)
-    }
-}
-
-impl From<opencv::core::Point2i> for Point_<i32> {
-    fn from(p: opencv::core::Point2i) -> Self {
-        Self { x: p.x, y: p.y }
-    }
-}
-
-impl From<Point_<i32>> for opencv::core::Point2i {
-    fn from(p: Point_<i32>) -> Self {
-        opencv::core::Point2i::new(p.x, p.y)
-    }
-}
-
 // Conversion between Point_ and tuple
 impl<T> From<(T, T)> for Point_<T> {
     fn from(t: (T, T)) -> Self {

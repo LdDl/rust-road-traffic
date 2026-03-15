@@ -1,14 +1,13 @@
 use std::fmt;
 use std::str::FromStr;
 use opencv::{
-    core::Mat,
-    core::Point2i,
-    core::Point2f,
-    core::Scalar,
+    core::{Mat, Point2i},
     imgproc::line,
     imgproc::LINE_8,
 };
 
+use crate::lib::spatial::Point2f;
+use crate::lib::cv::{Scalar, to_cv_scalar};
 use crate::lib::constants::EPSILON;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -101,7 +100,7 @@ impl VirtualLine {
         }
     }
     pub fn draw_on_mat(&self, img: &mut Mat) {
-        match line(img, self.line_cvi[0], self.line_cvi[1], self.color_cv, 2, LINE_8, 0) {
+        match line(img, self.line_cvi[0], self.line_cvi[1], to_cv_scalar(&self.color_cv), 2, LINE_8, 0) {
             Ok(_) => {},
             Err(err) => {
                 panic!("Can't draw virtual line for polygon due the error: {:?}", err)

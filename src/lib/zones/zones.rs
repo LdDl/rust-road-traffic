@@ -17,11 +17,14 @@ use crate::{lib::{spatial::compute_center}};
 use crate::lib::spatial::epsg::lonlat_to_meters;
 use crate::lib::spatial::haversine;
 use crate::lib::spatial::PerspectiveTransform;
+use crate::lib::spatial::Point2f;
+use crate::lib::cv::{Scalar, to_cv_scalar};
 use crate::lib::zones::{
     Skeleton, Statistics, VehicleTypeParameters, TrafficFlowParameters, VirtualLine, VirtualLineDirection,
 };
 use opencv::{
-    core::Mat, core::Point2f, core::Point2i, core::Scalar, imgproc::line, imgproc::put_text,
+    core::{Mat, Point},
+    imgproc::line, imgproc::put_text,
     imgproc::FONT_HERSHEY_SIMPLEX, imgproc::LINE_8,
 };
 
@@ -565,30 +568,30 @@ impl Zone {
     pub fn draw_geom(&self, img: &mut Mat) {
         // @todo: proper error handling
         for i in 1..self.pixel_coordinates.len() {
-            let prev_pt = Point2i::new(
+            let prev_pt = Point::new(
                 self.pixel_coordinates[i - 1].x as i32,
                 self.pixel_coordinates[i - 1].y as i32,
             );
-            let current_pt = Point2i::new(
+            let current_pt = Point::new(
                 self.pixel_coordinates[i].x as i32,
                 self.pixel_coordinates[i].y as i32,
             );
-            match line(img, prev_pt, current_pt, self.color, 2, LINE_8, 0) {
+            match line(img, prev_pt, current_pt, to_cv_scalar(&self.color), 2, LINE_8, 0) {
                 Ok(_) => {}
                 Err(err) => {
                     panic!("Can't draw line for polygon due the error: {:?}", err)
                 }
             };
         }
-        let last_pt = Point2i::new(
+        let last_pt = Point::new(
             self.pixel_coordinates[self.pixel_coordinates.len() - 1].x as i32,
             self.pixel_coordinates[self.pixel_coordinates.len() - 1].y as i32,
         );
-        let first_pt = Point2i::new(
+        let first_pt = Point::new(
             self.pixel_coordinates[0].x as i32,
             self.pixel_coordinates[0].y as i32,
         );
-        match line(img, last_pt, first_pt, self.color, 2, LINE_8, 0) {
+        match line(img, last_pt, first_pt, to_cv_scalar(&self.color), 2, LINE_8, 0) {
             Ok(_) => {}
             Err(err) => {
                 panic!("Can't draw line for polygon due the error: {:?}", err)
@@ -615,17 +618,18 @@ impl Zone {
             true => self.objects_crossed.len(),
             false => self.objects_registered.len(),
         };
-        let anchor = Point2i::new(
+        let anchor = Point::new(
             self.pixel_coordinates[0].x as i32 + 20,
             self.pixel_coordinates[0].y as i32 - 10,
         );
+        let black = to_cv_scalar(&Scalar::from((0.0, 0.0, 0.0)));
         match put_text(
             img,
             &current_intensity.to_string(),
             anchor,
             FONT_HERSHEY_SIMPLEX,
             0.5,
-            Scalar::from((0.0, 0.0, 0.0)),
+            black,
             2,
             LINE_8,
             false,

@@ -6,9 +6,7 @@
 
 use std::collections::HashMap;
 use rand::Rng;
-use opencv::{
-    core::Scalar,
-};
+use crate::lib::cv::Scalar;
 
 use crate::lib::constants::EPSILON;
 

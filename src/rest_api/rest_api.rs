@@ -12,9 +12,6 @@ use std::sync::{
         Receiver
     }
 };
-use opencv::{
-    core::Vector,
-};
 
 pub struct APIStorage {
     pub data_storage: ThreadedDataStorage,
@@ -24,7 +21,7 @@ pub struct APIStorage {
 }
 
 #[actix_web::main]
-pub async fn start_rest_api(server_host: String, server_port: i32, data_storage: ThreadedDataStorage, enable_mjpeg: bool, rx_frames_data: Receiver<Vector<u8>>, app_settings: AppSettings, settings_filename: &str) -> std::io::Result<()> {
+pub async fn start_rest_api(server_host: String, server_port: i32, data_storage: ThreadedDataStorage, enable_mjpeg: bool, rx_frames_data: Receiver<Vec<u8>>, app_settings: AppSettings, settings_filename: &str) -> std::io::Result<()> {
     let bind_address = format!("{}:{}", server_host, server_port);
     println!("REST API is starting on host:port {}:{}", server_host, server_port);
     let storage = APIStorage{

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
-use opencv::core::Point2f;
+use crate::lib::spatial::Point2f;
 
 use super::zones::Zone;
 

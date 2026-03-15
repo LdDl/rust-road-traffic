@@ -1,6 +1,4 @@
-use opencv::{
-    core::Rect as RectCV,
-};
+use crate::lib::cv::Rect as RectCV;
 
 use mot_rs::mot::{SimpleBlob, BlobBBox};
 use mot_rs::utils::{

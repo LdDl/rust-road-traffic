@@ -6,10 +6,12 @@ use std::collections::HashMap;
 
 use opencv::{
     prelude::*,
-    core::{Mat, Point2i, Vector},
+    core::{Mat, Point, Vector},
     imgproc::{line, put_text, FONT_HERSHEY_SIMPLEX, LINE_8},
     imgcodecs::imencode,
 };
+
+use crate::lib::cv::to_cv_scalar;
 
 use crate::lib::data_storage::DataStorage;
 
@@ -54,23 +56,23 @@ pub fn generate_report(
         // Draw zone polygon on frame
         let n = zone.pixel_coordinates.len();
         for i in 0..n {
-            let pt1 = Point2i::new(zone.pixel_coordinates[i].x as i32, zone.pixel_coordinates[i].y as i32);
-            let pt2 = Point2i::new(zone.pixel_coordinates[(i + 1) % n].x as i32, zone.pixel_coordinates[(i + 1) % n].y as i32);
-            line(&mut frame, pt1, pt2, zone.color, 2, LINE_8, 0)?;
+            let pt1 = Point::new(zone.pixel_coordinates[i].x as i32, zone.pixel_coordinates[i].y as i32);
+            let pt2 = Point::new(zone.pixel_coordinates[(i + 1) % n].x as i32, zone.pixel_coordinates[(i + 1) % n].y as i32);
+            line(&mut frame, pt1, pt2, to_cv_scalar(&zone.color), 2, LINE_8, 0)?;
         }
 
         // Draw zone ID label
-        let label_anchor = Point2i::new(
+        let label_anchor = Point::new(
             zone.pixel_coordinates[0].x as i32 + 5,
             zone.pixel_coordinates[0].y as i32 - 15,
         );
-        put_text(&mut frame, &zone_id, label_anchor, FONT_HERSHEY_SIMPLEX, 0.6, zone.color, 2, LINE_8, false)?;
+        put_text(&mut frame, &zone_id, label_anchor, FONT_HERSHEY_SIMPLEX, 0.6, to_cv_scalar(&zone.color), 2, LINE_8, false)?;
 
         // Draw vertex coordinates
         for (idx, pt) in zone.pixel_coordinates.iter().enumerate() {
             let text = format!("P{}({},{})", idx + 1, pt.x as i32, pt.y as i32);
-            let anchor = Point2i::new(pt.x as i32 + 5, pt.y as i32 + 15);
-            put_text(&mut frame, &text, anchor, FONT_HERSHEY_SIMPLEX, 0.4, zone.color, 1, LINE_8, false)?;
+            let anchor = Point::new(pt.x as i32 + 5, pt.y as i32 + 15);
+            put_text(&mut frame, &text, anchor, FONT_HERSHEY_SIMPLEX, 0.4, to_cv_scalar(&zone.color), 1, LINE_8, false)?;
         }
     }
 

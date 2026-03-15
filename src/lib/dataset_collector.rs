@@ -1,10 +1,10 @@
 use opencv::{
     prelude::*,
-    core::Mat,
-    core::Rect as RectCV,
+    core::{Mat, Vector},
     imgcodecs::imwrite,
-    core::Vector,
 };
+
+use crate::lib::cv::Rect as RectCV;
 
 use std::collections::HashMap;
 use std::fs;

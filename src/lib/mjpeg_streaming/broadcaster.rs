@@ -1,7 +1,5 @@
 // Based on https://github.com/LdDl/mjpeg-rs/blob/master/src/mjpeg_streaming/broadcaster.rs
 
-use opencv::core::Vector;
-
 use std::{
     thread,
     sync::{
@@ -53,8 +51,8 @@ impl Broadcaster {
         Client(rx)
     }
 
-    pub fn make_message_block(buffer: &Vector<u8>) -> Vec<u8> {
-        let bfu8 = buffer.as_ref();
+    pub fn make_message_block(buffer: &[u8]) -> Vec<u8> {
+        let bfu8 = buffer;
         let header = format!(
             "--boundarydonotcross\r\nContent-Length:{}\r\nContent-Type:image/jpeg\r\n\r\n",
             bfu8.len()
@@ -96,7 +94,7 @@ impl Broadcaster {
         });
     }
 
-    pub fn spawn_reciever(_self: web::Data<Mutex<Self>>, rx_frames_data: STDReceiver<Vector<u8>>) {
+    pub fn spawn_reciever(_self: web::Data<Mutex<Self>>, rx_frames_data: STDReceiver<Vec<u8>>) {
         thread::spawn(move || {
             for received in rx_frames_data {
                 let msg = Broadcaster::make_message_block(&received);
