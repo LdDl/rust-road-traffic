@@ -124,7 +124,7 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
 <img src="data/docs_1.png" width="720">
 
 ## Screenshots
-* imshow() output:
+* MJPEG streaming output:
 
     <img src="data/ui3_new.png" width="320">
 
@@ -379,7 +379,7 @@ This utility can generate a ZIP report after processing a video file. Report mod
 
 **Note:** Report mode is only available for video files, not for RTSP streams or cameras.
 
-When report mode is enabled it automatically disables REST API, MJPEG streaming, imshow output and periodic statistics reset.
+When report mode is enabled it automatically disables REST API, MJPEG streaming and periodic statistics reset.
 
 ### Configuration
 ```toml
