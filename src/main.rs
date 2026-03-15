@@ -1,7 +1,6 @@
 use chrono::Utc;
 use opencv::{
     prelude::*,
-    core::Scalar,
     core::Mat,
     core::Vector,
     core::Rect as RectCV,
@@ -25,6 +24,7 @@ use od_opencv::{Model, ModelTrait};
 use uuid::Uuid;
 use mot_rs::utils::Rect;
 
+#[path = "lib/mod.rs"]
 mod lib;
 use lib::data_storage::new_datastorage;
 use lib::draw;

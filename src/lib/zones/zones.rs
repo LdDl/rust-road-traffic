@@ -16,7 +16,7 @@ use crate::lib::constants::EPSILON;
 use crate::{lib::{spatial::compute_center}};
 use crate::lib::spatial::epsg::lonlat_to_meters;
 use crate::lib::spatial::haversine;
-use crate::lib::spatial::SpatialConverter;
+use crate::lib::spatial::PerspectiveTransform;
 use crate::lib::zones::{
     Skeleton, Statistics, VehicleTypeParameters, TrafficFlowParameters, VirtualLine, VirtualLineDirection,
 };
@@ -44,7 +44,7 @@ pub struct Zone {
     pub color: Scalar,
     pub road_lane_num: u16,
     pub road_lane_direction: u8,
-    spatial_converter: SpatialConverter,
+    spatial_converter: Option<PerspectiveTransform>,
     pub statistics: Statistics,
     objects_registered: Registered,
     objects_crossed: HashSet<Uuid>,
@@ -75,7 +75,7 @@ impl Zone {
             color: Scalar::from((255.0, 255.0, 255.0)),
             road_lane_num: 0,
             road_lane_direction: 0,
-            spatial_converter: SpatialConverter::default(),
+            spatial_converter: None,
             statistics: Statistics::default(),
             objects_registered: HashMap::new(),
             objects_crossed: HashSet::new(),
@@ -120,9 +120,9 @@ impl Zone {
             } else {
                 0.0  // Invalid - will be filtered in speed calculations
             };
-            SpatialConverter::new_from(coordinates.clone(), spatial_coordinates_epsg3857.clone())
+            make_perspective_transform(&coordinates, &spatial_coordinates_epsg3857)
         } else {
-            SpatialConverter::default()
+            None
         };
         Zone {
             id: id,
@@ -234,9 +234,9 @@ impl Zone {
                 })
                 .collect();
         }
-        self.spatial_converter = SpatialConverter::new_from(
-            self.pixel_coordinates.clone(),
-            self.spatial_coordinates_epsg3857.clone(),
+        self.spatial_converter = make_perspective_transform(
+            &self.pixel_coordinates,
+            &self.spatial_coordinates_epsg3857,
         );
         self.update_skeleton();
     }
@@ -257,9 +257,9 @@ impl Zone {
                 .map(|pt| Point2f::new(pt.x as f32, pt.y as f32))
                 .collect();
         }
-        self.spatial_converter = SpatialConverter::new_from(
-            self.pixel_coordinates.clone(),
-            self.spatial_coordinates_epsg3857.clone(),
+        self.spatial_converter = make_perspective_transform(
+            &self.pixel_coordinates,
+            &self.spatial_coordinates_epsg3857,
         );
         self.update_skeleton();
     }
@@ -678,6 +678,18 @@ impl Zone {
             },
         }
     }
+}
+
+fn make_perspective_transform(
+    pixel_coords: &[Point2f],
+    epsg3857_coords: &[Point2f],
+) -> Option<PerspectiveTransform> {
+    if pixel_coords.len() < 4 || epsg3857_coords.len() < 4 {
+        return None;
+    }
+    let src: [(f32, f32); 4] = core::array::from_fn(|i| (pixel_coords[i].x, pixel_coords[i].y));
+    let dst: [(f32, f32); 4] = core::array::from_fn(|i| (epsg3857_coords[i].x, epsg3857_coords[i].y));
+    PerspectiveTransform::new(&src, &dst)
 }
 
 fn find_skeleton_line(

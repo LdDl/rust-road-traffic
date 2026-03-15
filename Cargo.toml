@@ -46,8 +46,15 @@ od_opencv = { version = "0.8.1", default-features = false, features = ["letterbo
 rand = "0.9.2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
 [build-dependencies]
 static-files = "0.2.1"
 
 [build]
 build = "build.rs"
+
+[[bench]]
+name = "perspective_bench"
+harness = false
