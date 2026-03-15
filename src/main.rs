@@ -1,69 +1,62 @@
 use chrono::Utc;
 use opencv::{
-    prelude::*,
-    core::Mat,
-    core::Vector,
-    core::get_cuda_enabled_device_count,
+    core::Mat, core::Vector, core::get_cuda_enabled_device_count, imgcodecs::imencode, prelude::*,
     videoio::VideoCapture,
-    imgcodecs::imencode,
 };
 
 use lib::cv::Rect as RectCV;
 
 // Conditional imports based on backend feature
 #[cfg(feature = "opencv-backend")]
-use od_opencv::{Model, DnnBackend, DnnTarget, model_format::ModelFormat, model::ModelTrait};
+use od_opencv::{DnnBackend, DnnTarget, Model, model::ModelTrait, model_format::ModelFormat};
 
 // ORT backend uses ModelTrait from opencv_compat (does not depend on opencv/dnn)
 #[cfg(all(feature = "ort-backend", not(feature = "opencv-backend")))]
 use od_opencv::{Model, ModelTrait};
 
 // TensorRT backend uses ModelTrait from opencv_compat (does not depend on opencv/dnn)
-#[cfg(all(feature = "tensorrt-backend", not(feature = "opencv-backend"), not(feature = "ort-backend")))]
+#[cfg(all(
+    feature = "tensorrt-backend",
+    not(feature = "opencv-backend"),
+    not(feature = "ort-backend")
+))]
 use od_opencv::{Model, ModelTrait};
 
-use uuid::Uuid;
 use mot_rs::utils::Rect;
+use uuid::Uuid;
 
 #[path = "lib/mod.rs"]
 mod lib;
 use lib::data_storage::new_datastorage;
-use lib::draw;
-use lib::tracker::{
-    new_tracker_from_type,
-    TrackerTrait,
-    SpatialInfo
-};
-use lib::detection::KalmanFilterType;
-use lib::detection::DetectionBlobs::Simple;
-use lib::detection::DetectionBlobs::BBox;
-use lib::detection::process_yolo_detections;
-use lib::zones::Zone;
 use lib::dataset_collector::DatasetCollector;
+use lib::detection::DetectionBlobs::BBox;
+use lib::detection::DetectionBlobs::Simple;
+use lib::detection::KalmanFilterType;
+use lib::detection::process_yolo_detections;
+use lib::draw;
 use lib::perf_stats::{PerfStats, Timer};
+use lib::tracker::{SpatialInfo, TrackerTrait, new_tracker_from_type};
+use lib::zones::Zone;
 
 mod settings;
 use settings::AppSettings;
 
 mod video_capture;
-use video_capture::{
-    get_video_capture,
-    ThreadedFrame
-};
+use video_capture::{ThreadedFrame, get_video_capture};
 
 use lib::publisher::RedisConnection;
 
 mod rest_api;
 
+use std::collections::HashSet;
 use std::env;
+use std::fmt;
+use std::iter::FromIterator;
+use std::process;
+use std::sync::mpsc;
+use std::thread;
 use std::time::Duration as STDDuration;
 use std::time::SystemTime;
-use std::process;
-use std::thread;
-use std::sync::mpsc;
-use std::fmt;
-use std::collections::HashSet;
-use std::iter::FromIterator;
 
 const EMPTY_FRAMES_LIMIT: u16 = 60;
 
@@ -75,13 +68,15 @@ fn get_sys_time_in_secs() -> u64 {
 }
 
 #[derive(Debug)]
-struct AppVideoError{typ: i16}
+struct AppVideoError {
+    typ: i16,
+}
 impl fmt::Display for AppVideoError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.typ {
             1 => write!(f, "Can't open video"),
             2 => write!(f, "Can't make probe for video"),
-            _ => write!(f, "Undefined application video error")
+            _ => write!(f, "Undefined application video error"),
         }
     }
 }
@@ -113,7 +108,7 @@ impl From<opencv::Error> for AppError {
     }
 }
 
-fn probe_video(capture: &mut VideoCapture) ->  Result<(f32, f32, f32, f32), AppError> {
+fn probe_video(capture: &mut VideoCapture) -> Result<(f32, f32, f32, f32), AppError> {
     let fps = capture.get(opencv::videoio::CAP_PROP_FPS)? as f32;
     let frame_cols = capture.get(opencv::videoio::CAP_PROP_FRAME_WIDTH)? as f32;
     let frame_rows = capture.get(opencv::videoio::CAP_PROP_FRAME_HEIGHT)? as f32;
@@ -138,29 +133,53 @@ fn prepare_neural_net(
     mf: ModelFormat,
     weights: &str,
     configuration: Option<String>,
-    net_size: (i32, i32)
+    net_size: (i32, i32),
 ) -> Result<Box<dyn ModelTrait>, AppError> {
     let cuda_count = get_cuda_enabled_device_count()?;
     let cuda_available = cuda_count > 0;
-    println!("CUDA is {}", if cuda_available { "'available'" } else { "'not available'" });
+    println!(
+        "CUDA is {}",
+        if cuda_available {
+            "'available'"
+        } else {
+            "'not available'"
+        }
+    );
 
-    let dnn_backend = if cuda_available { DnnBackend::Cuda } else { DnnBackend::OpenCV };
-    let dnn_target = if cuda_available { DnnTarget::Cuda } else { DnnTarget::Cpu };
-    println!("Using OpenCV DNN backend with {:?}/{:?}", dnn_backend, dnn_target);
+    let dnn_backend = if cuda_available {
+        DnnBackend::Cuda
+    } else {
+        DnnBackend::OpenCV
+    };
+    let dnn_target = if cuda_available {
+        DnnTarget::Cuda
+    } else {
+        DnnTarget::Cpu
+    };
+    println!(
+        "Using OpenCV DNN backend with {:?}/{:?}",
+        dnn_backend, dnn_target
+    );
 
     let neural_net: Box<dyn ModelTrait> = match mf {
         ModelFormat::Darknet => {
-            let cfg = configuration.as_deref().expect("Darknet format requires .cfg file");
+            let cfg = configuration
+                .as_deref()
+                .expect("Darknet format requires .cfg file");
             match Model::darknet(cfg, weights, net_size, dnn_backend, dnn_target) {
                 Ok(model) => Box::new(model),
-                Err(err) => panic!("Can't read Darknet network '{}' (with cfg '{}') due the error: {:?}", weights, cfg, err),
+                Err(err) => panic!(
+                    "Can't read Darknet network '{}' (with cfg '{}') due the error: {:?}",
+                    weights, cfg, err
+                ),
             }
-        },
-        ModelFormat::ONNX => {
-            match Model::opencv(weights, net_size, dnn_backend, dnn_target) {
-                Ok(model) => Box::new(model),
-                Err(err) => panic!("Can't read ONNX network '{}' due the error: {:?}", weights, err),
-            }
+        }
+        ModelFormat::ONNX => match Model::opencv(weights, net_size, dnn_backend, dnn_target) {
+            Ok(model) => Box::new(model),
+            Err(err) => panic!(
+                "Can't read ONNX network '{}' due the error: {:?}",
+                weights, err
+            ),
         },
     };
     Ok(neural_net)
@@ -169,14 +188,21 @@ fn prepare_neural_net(
 // ORT backend (compile-time)
 #[cfg(all(feature = "ort-backend", not(feature = "opencv-backend")))]
 fn prepare_neural_net(
-    _mf: (),  // Model format not used - ORT only supports ONNX
+    _mf: (), // Model format not used - ORT only supports ONNX
     weights: &str,
     _configuration: Option<String>,
-    net_size: (i32, i32)
+    net_size: (i32, i32),
 ) -> Result<Box<dyn ModelTrait>, AppError> {
     let cuda_count = get_cuda_enabled_device_count()?;
     let cuda_available = cuda_count > 0;
-    println!("CUDA is {}", if cuda_available { "'available'" } else { "'not available'" });
+    println!(
+        "CUDA is {}",
+        if cuda_available {
+            "'available'"
+        } else {
+            "'not available'"
+        }
+    );
 
     #[cfg(feature = "ort-cuda")]
     let backend_name = if cuda_available { "CUDA" } else { "CPU" };
@@ -197,34 +223,52 @@ fn prepare_neural_net(
 
     match model_result {
         Ok(model) => Ok(Box::new(model)),
-        Err(err) => panic!("Can't create ORT model '{}' due the error: {:?}", weights, err),
+        Err(err) => panic!(
+            "Can't create ORT model '{}' due the error: {:?}",
+            weights, err
+        ),
     }
 }
 
 // TensorRT backend (compile-time)
-#[cfg(all(feature = "tensorrt-backend", not(feature = "opencv-backend"), not(feature = "ort-backend")))]
+#[cfg(all(
+    feature = "tensorrt-backend",
+    not(feature = "opencv-backend"),
+    not(feature = "ort-backend")
+))]
 fn prepare_neural_net(
     // ingore model format not used - TensorRT uses .engine files anyways
     _mf: (),
     weights: &str,
     _configuration: Option<String>,
-    net_size: (i32, i32)
+    net_size: (i32, i32),
 ) -> Result<Box<dyn ModelTrait>, AppError> {
     println!("Using TensorRT backend");
     match Model::tensorrt(weights, (net_size.0 as u32, net_size.1 as u32)) {
         Ok(model) => Ok(Box::new(model)),
-        Err(err) => panic!("Can't create TensorRT model '{}' due the error: {:?}", weights, err),
+        Err(err) => panic!(
+            "Can't create TensorRT model '{}' due the error: {:?}",
+            weights, err
+        ),
     }
 }
 
-fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTrait, neural_net: &mut dyn ModelTrait, verbose: bool) -> Result<(), AppError> {
+fn run(
+    settings: &AppSettings,
+    path_to_config: &str,
+    tracker: &mut dyn TrackerTrait,
+    neural_net: &mut dyn ModelTrait,
+    verbose: bool,
+) -> Result<(), AppError> {
     println!("Verbose is '{}'", verbose);
     println!("REST API is '{}'", settings.rest_api.enable);
     println!("Redis publisher is '{}'", settings.redis_publisher.enable);
 
     let report_mode = settings.is_report_mode();
     if report_mode && !std::path::Path::new(&settings.input.video_src).is_file() {
-        println!("Report mode is not available for RTSP streams or cameras. Only video files are supported.");
+        println!(
+            "Report mode is not available for RTSP streams or cameras. Only video files are supported."
+        );
         return Ok(());
     }
 
@@ -233,7 +277,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             let enabled = v.enable & settings.rest_api.enable & !report_mode;
             (enabled, v.quality)
         }
-        None => (false, 80)
+        None => (false, 80),
     };
 
     println!("MJPEG is '{}' (quality: {})", enable_mjpeg, mjpeg_quality);
@@ -243,7 +287,13 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
 
     /* Preprocess spatial data */
     let data_storage = new_datastorage(settings.equipment_info.id.clone(), verbose);
-    let target_classes = HashSet::from_iter(settings.detection.target_classes.to_owned().unwrap_or(vec![]));
+    let target_classes = HashSet::from_iter(
+        settings
+            .detection
+            .target_classes
+            .to_owned()
+            .unwrap_or(vec![]),
+    );
     let net_classes = settings.detection.net_classes.to_owned();
     let net_classes_set = HashSet::from_iter(net_classes.clone());
     let class_colors = draw::ClassColors::new(&net_classes);
@@ -257,7 +307,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 &net_classes_set
             });
             match data_storage.write().unwrap().insert_zone(zone) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(err) => {
                     panic!("Can't insert zone due the error {:?}", err);
                 }
@@ -271,12 +321,15 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             match DatasetCollector::new(dc_settings.clone(), &net_classes) {
                 Ok(collector) => Some(collector),
                 Err(err) => {
-                    println!("[WARNING] Can't initialize DatasetCollector: {}. Feature disabled.", err);
+                    println!(
+                        "[WARNING] Can't initialize DatasetCollector: {}. Feature disabled.",
+                        err
+                    );
                     None
                 }
             }
-        },
-        _ => None
+        }
+        _ => None,
     };
 
     // let data_storage_threaded = data_storage.clone();
@@ -286,13 +339,18 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         println!("Ctrl+C has been pressed! Exit in 2 seconds");
         thread::sleep(STDDuration::from_secs(2));
         process::exit(1);
-    }).expect("Error setting `Ctrl-C` handler");
+    })
+    .expect("Error setting `Ctrl-C` handler");
 
     /* Start statistics ("threading" is obsolete because of business-logic error) */
     let reset_time = settings.worker.reset_data_milliseconds;
-    let next_reset = if report_mode { f32::MAX } else { reset_time as f32 / 1000.0 };
+    let next_reset = if report_mode {
+        f32::MAX
+    } else {
+        reset_time as f32 / 1000.0
+    };
     let ds_worker = data_storage.clone();
-    
+
     /* Redis publisher */
     let redis_enabled = settings.redis_publisher.enable;
     let redis_worker = data_storage.clone();
@@ -304,32 +362,40 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             let redis_db_index = settings.redis_publisher.db_index;
             let redis_channel = settings.redis_publisher.channel_name.to_owned();
             let mut redis_conn = match redis_password.chars().count() {
-                0 => {
-                    RedisConnection::new(redis_host, redis_port, redis_db_index, redis_worker)
-                },
-                _ => {
-                    RedisConnection::new_with_password(redis_host, redis_port, redis_db_index, redis_password, redis_worker)
-                }
+                0 => RedisConnection::new(redis_host, redis_port, redis_db_index, redis_worker),
+                _ => RedisConnection::new_with_password(
+                    redis_host,
+                    redis_port,
+                    redis_db_index,
+                    redis_password,
+                    redis_worker,
+                ),
             };
             if redis_channel.chars().count() != 0 {
                 redis_conn.set_channel(redis_channel);
             }
             Some(redis_conn)
-        },
-        false => {
-            None
         }
+        false => None,
     };
 
-    /* Start REST API if needed */ 
+    /* Start REST API if needed */
     let overwrite_file = path_to_config.to_string();
     let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(0);
     if settings.rest_api.enable && !report_mode {
         let settings_clone = settings.clone();
         let ds_api = data_storage.clone();
         thread::spawn(move || {
-            match rest_api::start_rest_api(settings_clone.rest_api.host.clone(), settings_clone.rest_api.back_end_port, ds_api, enable_mjpeg, rx_mjpeg, settings_clone, &overwrite_file) {
-                Ok(_) => {},
+            match rest_api::start_rest_api(
+                settings_clone.rest_api.host.clone(),
+                settings_clone.rest_api.back_end_port,
+                ds_api,
+                enable_mjpeg,
+                rx_mjpeg,
+                settings_clone,
+                &overwrite_file,
+            ) {
+                Ok(_) => {}
                 Err(err) => {
                     println!("Can't start API due the error: {:?}", err)
                 }
@@ -338,25 +404,37 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
     }
 
     /* Probe video */
-    let mut video_capture = get_video_capture(&settings.input.video_src, settings.input.typ.clone());
+    let mut video_capture =
+        get_video_capture(&settings.input.video_src, settings.input.typ.clone());
     let opened = VideoCapture::is_opened(&video_capture).map_err(AppError::from)?;
     if !opened {
-        return Err(AppError::VideoError(AppVideoError{typ: 1}))
+        return Err(AppError::VideoError(AppVideoError { typ: 1 }));
     }
     let (width, height, fps, total_frames) = probe_video(&mut video_capture)?;
-    println!("Video probe: {{Width: {width}px | Height: {height}px | FPS: {fps} | Total frames: {total_frames}}}");
+    println!(
+        "Video probe: {{Width: {width}px | Height: {height}px | FPS: {fps} | Total frames: {total_frames}}}"
+    );
 
     // Initialize zone grid with frame dimensions
     {
-        let ds_guard = data_storage.read().expect("DataStorage is poisoned [RWLock]");
+        let ds_guard = data_storage
+            .read()
+            .expect("DataStorage is poisoned [RWLock]");
         match ds_guard.initialize_zone_grid(width, height) {
-            Ok(_) => println!("Zone grid initialized: {}x{} with 32px cells", (width / 32.0).ceil() as u32, (height / 32.0).ceil() as u32),
+            Ok(_) => println!(
+                "Zone grid initialized: {}x{} with 32px cells",
+                (width / 32.0).ceil() as u32,
+                (height / 32.0).ceil() as u32
+            ),
             Err(e) => println!("Warning: Failed to initialize zone grid: {}", e),
         }
     }
 
     /* Start capture loop */
-    let (tx_capture, rx_capture): (mpsc::SyncSender<ThreadedFrame>, mpsc::Receiver<ThreadedFrame>) = mpsc::sync_channel(0);
+    let (tx_capture, rx_capture): (
+        mpsc::SyncSender<ThreadedFrame>,
+        mpsc::Receiver<ThreadedFrame>,
+    ) = mpsc::sync_channel(0);
     thread::spawn(move || {
         let mut frames_counter: f32 = 0.0;
         let mut total_seconds: f32 = 0.0;
@@ -370,7 +448,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         loop {
             let mut read_frame = Mat::default();
             match video_capture.read(&mut read_frame) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(_) => {
                     println!("Can't read next frame");
                     break;
@@ -383,7 +461,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 empty_frames_countrer += 1;
                 if empty_frames_countrer >= EMPTY_FRAMES_LIMIT {
                     println!("Too many empty frames");
-                    break
+                    break;
                 }
                 continue;
             }
@@ -399,16 +477,15 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             }
             // println!("Frame {frames_counter} | Second: {total_seconds} | Fraction: {second_fraction}");
 
-
             /* Send frame and capture info */
-            let frame = ThreadedFrame{
+            let frame = ThreadedFrame {
                 frame: read_frame,
                 overall_seconds: overall_seconds,
                 current_second: second_fraction,
             };
 
             match tx_capture.send(frame) {
-                Ok(_)=>{},
+                Ok(_) => {}
                 Err(_err) => {
                     // Closed channel?
                     // println!("Error on send frame to detection thread: {}", _err)
@@ -418,29 +495,36 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             processed_frames += 1;
             if report_mode && total_frames > 0.0 && processed_frames % 100 == 0 {
                 let progress = (processed_frames as f32 / total_frames) * 100.0;
-                println!("[Report] Progress: {}/{} frames ({:.1}%)", processed_frames, total_frames as u32, progress);
+                println!(
+                    "[Report] Progress: {}/{} frames ({:.1}%)",
+                    processed_frames, total_frames as u32, progress
+                );
             }
 
             // println!("Total seconds: {}", total_seconds);
             if total_seconds >= next_reset {
-                println!("Reset timer due analytics. Current local time is: {}", second_fraction);
+                println!(
+                    "Reset timer due analytics. Current local time is: {}",
+                    second_fraction
+                );
                 total_seconds = 0.0;
                 let mut ds_writer = ds_worker.write().expect("Bad DS");
                 if ds_writer.period_end == ds_writer.period_start {
                     // First iteration
                     ds_writer.period_end = Utc::now();
-                    ds_writer.period_start = ds_writer.period_end - chrono::Duration::milliseconds(reset_time);
+                    ds_writer.period_start =
+                        ds_writer.period_end - chrono::Duration::milliseconds(reset_time);
                 } else {
                     // Next iterations
                     ds_writer.period_start = ds_writer.period_end;
                     ds_writer.period_end += chrono::Duration::milliseconds(reset_time);
                 }
-                
+
                 match ds_writer.update_statistics() {
                     Ok(_) => {
                         // Do not forget to drop mutex explicitly since we possible need to work with DS in REST API and Redis
                         drop(ds_writer)
-                    },
+                    }
                     Err(err) => {
                         println!("Can't update statistics due the error: {}", err);
                     }
@@ -453,7 +537,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         match video_capture.release() {
             Ok(_) => {
                 println!("Video capture has been closed successfully");
-            },
+            }
             Err(err) => {
                 println!("Can't release video capturer due the error: {}", err);
             }
@@ -464,7 +548,9 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
     let conf_threshold: f32 = settings.detection.conf_threshold;
     let nms_threshold: f32 = settings.detection.nms_threshold;
     let max_points_in_track: usize = settings.tracking.max_points_in_track;
-    let kalman_filter: KalmanFilterType = settings.tracking.kalman_filter
+    let kalman_filter: KalmanFilterType = settings
+        .tracking
+        .kalman_filter
         .as_deref()
         .unwrap_or("centroid")
         .parse()
@@ -472,7 +558,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
 
     let ds_tracker = data_storage.clone();
 
-    let tracker_dt = 1.0/fps;
+    let tracker_dt = 1.0 / fps;
 
     /* Performance stats (optional) */
     let perf_stats_interval = settings.detection.perf_stats_interval;
@@ -493,17 +579,24 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
 
         /* Inference (preprocessing + forward pass + NMS) */
         let t_inference = Timer::start();
-        let (nms_bboxes_cv, nms_classes_ids, nms_confidences) = match neural_net.forward(&received.frame, conf_threshold, nms_threshold) {
-            Ok((a, b, c)) => { (a, b, c) },
-            Err(err) => {
-                println!("Can't process input of neural network due the error {:?}", err);
-                continue;
-            }
-        };
+        let (nms_bboxes_cv, nms_classes_ids, nms_confidences) =
+            match neural_net.forward(&received.frame, conf_threshold, nms_threshold) {
+                Ok((a, b, c)) => (a, b, c),
+                Err(err) => {
+                    println!(
+                        "Can't process input of neural network due the error {:?}",
+                        err
+                    );
+                    continue;
+                }
+            };
         let inference_time = t_inference.elapsed();
 
         // Convert opencv::core::Rect to own Rect at the boundary
-        let nms_bboxes: Vec<RectCV> = nms_bboxes_cv.iter().map(|r| RectCV::new(r.x, r.y, r.width, r.height)).collect();
+        let nms_bboxes: Vec<RectCV> = nms_bboxes_cv
+            .iter()
+            .map(|r| RectCV::new(r.x, r.y, r.width, r.height))
+            .collect();
 
         /* Postprocessing: create detection blobs */
         let t_postprocess = Timer::start();
@@ -525,7 +618,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         let t_tracking = Timer::start();
         let relative_time = received.overall_seconds;
         match tracker.match_objects(&mut tmp_detections, relative_time) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(err) => {
                 println!("Can't match objects due the error: {:?}", err);
                 continue;
@@ -554,7 +647,8 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
 
             for (track_id, bbox) in blob_info.iter() {
                 // Get the actual track age from the tracker (zero-copy lookup)
-                let track_age = tracker.get_tracked_object_ref(track_id)
+                let track_age = tracker
+                    .get_tracked_object_ref(track_id)
                     .map(|obj| obj.get_track().len())
                     .unwrap_or(0);
 
@@ -581,10 +675,16 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         }
 
         let ds_guard = ds_tracker.read().expect("DataStorage is poisoned [RWLock]");
-        let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
-        let zone_grid = ds_guard.zone_grid.read().expect("Zone grid is poisoned [RWLock]");
-        
-        // Reset current occupancy for zones 
+        let zones = ds_guard
+            .zones
+            .read()
+            .expect("Spatial data is poisoned [RWLock]");
+        let zone_grid = ds_guard
+            .zone_grid
+            .read()
+            .expect("Zone grid is poisoned [RWLock]");
+
+        // Reset current occupancy for zones
         let current_ut = get_sys_time_in_secs();
         for (_, zone_guarded) in zones.iter() {
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
@@ -595,7 +695,8 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         }
 
         // Zero-copy filtering: collect IDs of active objects
-        let object_ids: Vec<Uuid> = tracker.iter_tracked_objects()
+        let object_ids: Vec<Uuid> = tracker
+            .iter_tracked_objects()
             .filter_map(|(id, obj)| {
                 if obj.get_no_match_times() <= 1 {
                     Some(id)
@@ -631,7 +732,10 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
 
             // Get the vehicle's previous zone from tracking if possible
             let previous_zone_id = {
-                let vehicle_zones = ds_guard.vehicle_last_zone_cross.read().expect("Vehicle zones is poisoned [RWLock]");
+                let vehicle_zones = ds_guard
+                    .vehicle_last_zone_cross
+                    .read()
+                    .expect("Vehicle zones is poisoned [RWLock]");
                 let result = vehicle_zones.get(&object_id).cloned();
                 drop(vehicle_zones);
                 result
@@ -649,7 +753,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 };
                 let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
                 if !zone.contains_point(last_point_x, last_point_y) {
-                    continue
+                    continue;
                 }
                 zone.current_statistics.occupancy += 1; // Increment current load to match number of objects in zone
 
@@ -657,7 +761,12 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 let pixels_per_meters = zone.get_skeleton_ppm();
 
                 let crossed = if let Some(before_point) = last_before_point {
-                    zone.crossed_virtual_line(last_point_x, last_point_y, before_point.0, before_point.1)
+                    zone.crossed_virtual_line(
+                        last_point_x,
+                        last_point_y,
+                        before_point.0,
+                        before_point.1,
+                    )
                 } else {
                     false
                 };
@@ -669,17 +778,49 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 };
                 match object_extra.spatial_info {
                     Some(ref mut spatial_info) => {
-                        spatial_info.update_avg(last_time, last_point_x, last_point_y, projected_pt.0, projected_pt.1, pixels_per_meters);
-                        zone.register_or_update_object(object_id, last_time, relative_time, spatial_info.speed, object_extra.get_classname(), crossed, zone_id_from.clone());
-                    },
+                        spatial_info.update_avg(
+                            last_time,
+                            last_point_x,
+                            last_point_y,
+                            projected_pt.0,
+                            projected_pt.1,
+                            pixels_per_meters,
+                        );
+                        zone.register_or_update_object(
+                            object_id,
+                            last_time,
+                            relative_time,
+                            spatial_info.speed,
+                            object_extra.get_classname(),
+                            crossed,
+                            zone_id_from.clone(),
+                        );
+                    }
                     None => {
-                        object_extra.spatial_info = Some(SpatialInfo::new(last_time, last_point_x, last_point_y, projected_pt.0, projected_pt.1));
-                        zone.register_or_update_object(object_id, last_time, relative_time, -1.0, object_extra.get_classname(), crossed, zone_id_from.clone());
+                        object_extra.spatial_info = Some(SpatialInfo::new(
+                            last_time,
+                            last_point_x,
+                            last_point_y,
+                            projected_pt.0,
+                            projected_pt.1,
+                        ));
+                        zone.register_or_update_object(
+                            object_id,
+                            last_time,
+                            relative_time,
+                            -1.0,
+                            object_extra.get_classname(),
+                            crossed,
+                            zone_id_from.clone(),
+                        );
                     }
                 }
                 // Only update vehicle zone tracking when vehicle crosses virtual line
                 if crossed {
-                    let mut vehicle_zones = ds_guard.vehicle_last_zone_cross.write().expect("Vehicle zones is poisoned [RWLock]");
+                    let mut vehicle_zones = ds_guard
+                        .vehicle_last_zone_cross
+                        .write()
+                        .expect("Vehicle zones is poisoned [RWLock]");
                     vehicle_zones.insert(object_id, zone.id.clone());
                     drop(vehicle_zones);
                 }
@@ -688,7 +829,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 break;
             }
         }
-        
+
         /* Re-stream input video as MJPEG */
         if enable_mjpeg {
             let mut frame = received.frame.clone();
@@ -717,7 +858,7 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
                 continue;
             }
             match tx_mjpeg.send(buffer_cv.to_vec()) {
-                Ok(_)=>{},
+                Ok(_) => {}
                 Err(_err) => {
                     println!("Error on send frame to MJPEG thread: {}", _err)
                 }
@@ -728,31 +869,38 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
             drop(zones);
             drop(ds_guard);
         }
-
-
     }
 
     if report_mode {
         println!("Video processing complete. Generating report...");
         let report_settings = settings.report.as_ref().unwrap();
         {
-            let mut ds_writer = data_storage.write().expect("DataStorage is poisoned [RWLock]");
+            let mut ds_writer = data_storage
+                .write()
+                .expect("DataStorage is poisoned [RWLock]");
             ds_writer.period_end = Utc::now();
             match ds_writer.update_statistics() {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(err) => {
                     println!("Can't compute final statistics due the error: {}", err);
                 }
             }
         }
-        let ds_reader = data_storage.read().expect("DataStorage is poisoned [RWLock]");
+        let ds_reader = data_storage
+            .read()
+            .expect("DataStorage is poisoned [RWLock]");
         match first_frame {
             Some(ref frame) => {
-                match lib::report::generate_report(&ds_reader, &settings.input.video_src, &report_settings.output_path, frame) {
+                match lib::report::generate_report(
+                    &ds_reader,
+                    &settings.input.video_src,
+                    &report_settings.output_path,
+                    frame,
+                ) {
                     Ok(zip_path) => println!("Report saved to: {}", zip_path),
                     Err(err) => println!("Can't generate report due the error: {}", err),
                 }
-            },
+            }
             None => {
                 println!("Can't generate report: no frames were captured from video");
             }
@@ -765,18 +913,20 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
 fn main() {
     let args: Vec<String> = env::args().collect();
     let path_to_config = match args.len() {
-        2 => {
-            &args[1]
-        },
+        2 => &args[1],
         _ => {
-            println!("Args should contain exactly one string: path to TOML configuration file. Setting to default './data/conf.toml'");
+            println!(
+                "Args should contain exactly one string: path to TOML configuration file. Setting to default './data/conf.toml'"
+            );
             "./data/conf.toml"
         }
     };
     let app_settings = AppSettings::new(path_to_config);
     println!("Settings are:\n\t{}", app_settings);
 
-    let kalman_filter: KalmanFilterType = app_settings.tracking.kalman_filter
+    let kalman_filter: KalmanFilterType = app_settings
+        .tracking
+        .kalman_filter
         .as_deref()
         .unwrap_or("centroid")
         .parse()
@@ -785,7 +935,7 @@ fn main() {
         &app_settings.tracking.typ.as_deref().unwrap_or("iou_naive"),
         kalman_filter,
         app_settings.tracking.max_no_match,
-        app_settings.tracking.iou_threshold
+        app_settings.tracking.iou_threshold,
     );
     println!("Tracker is:\n\t{}", tracker);
 
@@ -796,19 +946,22 @@ fn main() {
             Ok(mf) => mf,
             Err(err) => {
                 println!("Can't get model format due the error: {}", err);
-                return
+                return;
             }
         };
         match prepare_neural_net(
             model_format,
             &app_settings.detection.network_weights,
             app_settings.detection.network_cfg.clone(),
-            (app_settings.detection.net_width, app_settings.detection.net_height)
+            (
+                app_settings.detection.net_width,
+                app_settings.detection.net_height,
+            ),
         ) {
             Ok(nn) => nn,
             Err(err) => {
                 println!("Can't prepare neural network due the error: {}", err);
-                return
+                return;
             }
         }
     };
@@ -819,37 +972,53 @@ fn main() {
         (),
         &app_settings.detection.network_weights,
         app_settings.detection.network_cfg.clone(),
-        (app_settings.detection.net_width, app_settings.detection.net_height)
+        (
+            app_settings.detection.net_width,
+            app_settings.detection.net_height,
+        ),
     ) {
         Ok(nn) => nn,
         Err(err) => {
             println!("Can't prepare neural network due the error: {}", err);
-            return
+            return;
         }
     };
 
     // TensorRT backend: .engine files only
-    #[cfg(all(feature = "tensorrt-backend", not(feature = "opencv-backend"), not(feature = "ort-backend")))]
+    #[cfg(all(
+        feature = "tensorrt-backend",
+        not(feature = "opencv-backend"),
+        not(feature = "ort-backend")
+    ))]
     let mut neural_net = match prepare_neural_net(
         (),
         &app_settings.detection.network_weights,
         app_settings.detection.network_cfg.clone(),
-        (app_settings.detection.net_width, app_settings.detection.net_height)
+        (
+            app_settings.detection.net_width,
+            app_settings.detection.net_height,
+        ),
     ) {
         Ok(nn) => nn,
         Err(err) => {
             println!("Can't prepare neural network due the error: {}", err);
-            return
+            return;
         }
     };
 
     let verbose = match &app_settings.debug {
-        Some(x) => { x.enable },
-        None => { false }
+        Some(x) => x.enable,
+        None => false,
     };
-    
-    match run(&app_settings, path_to_config, &mut *tracker, &mut *neural_net, verbose) {
-        Ok(_) => {},
+
+    match run(
+        &app_settings,
+        path_to_config,
+        &mut *tracker,
+        &mut *neural_net,
+        verbose,
+    ) {
+        Ok(_) => {}
         Err(_err) => {
             println!("Error in main thread: {}", _err);
         }

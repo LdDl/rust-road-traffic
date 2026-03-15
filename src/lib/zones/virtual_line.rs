@@ -1,14 +1,14 @@
-use std::fmt;
-use std::str::FromStr;
 use opencv::{
     core::{Mat, Point2i},
-    imgproc::line,
     imgproc::LINE_8,
+    imgproc::line,
 };
+use std::fmt;
+use std::str::FromStr;
 
-use crate::lib::spatial::Point2f;
-use crate::lib::cv::{Scalar, to_cv_scalar};
 use crate::lib::constants::EPSILON;
+use crate::lib::cv::{Scalar, to_cv_scalar};
+use crate::lib::spatial::Point2f;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum VirtualLineDirection {
@@ -25,7 +25,7 @@ impl fmt::Display for VirtualLineDirection {
     }
 }
 
-impl Default for  VirtualLineDirection {
+impl Default for VirtualLineDirection {
     fn default() -> Self {
         VirtualLineDirection::Inbound
     }
@@ -60,7 +60,10 @@ impl VirtualLine {
         VirtualLine {
             line: [[a.x as i32, a.y as i32], [b.x as i32, b.y as i32]],
             line_cvf: [a, b],
-            line_cvi: [Point2i::new(a.x as i32, a.y as i32), Point2i::new(b.x as i32, b.y as i32)],
+            line_cvi: [
+                Point2i::new(a.x as i32, a.y as i32),
+                Point2i::new(b.x as i32, b.y as i32),
+            ],
             color_cv: Scalar::from((0.0, 0.0, 0.0)),
             color: [0, 0, 0],
             direction: _direction,
@@ -69,8 +72,14 @@ impl VirtualLine {
     pub fn new_from(ab: [[i32; 2]; 2], _direction: VirtualLineDirection) -> Self {
         VirtualLine {
             line: ab,
-            line_cvf: [Point2f::new(ab[0][0] as f32, ab[0][1] as f32), Point2f::new(ab[1][0] as f32, ab[1][1] as f32)],
-            line_cvi: [Point2i::new(ab[0][0], ab[0][1]), Point2i::new(ab[1][0], ab[1][1])],
+            line_cvf: [
+                Point2f::new(ab[0][0] as f32, ab[0][1] as f32),
+                Point2f::new(ab[1][0] as f32, ab[1][1] as f32),
+            ],
+            line_cvi: [
+                Point2i::new(ab[0][0], ab[0][1]),
+                Point2i::new(ab[1][0], ab[1][1]),
+            ],
             color_cv: Scalar::from((0.0, 0.0, 0.0)),
             color: [0, 0, 0],
             direction: _direction,
@@ -100,10 +109,21 @@ impl VirtualLine {
         }
     }
     pub fn draw_on_mat(&self, img: &mut Mat) {
-        match line(img, self.line_cvi[0], self.line_cvi[1], to_cv_scalar(&self.color_cv), 2, LINE_8, 0) {
-            Ok(_) => {},
+        match line(
+            img,
+            self.line_cvi[0],
+            self.line_cvi[1],
+            to_cv_scalar(&self.color_cv),
+            2,
+            LINE_8,
+            0,
+        ) {
+            Ok(_) => {}
             Err(err) => {
-                panic!("Can't draw virtual line for polygon due the error: {:?}", err)
+                panic!(
+                    "Can't draw virtual line for polygon due the error: {:?}",
+                    err
+                )
             }
         };
     }
@@ -114,7 +134,11 @@ mod tests {
     use super::*;
     #[test]
     fn test_vertical_line() {
-        let vertical_line = VirtualLine::new_from_cv(Point2f::new(4.0, 3.0), Point2f::new(5.0, 10.0), VirtualLineDirection::Inbound);
+        let vertical_line = VirtualLine::new_from_cv(
+            Point2f::new(4.0, 3.0),
+            Point2f::new(5.0, 10.0),
+            VirtualLineDirection::Inbound,
+        );
         let c = Point2f::new(3.0, 8.0);
         let is_left = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_left);
@@ -153,7 +177,11 @@ mod tests {
     }
     #[test]
     fn test_horizontal_line() {
-        let vertical_line = VirtualLine::new_from_cv(Point2f::new(4.0, 6.0), Point2f::new(9.0, 6.4), VirtualLineDirection::Inbound);
+        let vertical_line = VirtualLine::new_from_cv(
+            Point2f::new(4.0, 6.0),
+            Point2f::new(9.0, 6.4),
+            VirtualLineDirection::Inbound,
+        );
         let c = Point2f::new(3.0, 8.0);
         let is_above = vertical_line.is_left(c.x, c.y);
         assert_eq!(true, is_above);

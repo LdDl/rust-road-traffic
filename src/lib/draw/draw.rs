@@ -1,22 +1,12 @@
-use opencv::{
-    core::Mat,
-    core::Point,
-    core::Size,
-    imgproc::LINE_8,
-    imgproc::FONT_HERSHEY_SIMPLEX,
-    imgproc::circle,
-    imgproc::ellipse,
-    imgproc::put_text,
-};
-use crate::lib::cv::{Scalar, Rect, to_cv_scalar};
-use crate::lib::tracker::TrackerTrait;
+use crate::lib::cv::{Rect, Scalar, to_cv_scalar};
 use crate::lib::draw::colors::ClassColors;
+use crate::lib::tracker::TrackerTrait;
+use opencv::{
+    core::Mat, core::Point, core::Size, imgproc::FONT_HERSHEY_SIMPLEX, imgproc::LINE_8,
+    imgproc::circle, imgproc::ellipse, imgproc::put_text,
+};
 
-pub fn draw_track(
-    img: &mut Mat,
-    tracker: &dyn TrackerTrait,
-    class_colors: &ClassColors,
-) {
+pub fn draw_track(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
     draw_trajectories(img, tracker, class_colors);
     draw_bboxes(img, tracker, class_colors);
     draw_identifiers(img, tracker, class_colors);
@@ -27,7 +17,8 @@ pub fn draw_track(
 pub fn draw_trajectories(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
     let objects_extra = tracker.get_objects_extra();
     for (object_id, object) in tracker.iter_tracked_objects() {
-        let class_name = objects_extra.get(&object_id)
+        let class_name = objects_extra
+            .get(&object_id)
             .map(|extra| extra.get_classname())
             .unwrap_or("unknown".to_string());
         let color = if object.get_no_match_times() > 1 {
@@ -38,9 +29,12 @@ pub fn draw_trajectories(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors
         for pt in object.get_track().iter() {
             let cv_pt = Point::new(pt.x.floor() as i32, pt.y.floor() as i32);
             match circle(img, cv_pt, 2, to_cv_scalar(&color), 2, LINE_8, 0) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(err) => {
-                    panic!("Can't draw circle at blob's center due the error: {:?}", err)
+                    panic!(
+                        "Can't draw circle at blob's center due the error: {:?}",
+                        err
+                    )
                 }
             };
         }
@@ -50,7 +44,8 @@ pub fn draw_trajectories(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors
 pub fn draw_bboxes(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
     let objects_extra = tracker.get_objects_extra();
     for (object_id, object) in tracker.iter_tracked_objects() {
-        let class_name = objects_extra.get(&object_id)
+        let class_name = objects_extra
+            .get(&object_id)
             .map(|extra| extra.get_classname())
             .unwrap_or("unknown".to_string());
         let color = if object.get_no_match_times() > 1 {
@@ -59,12 +54,20 @@ pub fn draw_bboxes(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &Cla
             class_colors.get_color(&class_name)
         };
         let bbox = object.get_bbox();
-        let rect = Rect::new(bbox.x.floor() as i32, bbox.y.floor() as i32, bbox.width as i32, bbox.height as i32);
+        let rect = Rect::new(
+            bbox.x.floor() as i32,
+            bbox.y.floor() as i32,
+            bbox.width as i32,
+            bbox.height as i32,
+        );
         // Use rounded rectangle instead of regular rectangle
         match draw_rounded_rectangle(img, rect, &color, 2, 8) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(err) => {
-                panic!("Can't draw rounded rectangle at blob's bbox due the error: {:?}", err)
+                panic!(
+                    "Can't draw rounded rectangle at blob's bbox due the error: {:?}",
+                    err
+                )
             }
         };
     }
@@ -73,7 +76,8 @@ pub fn draw_bboxes(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &Cla
 pub fn draw_identifiers(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
     let objects_extra = tracker.get_objects_extra();
     for (object_id, object) in tracker.iter_tracked_objects() {
-        let class_name = objects_extra.get(&object_id)
+        let class_name = objects_extra
+            .get(&object_id)
             .map(|extra| extra.get_classname())
             .unwrap_or("unknown".to_string());
         let color = if object.get_no_match_times() > 1 {
@@ -83,9 +87,24 @@ pub fn draw_identifiers(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors:
         };
         let bbox = object.get_bbox();
         let anchor = Point::new(bbox.x.floor() as i32 + 2, bbox.y.floor() as i32 + 10);
-        let short_id = object.get_id().to_string().chars().take(8).collect::<String>();
-        match put_text(img, &short_id, anchor, FONT_HERSHEY_SIMPLEX, 0.5, to_cv_scalar(&color), 2, LINE_8, false) {
-            Ok(_) => {},
+        let short_id = object
+            .get_id()
+            .to_string()
+            .chars()
+            .take(8)
+            .collect::<String>();
+        match put_text(
+            img,
+            &short_id,
+            anchor,
+            FONT_HERSHEY_SIMPLEX,
+            0.5,
+            to_cv_scalar(&color),
+            2,
+            LINE_8,
+            false,
+        ) {
+            Ok(_) => {}
             Err(err) => {
                 println!("Can't display ID of object due the error {:?}", err);
             }
@@ -112,8 +131,18 @@ pub fn draw_speeds(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &Cla
         };
         let bbox = object.get_bbox();
         let anchor = Point::new(bbox.x.floor() as i32 + 2, bbox.y.floor() as i32 + 20);
-        match put_text(img, &spatial_info.speed.to_string(), anchor, FONT_HERSHEY_SIMPLEX, 0.5, to_cv_scalar(&color), 2, LINE_8, false) {
-            Ok(_) => {},
+        match put_text(
+            img,
+            &spatial_info.speed.to_string(),
+            anchor,
+            FONT_HERSHEY_SIMPLEX,
+            0.5,
+            to_cv_scalar(&color),
+            2,
+            LINE_8,
+            false,
+        ) {
+            Ok(_) => {}
             Err(err) => {
                 println!("Can't display velocity of object due the error {:?}", err);
             }
@@ -128,12 +157,18 @@ pub fn draw_projections(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors:
             Some(ref spatial_info) => spatial_info,
             None => continue,
         };
-        let cv_pt = Point::new(spatial_info.last_x_projected.floor() as i32, spatial_info.last_y_projected.floor() as i32);
+        let cv_pt = Point::new(
+            spatial_info.last_x_projected.floor() as i32,
+            spatial_info.last_y_projected.floor() as i32,
+        );
         let cyan = to_cv_scalar(&Scalar::from((255.0, 255.0, 0.0)));
         match circle(img, cv_pt, 2, cyan, 2, LINE_8, 0) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(err) => {
-                panic!("Can't draw circle at blob's projected center due the error: {:?}", err)
+                panic!(
+                    "Can't draw circle at blob's projected center due the error: {:?}",
+                    err
+                )
             }
         };
         // let object = tracker.engine.objects.get(&object_id).unwrap();
@@ -153,7 +188,13 @@ pub fn draw_projections(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors:
 }
 
 // Add this new function for drawing rounded rectangles
-pub fn draw_rounded_rectangle(img: &mut Mat, rect: Rect, color: &Scalar, thickness: i32, corner_radius: i32) -> opencv::Result<()> {
+pub fn draw_rounded_rectangle(
+    img: &mut Mat,
+    rect: Rect,
+    color: &Scalar,
+    thickness: i32,
+    corner_radius: i32,
+) -> opencv::Result<()> {
     let x = rect.x;
     let y = rect.y;
     let width = rect.width;
@@ -169,32 +210,60 @@ pub fn draw_rounded_rectangle(img: &mut Mat, rect: Rect, color: &Scalar, thickne
     let arc_size = Size::new(adaptive_radius * 2, adaptive_radius * 2);
 
     // Top-left corner
-    ellipse(img,
+    ellipse(
+        img,
         Point::new(x + adaptive_radius, y + adaptive_radius),
         arc_size,
-        180.0, 0.0, 90.0,
-        cv_color, thickness, LINE_8, 0)?;
+        180.0,
+        0.0,
+        90.0,
+        cv_color,
+        thickness,
+        LINE_8,
+        0,
+    )?;
 
     // Top-right corner
-    ellipse(img,
+    ellipse(
+        img,
         Point::new(x + width - adaptive_radius, y + adaptive_radius),
         arc_size,
-        270.0, 0.0, 90.0,
-        cv_color, thickness, LINE_8, 0)?;
+        270.0,
+        0.0,
+        90.0,
+        cv_color,
+        thickness,
+        LINE_8,
+        0,
+    )?;
 
     // Bottom-right corner
-    ellipse(img,
+    ellipse(
+        img,
         Point::new(x + width - adaptive_radius, y + height - adaptive_radius),
         arc_size,
-        0.0, 0.0, 90.0,
-        cv_color, thickness, LINE_8, 0)?;
+        0.0,
+        0.0,
+        90.0,
+        cv_color,
+        thickness,
+        LINE_8,
+        0,
+    )?;
 
     // Bottom-left corner
-    ellipse(img,
+    ellipse(
+        img,
         Point::new(x + adaptive_radius, y + height - adaptive_radius),
         arc_size,
-        90.0, 0.0, 90.0,
-        cv_color, thickness, LINE_8, 0)?;
+        90.0,
+        0.0,
+        90.0,
+        cv_color,
+        thickness,
+        LINE_8,
+        0,
+    )?;
 
     Ok(())
 }

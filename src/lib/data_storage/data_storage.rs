@@ -1,32 +1,16 @@
-use std::collections::{
-    HashMap
-};
+use std::collections::HashMap;
 
-use std::sync::{
-    Arc,
-    Mutex,
-    RwLock,
-    PoisonError
-};
+use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
-use std::{
-    thread
-};
+use std::thread;
 
-use chrono::{
-    DateTime,
-    TimeZone,
-    Utc,
-};
+use chrono::{DateTime, TimeZone, Utc};
 
-use crate::lib::zones::{
-    Zone,
-    ZoneGrid,
-};
+use crate::lib::zones::{Zone, ZoneGrid};
 
 #[derive(Debug)]
 pub enum DataStorageError {
-    Poison
+    Poison,
 }
 
 impl<T> From<PoisonError<T>> for DataStorageError {
@@ -37,7 +21,7 @@ impl<T> From<PoisonError<T>> for DataStorageError {
 impl std::fmt::Display for DataStorageError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            DataStorageError::Poison => write!(f, "PoisonError")
+            DataStorageError::Poison => write!(f, "PoisonError"),
         }
     }
 }
@@ -48,11 +32,11 @@ const GRID_CELL_SIZE: f32 = 32.0;
 pub struct DataStorage {
     pub zones: Arc<RwLock<HashMap<String, Mutex<Zone>>>>,
     pub zone_grid: Arc<RwLock<ZoneGrid>>,
-    pub vehicle_last_zone_cross:  Arc<RwLock<HashMap<uuid::Uuid, String>>>,
+    pub vehicle_last_zone_cross: Arc<RwLock<HashMap<uuid::Uuid, String>>>,
     pub period_start: DateTime<Utc>,
     pub period_end: DateTime<Utc>,
     pub id: String,
-    pub verbose: bool
+    pub verbose: bool,
 }
 
 impl DataStorage {
@@ -64,12 +48,16 @@ impl DataStorage {
             period_start: TimeZone::with_ymd_and_hms(&Utc, 1970, 1, 1, 0, 0, 0).unwrap(),
             period_end: TimeZone::with_ymd_and_hms(&Utc, 1970, 1, 1, 0, 0, 0).unwrap(),
             id: _id,
-            verbose: _verbose
+            verbose: _verbose,
         };
     }
 
     /// Initialize zone grid with frame dimensions (call once when frame size is known)
-    pub fn initialize_zone_grid(&self, frame_width: f32, frame_height: f32) -> Result<(), DataStorageError> {
+    pub fn initialize_zone_grid(
+        &self,
+        frame_width: f32,
+        frame_height: f32,
+    ) -> Result<(), DataStorageError> {
         let mut grid = self.zone_grid.write()?;
         // 32x32 pixel cells
         grid.initialize(frame_width, frame_height, GRID_CELL_SIZE);
@@ -90,7 +78,7 @@ impl DataStorage {
         match zones.write() {
             Ok(mut mutex) => {
                 mutex.insert(zone.get_id(), Mutex::new(zone));
-            },
+            }
             Err(_) => {
                 return Err(DataStorageError::Poison);
             }
@@ -102,7 +90,7 @@ impl DataStorage {
         match zones.write() {
             Ok(mut mutex) => {
                 mutex.remove(zone_id);
-            },
+            }
             Err(_) => {
                 return Err(DataStorageError::Poison);
             }
@@ -117,7 +105,7 @@ impl DataStorage {
                     let mut zone = zone.lock()?;
                     zone.update_statistics(self.period_start, self.period_end);
                 }
-            },
+            }
             Err(_) => {
                 return Err(DataStorageError::Poison);
             }
@@ -153,7 +141,7 @@ impl DataStorage {
                 for (_, zone_guarded) in zones_guard.iter() {
                     let zone = zone_guarded.lock()?;
                     let to_key = zone_id_to_key.get(&zone.get_id()).unwrap();
-                    
+
                     for (from_zone_id, flow_count) in zone.current_statistics.income.iter() {
                         // Convert from_zone_id (internal UUID) to OD matrix key format
                         if let Some(from_key) = zone_id_to_key.get(from_zone_id) {
@@ -197,9 +185,8 @@ impl DataStorage {
                     println!();
                 }
                 // Print summary statistics
-                let total_movements: u32 = od_matrix.values()
-                    .flat_map(|inner| inner.values())
-                    .sum();
+                let total_movements: u32 =
+                    od_matrix.values().flat_map(|inner| inner.values()).sum();
                 println!("\n=== Summary ===");
                 println!("Total movements: {}", total_movements);
                 // Print top flows
@@ -223,7 +210,7 @@ impl DataStorage {
                     }
                 }
                 println!("=== End OD Matrix ===\n");
-            },
+            }
             Err(_) => {
                 return Err(DataStorageError::Poison);
             }
@@ -257,13 +244,13 @@ pub fn start_analytics_thread(ds: ThreadedDataStorage, millis: u64, verbose: boo
                     match mutex.update_statistics() {
                         Ok(_) => {
                             println!("Statistics updated: {}", last_tm);
-                        },
+                        }
                         Err(_) => {
                             println!("Can't update statistics due PoisonErr [1]");
                         }
                     }
                     last_tm = Utc::now();
-                },
+                }
                 Err(_) => {
                     println!("Can't update statistics due PoisonErr [2]");
                 }

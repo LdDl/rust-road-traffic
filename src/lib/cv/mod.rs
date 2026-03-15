@@ -1,4 +1,4 @@
-pub mod scalar;
 pub mod rect;
+pub mod scalar;
 
-pub use self::{scalar::*, rect::*};
+pub use self::{rect::*, scalar::*};

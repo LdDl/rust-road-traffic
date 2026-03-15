@@ -2,8 +2,8 @@
 
 #[derive(Clone, Default, Debug, Copy, PartialEq)]
 pub struct Point_<T> {
-	pub x: T,
-	pub y: T,
+    pub x: T,
+    pub y: T,
 }
 
 pub type Point = Point2i;
@@ -14,8 +14,8 @@ pub type Point2l = Point_<i64>;
 
 impl<T> Point_<T> {
     pub fn new(x: T, y: T) -> Self {
-		Self { x, y }
-	}
+        Self { x, y }
+    }
 }
 
 // Conversion between Point_ and tuple

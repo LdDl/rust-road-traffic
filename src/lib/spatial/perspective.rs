@@ -158,9 +158,15 @@ pub fn compute_perspective_matrix(
     let h = gaussian_elimination_pp(&mut a, &mut b)?;
 
     Some(Matrix3::new(
-        h[0] as f32, h[1] as f32, h[2] as f32,
-        h[3] as f32, h[4] as f32, h[5] as f32,
-        h[6] as f32, h[7] as f32, 1.0,
+        h[0] as f32,
+        h[1] as f32,
+        h[2] as f32,
+        h[3] as f32,
+        h[4] as f32,
+        h[5] as f32,
+        h[6] as f32,
+        h[7] as f32,
+        1.0,
     ))
 }
 
@@ -168,8 +174,8 @@ pub fn compute_perspective_matrix(
 mod tests {
     use super::*;
     use crate::lib::spatial::epsg::lonlat_to_meters;
-    use crate::lib::spatial::haversine::haversine;
     use crate::lib::spatial::epsg::meters_to_lonlat;
+    use crate::lib::spatial::haversine::haversine;
 
     const EPS: f32 = 1e-7;
 
@@ -207,7 +213,12 @@ mod tests {
 
     #[test]
     fn test_source_points_map_to_destination() {
-        let src = [(554.0, 592.0), (959.0, 664.0), (1098.0, 360.0), (998.0, 359.0)];
+        let src = [
+            (554.0, 592.0),
+            (959.0, 664.0),
+            (1098.0, 360.0),
+            (998.0, 359.0),
+        ];
         let dst_wgs84 = [
             (37.353610_f32, 55.853085),
             (37.353559, 55.853081),
@@ -225,14 +236,31 @@ mod tests {
         let eps = 10.0;
         for i in 0..4 {
             let (rx, ry) = pt.transform(src[i].0, src[i].1);
-            assert!((rx - dst_meters[i].0).abs() < eps, "x mismatch at point {}: {} vs {}", i, rx, dst_meters[i].0);
-            assert!((ry - dst_meters[i].1).abs() < eps, "y mismatch at point {}: {} vs {}", i, ry, dst_meters[i].1);
+            assert!(
+                (rx - dst_meters[i].0).abs() < eps,
+                "x mismatch at point {}: {} vs {}",
+                i,
+                rx,
+                dst_meters[i].0
+            );
+            assert!(
+                (ry - dst_meters[i].1).abs() < eps,
+                "y mismatch at point {}: {} vs {}",
+                i,
+                ry,
+                dst_meters[i].1
+            );
         }
     }
 
     #[test]
     fn test_haversine_distance() {
-        let src = [(554.0, 592.0), (959.0, 664.0), (1098.0, 360.0), (998.0, 359.0)];
+        let src = [
+            (554.0, 592.0),
+            (959.0, 664.0),
+            (1098.0, 360.0),
+            (998.0, 359.0),
+        ];
         let dst_wgs84 = [
             (37.353610_f32, 55.853085),
             (37.353559, 55.853081),
@@ -254,7 +282,12 @@ mod tests {
 
         let distance = haversine(a_wgs84.0, a_wgs84.1, b_wgs84.0, b_wgs84.1) * 1000.0;
         let correct_dist: f32 = 19.95998;
-        assert!((distance - correct_dist).abs() < EPS, "distance mismatch: {} vs {}", distance, correct_dist);
+        assert!(
+            (distance - correct_dist).abs() < EPS,
+            "distance mismatch: {} vs {}",
+            distance,
+            correct_dist
+        );
     }
 
     #[test]
@@ -277,8 +310,16 @@ mod tests {
         let eps = 10.0;
         for i in 0..4 {
             let (rx, ry) = pt.transform(src[i].0, src[i].1);
-            assert!((rx - dst_meters[i].0).abs() < eps, "x mismatch at point {}", i);
-            assert!((ry - dst_meters[i].1).abs() < eps, "y mismatch at point {}", i);
+            assert!(
+                (rx - dst_meters[i].0).abs() < eps,
+                "x mismatch at point {}",
+                i
+            );
+            assert!(
+                (ry - dst_meters[i].1).abs() < eps,
+                "y mismatch at point {}",
+                i
+            );
         }
     }
 }

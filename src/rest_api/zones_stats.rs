@@ -1,4 +1,4 @@
-use actix_web::{web, Error, HttpResponse};
+use actix_web::{Error, HttpResponse, web};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -39,7 +39,7 @@ pub struct ZoneStats {
     #[schema(example = json!({"train":{"estimated_avg_speed":-1,"estimated_sum_intensity":0},"bus":{"estimated_avg_speed":15.2,"estimated_sum_intensity":2},"truck":{"estimated_avg_speed":20.965343,"estimated_sum_intensity":3},"car":{"estimated_avg_speed":23.004976,"estimated_sum_intensity":4},"motorbike":{"estimated_avg_speed":-1,"estimated_sum_intensity":0}  }))]
     pub statistics: HashMap<String, VehicleTypeParameters>,
     /// Aggregated traffic flow parameters across the all vehicle types
-    pub traffic_flow_parameters: TrafficFlowInfo
+    pub traffic_flow_parameters: TrafficFlowInfo,
 }
 
 /// Road traffic parameters for specific vehicle type
@@ -55,7 +55,7 @@ pub struct VehicleTypeParameters {
     /// that sum_intensity does not take into account whether vehicles have estimated speed, when
     /// defined_sum_intensity does. Could be less or equal to sum_intensity.
     #[schema(example = 12)]
-    pub estimated_defined_sum_intensity: u32
+    pub estimated_defined_sum_intensity: u32,
 }
 
 /// Road traffic parameters for specific vehicle type
@@ -76,7 +76,6 @@ pub struct TrafficFlowInfo {
     #[schema(example = 2.5)]
     pub avg_headway: f32,
 }
-
 
 #[utoipa::path(
     get,
@@ -129,12 +128,15 @@ pub async fn all_zones_stats(data: web::Data<APIStorage>) -> Result<HttpResponse
             period_start: zone.statistics.period_start,
             period_end: zone.statistics.period_end,
             statistics: HashMap::new(),
-            traffic_flow_parameters: TrafficFlowInfo{
+            traffic_flow_parameters: TrafficFlowInfo {
                 avg_speed: zone.statistics.traffic_flow_parameters.avg_speed,
                 sum_intensity: zone.statistics.traffic_flow_parameters.sum_intensity,
-                defined_sum_intensity: zone.statistics.traffic_flow_parameters.defined_sum_intensity,
+                defined_sum_intensity: zone
+                    .statistics
+                    .traffic_flow_parameters
+                    .defined_sum_intensity,
                 avg_headway: zone.statistics.traffic_flow_parameters.avg_headway,
-            }
+            },
         };
         for (vehicle_type, statistics) in zone.statistics.vehicles_data.iter() {
             stats.statistics.insert(
@@ -142,7 +144,7 @@ pub async fn all_zones_stats(data: web::Data<APIStorage>) -> Result<HttpResponse
                 VehicleTypeParameters {
                     estimated_avg_speed: statistics.avg_speed,
                     estimated_sum_intensity: statistics.sum_intensity,
-                    estimated_defined_sum_intensity: statistics.defined_sum_intensity
+                    estimated_defined_sum_intensity: statistics.defined_sum_intensity,
                 },
             );
         }
@@ -236,4 +238,3 @@ pub async fn all_zones_occupancy(data: web::Data<APIStorage>) -> Result<HttpResp
     drop(ds_guard);
     return Ok(HttpResponse::Ok().json(ans));
 }
-

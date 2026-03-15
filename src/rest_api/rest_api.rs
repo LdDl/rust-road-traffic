@@ -1,30 +1,36 @@
-use std::sync::{Arc, RwLock};
-use actix_web::{web, http, App, HttpServer};
 use actix_cors::Cors;
+use actix_web::{App, HttpServer, http, web};
+use std::sync::{Arc, RwLock};
 
-use crate::settings::AppSettings;
-use crate::rest_api::services;
 use crate::lib::data_storage::ThreadedDataStorage;
 use crate::lib::mjpeg_streaming::Broadcaster;
-use std::sync::{
-    Mutex,
-    mpsc::{
-        Receiver
-    }
-};
+use crate::rest_api::services;
+use crate::settings::AppSettings;
+use std::sync::{Mutex, mpsc::Receiver};
 
 pub struct APIStorage {
     pub data_storage: ThreadedDataStorage,
     pub app_settings: AppSettings,
     pub settings_filename: String,
-    pub mjpeg_broadcaster: web::Data<Mutex<Broadcaster>>
+    pub mjpeg_broadcaster: web::Data<Mutex<Broadcaster>>,
 }
 
 #[actix_web::main]
-pub async fn start_rest_api(server_host: String, server_port: i32, data_storage: ThreadedDataStorage, enable_mjpeg: bool, rx_frames_data: Receiver<Vec<u8>>, app_settings: AppSettings, settings_filename: &str) -> std::io::Result<()> {
+pub async fn start_rest_api(
+    server_host: String,
+    server_port: i32,
+    data_storage: ThreadedDataStorage,
+    enable_mjpeg: bool,
+    rx_frames_data: Receiver<Vec<u8>>,
+    app_settings: AppSettings,
+    settings_filename: &str,
+) -> std::io::Result<()> {
     let bind_address = format!("{}:{}", server_host, server_port);
-    println!("REST API is starting on host:port {}:{}", server_host, server_port);
-    let storage = APIStorage{
+    println!(
+        "REST API is starting on host:port {}:{}",
+        server_host, server_port
+    );
+    let storage = APIStorage {
         data_storage: data_storage,
         app_settings: app_settings,
         settings_filename: settings_filename.to_string(),
@@ -40,7 +46,14 @@ pub async fn start_rest_api(server_host: String, server_port: i32, data_storage:
     HttpServer::new(move || {
         let cors = Cors::default()
             .allow_any_origin()
-            .allowed_headers(vec![http::header::ORIGIN, http::header::AUTHORIZATION, http::header::CONTENT_TYPE, http::header::CONTENT_LENGTH, http::header::ACCEPT, http::header::ACCEPT_ENCODING])
+            .allowed_headers(vec![
+                http::header::ORIGIN,
+                http::header::AUTHORIZATION,
+                http::header::CONTENT_TYPE,
+                http::header::CONTENT_LENGTH,
+                http::header::ACCEPT,
+                http::header::ACCEPT_ENCODING,
+            ])
             .allowed_methods(vec!["GET", "POST"])
             .expose_headers(vec![http::header::CONTENT_LENGTH])
             .supports_credentials()
@@ -55,4 +68,3 @@ pub async fn start_rest_api(server_host: String, server_port: i32, data_storage:
     .run()
     .await
 }
-

@@ -1,12 +1,12 @@
 use opencv::{
     core::{Mat, Point2i},
-    imgproc::line,
     imgproc::LINE_8,
+    imgproc::line,
 };
 
-use crate::lib::spatial::Point2f;
-use crate::lib::cv::{Scalar, to_cv_scalar};
 use crate::lib::constants::EPSILON_TINY;
+use crate::lib::cv::{Scalar, to_cv_scalar};
+use crate::lib::spatial::Point2f;
 
 #[derive(Debug)]
 pub struct Skeleton {
@@ -23,7 +23,10 @@ impl Skeleton {
         let length_pixels = ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt();
         Skeleton {
             line_cvf: [a, b],
-            line_cvi: [Point2i::new(a.x as i32, a.y as i32), Point2i::new(b.x as i32, b.y as i32)],
+            line_cvi: [
+                Point2i::new(a.x as i32, a.y as i32),
+                Point2i::new(b.x as i32, b.y as i32),
+            ],
             color: Scalar::from((0.0, 0.0, 0.0)),
             length_pixels: length_pixels,
             length_meters: -1.0,
@@ -82,12 +85,22 @@ impl Skeleton {
         }
     }
     pub fn draw_on_mat(&self, img: &mut Mat) {
-        match line(img, self.line_cvi[0], self.line_cvi[1], to_cv_scalar(&self.color), 2, LINE_8, 0) {
-            Ok(_) => {},
+        match line(
+            img,
+            self.line_cvi[0],
+            self.line_cvi[1],
+            to_cv_scalar(&self.color),
+            2,
+            LINE_8,
+            0,
+        ) {
+            Ok(_) => {}
             Err(err) => {
-                panic!("Can't draw skeleton line for polygon due the error: {:?}", err)
+                panic!(
+                    "Can't draw skeleton line for polygon due the error: {:?}",
+                    err
+                )
             }
         };
-
     }
 }

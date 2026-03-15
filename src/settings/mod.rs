@@ -1,3 +1,3 @@
 mod settings;
 
-pub use self::{settings::*};
+pub use self::settings::*;

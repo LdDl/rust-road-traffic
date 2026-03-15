@@ -1,6 +1,6 @@
+use crate::lib::spatial::Point2f;
 use std::collections::HashMap;
 use std::sync::Mutex;
-use crate::lib::spatial::Point2f;
 
 use super::zones::Zone;
 
@@ -74,9 +74,11 @@ impl ZoneGrid {
             let (min_x, min_y, max_x, max_y) = bbox.unwrap();
 
             // Convert to cell indices (clamped to grid bounds)
-            let col_start = ((min_x / self.cell_size).floor() as usize).min(self.width_cells.saturating_sub(1));
+            let col_start =
+                ((min_x / self.cell_size).floor() as usize).min(self.width_cells.saturating_sub(1));
             let col_end = ((max_x / self.cell_size).ceil() as usize).min(self.width_cells);
-            let row_start = ((min_y / self.cell_size).floor() as usize).min(self.height_cells.saturating_sub(1));
+            let row_start = ((min_y / self.cell_size).floor() as usize)
+                .min(self.height_cells.saturating_sub(1));
             let row_end = ((max_y / self.cell_size).ceil() as usize).min(self.height_cells);
 
             // Mark all cells in bounding box as containing this zone
@@ -95,7 +97,12 @@ impl ZoneGrid {
     /// Returns empty slice if point is outside frame bounds
     #[inline]
     pub fn get_candidate_zones(&self, x: f32, y: f32) -> &[String] {
-        if !self.is_initialized() || x < 0.0 || y < 0.0 || x >= self.frame_width || y >= self.frame_height {
+        if !self.is_initialized()
+            || x < 0.0
+            || y < 0.0
+            || x >= self.frame_width
+            || y >= self.frame_height
+        {
             return &[];
         }
 
@@ -151,7 +158,11 @@ impl ZoneGrid {
             total_cells: self.cells.len(),
             non_empty_cells: non_empty,
             max_zones_per_cell,
-            avg_zones_per_non_empty: if non_empty > 0 { total_zone_refs as f32 / non_empty as f32 } else { 0.0 },
+            avg_zones_per_non_empty: if non_empty > 0 {
+                total_zone_refs as f32 / non_empty as f32
+            } else {
+                0.0
+            },
             cell_size: self.cell_size,
             grid_dimensions: (self.width_cells, self.height_cells),
         }
@@ -176,7 +187,8 @@ mod tests {
     fn create_test_zone(id: &str, points: Vec<(f32, f32)>) -> Zone {
         let mut zone = Zone::default();
         zone.id = id.to_string();
-        zone.pixel_coordinates = points.into_iter()
+        zone.pixel_coordinates = points
+            .into_iter()
             .map(|(x, y)| Point2f::new(x, y))
             .collect();
         zone
@@ -233,9 +245,10 @@ mod tests {
         grid.initialize(640.0, 480.0, 32.0);
 
         // Create zone covering cells (0,0) to (2,2) - roughly 0-64px in both dimensions
-        let zone = create_test_zone("zone1", vec![
-            (10.0, 10.0), (60.0, 10.0), (60.0, 60.0), (10.0, 60.0)
-        ]);
+        let zone = create_test_zone(
+            "zone1",
+            vec![(10.0, 10.0), (60.0, 10.0), (60.0, 60.0), (10.0, 60.0)],
+        );
 
         let mut zones = HashMap::new();
         zones.insert("zone1".to_string(), Mutex::new(zone));
@@ -258,19 +271,27 @@ mod tests {
         grid.initialize(640.0, 480.0, 32.0);
 
         // Zone 1: top-left area
-        let zone1 = create_test_zone("zone1", vec![
-            (0.0, 0.0), (64.0, 0.0), (64.0, 64.0), (0.0, 64.0)
-        ]);
+        let zone1 = create_test_zone(
+            "zone1",
+            vec![(0.0, 0.0), (64.0, 0.0), (64.0, 64.0), (0.0, 64.0)],
+        );
 
         // Zone 2: overlapping with zone1
-        let zone2 = create_test_zone("zone2", vec![
-            (32.0, 32.0), (128.0, 32.0), (128.0, 128.0), (32.0, 128.0)
-        ]);
+        let zone2 = create_test_zone(
+            "zone2",
+            vec![(32.0, 32.0), (128.0, 32.0), (128.0, 128.0), (32.0, 128.0)],
+        );
 
         // Zone 3: separate area
-        let zone3 = create_test_zone("zone3", vec![
-            (400.0, 300.0), (500.0, 300.0), (500.0, 400.0), (400.0, 400.0)
-        ]);
+        let zone3 = create_test_zone(
+            "zone3",
+            vec![
+                (400.0, 300.0),
+                (500.0, 300.0),
+                (500.0, 400.0),
+                (400.0, 400.0),
+            ],
+        );
 
         let mut zones = HashMap::new();
         zones.insert("zone1".to_string(), Mutex::new(zone1));
@@ -302,9 +323,10 @@ mod tests {
         grid.initialize(640.0, 480.0, 32.0);
 
         // First rebuild with zone1
-        let zone1 = create_test_zone("zone1", vec![
-            (0.0, 0.0), (64.0, 0.0), (64.0, 64.0), (0.0, 64.0)
-        ]);
+        let zone1 = create_test_zone(
+            "zone1",
+            vec![(0.0, 0.0), (64.0, 0.0), (64.0, 64.0), (0.0, 64.0)],
+        );
         let mut zones = HashMap::new();
         zones.insert("zone1".to_string(), Mutex::new(zone1));
         grid.rebuild(&zones);
@@ -312,9 +334,15 @@ mod tests {
         assert_eq!(grid.get_candidate_zones(16.0, 16.0).len(), 1);
 
         // Second rebuild with different zone
-        let zone2 = create_test_zone("zone2", vec![
-            (200.0, 200.0), (300.0, 200.0), (300.0, 300.0), (200.0, 300.0)
-        ]);
+        let zone2 = create_test_zone(
+            "zone2",
+            vec![
+                (200.0, 200.0),
+                (300.0, 200.0),
+                (300.0, 300.0),
+                (200.0, 300.0),
+            ],
+        );
         let mut zones = HashMap::new();
         zones.insert("zone2".to_string(), Mutex::new(zone2));
         grid.rebuild(&zones);
@@ -329,9 +357,10 @@ mod tests {
     fn test_rebuild_uninitialized_grid_no_panic() {
         let mut grid = ZoneGrid::uninitialized();
 
-        let zone = create_test_zone("zone1", vec![
-            (10.0, 10.0), (60.0, 10.0), (60.0, 60.0), (10.0, 60.0)
-        ]);
+        let zone = create_test_zone(
+            "zone1",
+            vec![(10.0, 10.0), (60.0, 10.0), (60.0, 60.0), (10.0, 60.0)],
+        );
         let mut zones = HashMap::new();
         zones.insert("zone1".to_string(), Mutex::new(zone));
 
@@ -346,9 +375,10 @@ mod tests {
         // 4x4 grid = 16 cells
         grid.initialize(128.0, 128.0, 32.0);
 
-        let zone = create_test_zone("zone1", vec![
-            (0.0, 0.0), (64.0, 0.0), (64.0, 64.0), (0.0, 64.0)
-        ]);
+        let zone = create_test_zone(
+            "zone1",
+            vec![(0.0, 0.0), (64.0, 0.0), (64.0, 64.0), (0.0, 64.0)],
+        );
         let mut zones = HashMap::new();
         zones.insert("zone1".to_string(), Mutex::new(zone));
         grid.rebuild(&zones);
@@ -367,9 +397,15 @@ mod tests {
         grid.initialize(640.0, 480.0, 32.0);
 
         // Zone at the edge of frame
-        let zone = create_test_zone("edge_zone", vec![
-            (600.0, 440.0), (640.0, 440.0), (640.0, 480.0), (600.0, 480.0)
-        ]);
+        let zone = create_test_zone(
+            "edge_zone",
+            vec![
+                (600.0, 440.0),
+                (640.0, 440.0),
+                (640.0, 480.0),
+                (600.0, 480.0),
+            ],
+        );
         let mut zones = HashMap::new();
         zones.insert("edge_zone".to_string(), Mutex::new(zone));
         grid.rebuild(&zones);

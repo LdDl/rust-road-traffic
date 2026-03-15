@@ -1,7 +1,7 @@
 use opencv::{
-    prelude::*,
     core::{Mat, Vector},
     imgcodecs::imwrite,
+    prelude::*,
 };
 
 use crate::lib::cv::Rect as RectCV;
@@ -36,7 +36,10 @@ pub struct DatasetCollector {
 }
 
 impl DatasetCollector {
-    pub fn new(settings: DatasetCollectorSettings, net_classes: &[String]) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(
+        settings: DatasetCollectorSettings,
+        net_classes: &[String],
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let images_dir = format!("{}/images", settings.output_dir);
         let labels_dir = format!("{}/labels", settings.output_dir);
 
@@ -51,9 +54,14 @@ impl DatasetCollector {
             .map(|(i, name)| (name.clone(), i))
             .collect();
 
-        println!("[DatasetCollector] Initialized with output_dir: {}", settings.output_dir);
-        println!("[DatasetCollector] min_track_age: {}, max_captures_per_track: {}, capture_interval: {}",
-            settings.min_track_age, settings.max_captures_per_track, settings.capture_interval);
+        println!(
+            "[DatasetCollector] Initialized with output_dir: {}",
+            settings.output_dir
+        );
+        println!(
+            "[DatasetCollector] min_track_age: {}, max_captures_per_track: {}, capture_interval: {}",
+            settings.min_track_age, settings.max_captures_per_track, settings.capture_interval
+        );
 
         Ok(Self {
             settings,
@@ -78,7 +86,12 @@ impl DatasetCollector {
 
     /// Convert pixel bounding box to YOLO normalized format
     /// Returns: (center_x, center_y, width, height) all normalized to [0, 1]
-    fn bbox_to_yolo(&self, bbox: &RectCV, frame_width: i32, frame_height: i32) -> (f64, f64, f64, f64) {
+    fn bbox_to_yolo(
+        &self,
+        bbox: &RectCV,
+        frame_width: i32,
+        frame_height: i32,
+    ) -> (f64, f64, f64, f64) {
         let center_x = (bbox.x as f64 + bbox.width as f64 / 2.0) / frame_width as f64;
         let center_y = (bbox.y as f64 + bbox.height as f64 / 2.0) / frame_height as f64;
         let width = bbox.width as f64 / frame_width as f64;
@@ -107,8 +120,12 @@ impl DatasetCollector {
 
         // Debug: log every 100 frames
         if self.frame_counter % 100 == 0 {
-            println!("[DatasetCollector] Frame {}: {} detections, {} tracked objects",
-                self.frame_counter, bboxes.len(), self.track_states.len());
+            println!(
+                "[DatasetCollector] Frame {}: {} detections, {} tracked objects",
+                self.frame_counter,
+                bboxes.len(),
+                self.track_states.len()
+            );
         }
 
         if bboxes.is_empty() {
@@ -136,7 +153,8 @@ impl DatasetCollector {
             }
 
             // Check edge proximity
-            if self.settings.skip_edge_objects && self.is_near_edge(bbox, frame_width, frame_height) {
+            if self.settings.skip_edge_objects && self.is_near_edge(bbox, frame_width, frame_height)
+            {
                 skipped_edge += 1;
                 continue;
             }
@@ -145,10 +163,13 @@ impl DatasetCollector {
             mature_objects.push(i);
 
             // Check if this object should trigger a new capture
-            let state = self.track_states.entry(*track_id).or_insert(TrackCaptureState {
-                capture_count: 0,
-                last_capture_frame: 0,
-            });
+            let state = self
+                .track_states
+                .entry(*track_id)
+                .or_insert(TrackCaptureState {
+                    capture_count: 0,
+                    last_capture_frame: 0,
+                });
 
             // Already reached max captures?
             if state.capture_count >= self.settings.max_captures_per_track {
@@ -169,8 +190,13 @@ impl DatasetCollector {
 
         // Debug: log skip reasons every 100 frames
         if self.frame_counter % 100 == 0 && !bboxes.is_empty() {
-            println!("[DatasetCollector] Skipped: {} young, {} edge. Mature: {}, Triggers: {}",
-                skipped_young, skipped_edge, mature_objects.len(), trigger_track_ids.len());
+            println!(
+                "[DatasetCollector] Skipped: {} young, {} edge. Mature: {}, Triggers: {}",
+                skipped_young,
+                skipped_edge,
+                mature_objects.len(),
+                trigger_track_ids.len()
+            );
         }
 
         // If we have trigger objects, save the frame with ALL mature objects annotated
@@ -197,7 +223,10 @@ impl DatasetCollector {
 
                 // Convert to YOLO format
                 let (cx, cy, w, h) = self.bbox_to_yolo(bbox, frame_width, frame_height);
-                annotations.push_str(&format!("{} {:.6} {:.6} {:.6} {:.6}\n", class_id, cx, cy, w, h));
+                annotations.push_str(&format!(
+                    "{} {:.6} {:.6} {:.6} {:.6}\n",
+                    class_id, cx, cy, w, h
+                ));
             }
 
             // Update capture state only for trigger objects
@@ -212,16 +241,20 @@ impl DatasetCollector {
             let mut file = fs::File::create(&label_path)?;
             file.write_all(annotations.as_bytes())?;
 
-            println!("[DatasetCollector] SAVED: {} with {} objects (triggered by {}) -> {}",
-                filename_base, mature_objects.len(), trigger_track_ids.len(), image_path);
+            println!(
+                "[DatasetCollector] SAVED: {} with {} objects (triggered by {}) -> {}",
+                filename_base,
+                mature_objects.len(),
+                trigger_track_ids.len(),
+                image_path
+            );
         }
 
         // Cleanup old track states (optional - prevents memory growth)
         // Remove tracks that haven't been seen for a while
         if self.frame_counter % 1000 == 0 {
-            self.track_states.retain(|_, state| {
-                self.frame_counter - state.last_capture_frame < 500
-            });
+            self.track_states
+                .retain(|_, state| self.frame_counter - state.last_capture_frame < 500);
         }
 
         Ok(())

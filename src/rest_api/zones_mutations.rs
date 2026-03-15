@@ -1,16 +1,9 @@
-use std::str::FromStr;
-use actix_web::{HttpResponse, web, Error, http::StatusCode};
-use serde::{
-    Deserialize,
-    Serialize
-};
-use utoipa::ToSchema;
-use crate::lib::zones::{
-    Zone,
-    VirtualLineDirection,
-    VirtualLine
-};
+use crate::lib::zones::{VirtualLine, VirtualLineDirection, Zone};
 use crate::rest_api::APIStorage;
+use actix_web::{Error, HttpResponse, http::StatusCode, web};
+use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+use utoipa::ToSchema;
 
 /// Error response
 #[derive(Debug, Serialize, ToSchema)]
@@ -43,12 +36,12 @@ pub struct ZoneUpdateRequest {
     #[schema(example = json!([130, 0, 100]))]
     pub color_rgb: Option<[i16; 3]>,
     /// Virtual line
-    pub virtual_line: Option<VirtualLineRequestData>
+    pub virtual_line: Option<VirtualLineRequestData>,
 }
 
 /// Respone on zone update request
 #[derive(Debug, Serialize, ToSchema)]
-pub struct ZoneUpdateResponse <'a>{
+pub struct ZoneUpdateResponse<'a> {
     /// Message
     #[schema(example = "ok")]
     pub message: &'a str,
@@ -64,18 +57,28 @@ pub struct ZoneUpdateResponse <'a>{
         (status = 424, description = "Failed dependency", body = ErrorResponse)
     )
 )]
-pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<ZoneUpdateRequest>) -> Result<HttpResponse, Error> {
-
-    let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
-    let mut zones = ds_guard.zones.write().expect("Spatial data is poisoned [RWLock]");
+pub async fn update_zone(
+    data: web::Data<APIStorage>,
+    _update_zone: web::Json<ZoneUpdateRequest>,
+) -> Result<HttpResponse, Error> {
+    let ds_guard = data
+        .data_storage
+        .read()
+        .expect("DataStorage is poisoned [RWLock]");
+    let mut zones = ds_guard
+        .zones
+        .write()
+        .expect("Spatial data is poisoned [RWLock]");
 
     let zone_guarded = match zones.get_mut(&_update_zone.zone_id) {
         /* Check if polygon with such identifier exists */
         Some(val) => val,
         None => {
-            return Ok(HttpResponse::build(StatusCode::FAILED_DEPENDENCY).json(ErrorResponse {
-                error_text: format!("No such zone. Requested ID: {}", _update_zone.zone_id)
-            }));
+            return Ok(
+                HttpResponse::build(StatusCode::FAILED_DEPENDENCY).json(ErrorResponse {
+                    error_text: format!("No such zone. Requested ID: {}", _update_zone.zone_id),
+                }),
+            );
         }
     };
 
@@ -87,7 +90,7 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Zo
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             zone.update_pixel_map(data);
             drop(zone)
-        },
+        }
         _ => {}
     }
 
@@ -96,7 +99,7 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Zo
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             zone.update_spatial_map(data);
             drop(zone)
-        },
+        }
         _ => {}
     }
 
@@ -105,7 +108,7 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Zo
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             zone.set_road_lane_direction(val);
             drop(zone)
-        },
+        }
         _ => {}
     }
 
@@ -115,7 +118,7 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Zo
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             zone.set_road_lane_num(val);
             drop(zone)
-        },
+        }
         _ => {}
     }
 
@@ -125,7 +128,7 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Zo
             zone.set_color(val);
             zone.set_line_color(val);
             drop(zone)
-        },
+        }
         _ => {}
     }
 
@@ -134,7 +137,7 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Zo
             let dir = VirtualLineDirection::from_str(val.direction.as_str()).unwrap_or_default();
             let mut new_line = VirtualLine::new_from(val.geometry, dir);
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
-            if let Some(rgb) = val.color_rgb{
+            if let Some(rgb) = val.color_rgb {
                 new_line.set_color_rgb(rgb[0], rgb[1], rgb[2]);
             } else {
                 let zone_color = zone.get_color();
@@ -142,7 +145,7 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Zo
             };
             zone.set_virtual_line(new_line);
             drop(zone)
-        },
+        }
         _ => {}
     }
 
@@ -154,11 +157,8 @@ pub async fn update_zone(data: web::Data<APIStorage>, _update_zone: web::Json<Zo
         let _ = ds_guard.rebuild_zone_grid();
     }
 
-    return Ok(HttpResponse::Ok().json(ZoneUpdateResponse{
-        message: "ok"
-    }));
+    return Ok(HttpResponse::Ok().json(ZoneUpdateResponse { message: "ok" }));
 }
-
 
 /// The body of the request to delete the zone
 #[derive(Debug, Deserialize, ToSchema)]
@@ -170,7 +170,7 @@ pub struct ZoneDeleteRequest {
 
 /// Respone on zone delete request
 #[derive(Debug, Serialize, ToSchema)]
-pub struct ZoneDeleteResponse <'a>{
+pub struct ZoneDeleteResponse<'a> {
     /// Message
     #[schema(example = "ok")]
     pub message: &'a str,
@@ -186,22 +186,31 @@ pub struct ZoneDeleteResponse <'a>{
         (status = 500, description = "Internal error", body = ErrorResponse)
     )
 )]
-pub async fn delete_zone(data: web::Data<APIStorage>, _delete_zone: web::Json<ZoneDeleteRequest>) -> Result<HttpResponse, Error> {
-    let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
+pub async fn delete_zone(
+    data: web::Data<APIStorage>,
+    _delete_zone: web::Json<ZoneDeleteRequest>,
+) -> Result<HttpResponse, Error> {
+    let ds_guard = data
+        .data_storage
+        .read()
+        .expect("DataStorage is poisoned [RWLock]");
     match ds_guard.delete_zone(&_delete_zone.zone_id) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(err) => {
-            return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).json(ErrorResponse {
-                error_text: format!("Can't delete zone ID: {}. Error: {}", _delete_zone.zone_id, err)
-            }));
+            return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).json(
+                ErrorResponse {
+                    error_text: format!(
+                        "Can't delete zone ID: {}. Error: {}",
+                        _delete_zone.zone_id, err
+                    ),
+                },
+            ));
         }
     }
     // Rebuild zone grid after deletion
     let _ = ds_guard.rebuild_zone_grid();
     drop(ds_guard);
-    return Ok(HttpResponse::NoContent().json(ZoneDeleteResponse{
-        message: "ok"
-    }));
+    return Ok(HttpResponse::NoContent().json(ZoneDeleteResponse { message: "ok" }));
 }
 
 /// The body of the request to create new zone
@@ -224,7 +233,7 @@ pub struct ZoneCreateRequest {
     #[schema(example = json!([130, 130, 0]))]
     pub color_rgb: Option<[i16; 3]>,
     /// Virtual line
-    pub virtual_line: Option<VirtualLineRequestData>
+    pub virtual_line: Option<VirtualLineRequestData>,
 }
 
 /// Information about virtual line
@@ -248,7 +257,7 @@ pub struct VirtualLineRequestData {
 pub struct ZoneCreateResponse {
     /// Zone identifier
     #[schema(example = "fad8a040-5979-47e9-9ebf-3a571f677f49")]
-    pub zone_id: String
+    pub zone_id: String,
 }
 
 #[utoipa::path(
@@ -261,8 +270,10 @@ pub struct ZoneCreateResponse {
         (status = 500, description = "Internal error", body = ErrorResponse)
     )
 )]
-pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<ZoneCreateRequest>) -> Result<HttpResponse, Error> {
-
+pub async fn create_zone(
+    data: web::Data<APIStorage>,
+    _new_zone: web::Json<ZoneCreateRequest>,
+) -> Result<HttpResponse, Error> {
     // @todo need to deal with those (see main function):
     // polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
 
@@ -270,35 +281,35 @@ pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<ZoneC
     match _new_zone.pixel_points {
         Some(data) => {
             zone.update_pixel_map(data);
-        },
+        }
         _ => {}
     }
 
     match _new_zone.spatial_points {
         Some(data) => {
             zone.update_spatial_map(data);
-        },
+        }
         _ => {}
     }
 
     match _new_zone.lane_direction {
         Some(val) => {
             zone.set_road_lane_direction(val);
-        },
+        }
         _ => {}
     }
 
     match _new_zone.lane_number {
         Some(val) => {
             zone.set_road_lane_num(val);
-        },
+        }
         _ => {}
     }
 
     match _new_zone.color_rgb {
         Some(val) => {
             zone.set_color(val);
-        },
+        }
         _ => {}
     }
 
@@ -306,26 +317,31 @@ pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<ZoneC
         Some(val) => {
             let dir = VirtualLineDirection::from_str(val.direction.as_str()).unwrap_or_default();
             let mut new_line = VirtualLine::new_from(val.geometry, dir);
-            if let Some(rgb) = val.color_rgb{
+            if let Some(rgb) = val.color_rgb {
                 new_line.set_color_rgb(rgb[0], rgb[1], rgb[2]);
             } else {
                 let zone_color = zone.get_color();
                 new_line.set_color_rgb(zone_color[0], zone_color[1], zone_color[2]);
             };
             zone.set_virtual_line(new_line);
-        },
+        }
         _ => {}
     }
 
     let new_id = zone.get_id().clone();
 
-    let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
+    let ds_guard = data
+        .data_storage
+        .read()
+        .expect("DataStorage is poisoned [RWLock]");
     match ds_guard.insert_zone(zone) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(err) => {
-            return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).json(ErrorResponse {
-                error_text: format!("Can't insert zone ID: {}. Error: {}", new_id, err)
-            }));
+            return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).json(
+                ErrorResponse {
+                    error_text: format!("Can't insert zone ID: {}. Error: {}", new_id, err),
+                },
+            ));
         }
     }
 
@@ -333,11 +349,8 @@ pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<ZoneC
     let _ = ds_guard.rebuild_zone_grid();
     drop(ds_guard);
 
-    return Ok(HttpResponse::Created().json(ZoneCreateResponse{
-        zone_id: new_id
-    }));
+    return Ok(HttpResponse::Created().json(ZoneCreateResponse { zone_id: new_id }));
 }
-
 
 /// The body of the request to overwrite all zones
 /// It does delete all existing zones and create new ones
@@ -345,7 +358,7 @@ pub async fn create_zone(data: web::Data<APIStorage>, _new_zone: web::Json<ZoneC
 pub struct ZonesOverwriteAllRequest {
     /// List of new zones
     #[schema(example = json!([{"lane_number":53,"lane_direction":153,"pixel_points":[[230,200],[550,235],[512,40],[359,69]],"spatial_points":[[37.618908137083054,54.20564619851147],[37.61891517788172,54.20564502193819],[37.618927247822285,54.205668749493036],[37.61892020702362,54.2056701221611]],"color_rgb":[130,130,0],"virtual_line":{"geometry":[[365,177],[540,185]],"color_rgb":[210,65,80],"direction":"lrtb"}},{"lane_number":42,"lane_direction":142,"pixel_points":[[591,265],[835,265],[726,48],[555,58]],"spatial_points":[[37.618923808130916,54.205684902663165],[37.618887068935805,54.205689389059046],[37.618869252334406,54.205650113258066],[37.61890605402775,54.20564367215164]],"color_rgb":[130,0,130]}]))]
-    pub data: Vec<ZoneCreateRequest>
+    pub data: Vec<ZoneCreateRequest>,
 }
 
 /// Respone on overwrite all zones request
@@ -353,7 +366,7 @@ pub struct ZonesOverwriteAllRequest {
 pub struct ZonesOverwriteAllResponse {
     /// List of new zones identifiers
     #[schema(example = json!(["fad8a040-5979-47e9-9ebf-3a571f677f49", "dcd66eeb-545c-4f81-99f6-e94229f8008a"]))]
-    pub zones_ids: Vec<String>
+    pub zones_ids: Vec<String>,
 }
 
 #[utoipa::path(
@@ -366,17 +379,27 @@ pub struct ZonesOverwriteAllResponse {
         (status = 500, description = "Internal error", body = ErrorResponse)
     )
 )]
-pub async fn replace_all(data: web::Data<APIStorage>, _new_zones: web::Json<ZonesOverwriteAllRequest>) -> Result<HttpResponse, Error> {
-
+pub async fn replace_all(
+    data: web::Data<APIStorage>,
+    _new_zones: web::Json<ZonesOverwriteAllRequest>,
+) -> Result<HttpResponse, Error> {
     if _new_zones.data.len() == 0 {
-        return Ok(HttpResponse::build(StatusCode::BAD_REQUEST).json(ErrorResponse {
-            error_text: "No polygons".to_string()
-        }));
+        return Ok(
+            HttpResponse::build(StatusCode::BAD_REQUEST).json(ErrorResponse {
+                error_text: "No polygons".to_string(),
+            }),
+        );
     }
 
     // Mark data for clean
-    let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
-    let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
+    let ds_guard = data
+        .data_storage
+        .read()
+        .expect("DataStorage is poisoned [RWLock]");
+    let zones = ds_guard
+        .zones
+        .read()
+        .expect("Spatial data is poisoned [RWLock]");
     let need_to_clean: Vec<String> = zones.iter().map(|poly| poly.0.clone()).collect();
     drop(zones);
     drop(ds_guard);
@@ -388,63 +411,68 @@ pub async fn replace_all(data: web::Data<APIStorage>, _new_zones: web::Json<Zone
         match new_zone.pixel_points {
             Some(data) => {
                 zone.update_pixel_map(data);
-            },
+            }
             _ => {}
         }
 
         match new_zone.spatial_points {
             Some(data) => {
                 zone.update_spatial_map(data);
-            },
+            }
             _ => {}
         }
 
         match new_zone.lane_direction {
             Some(val) => {
                 zone.set_road_lane_direction(val);
-            },
+            }
             _ => {}
         }
 
         match new_zone.lane_number {
             Some(val) => {
                 zone.set_road_lane_num(val);
-            },
+            }
             _ => {}
         }
 
         match new_zone.color_rgb {
             Some(val) => {
                 zone.set_color(val);
-            },
+            }
             _ => {}
         }
 
         match &new_zone.virtual_line {
             Some(val) => {
-                let dir = VirtualLineDirection::from_str(val.direction.as_str()).unwrap_or_default();
+                let dir =
+                    VirtualLineDirection::from_str(val.direction.as_str()).unwrap_or_default();
                 let mut new_line = VirtualLine::new_from(val.geometry, dir);
-                if let Some(rgb) = val.color_rgb{  
+                if let Some(rgb) = val.color_rgb {
                     new_line.set_color_rgb(rgb[0], rgb[1], rgb[2]);
                 } else {
                     let zone_color = zone.get_color();
                     new_line.set_color_rgb(zone_color[0], zone_color[1], zone_color[2]);
                 };
                 zone.set_virtual_line(new_line);
-            },
+            }
             _ => {}
         }
 
         let new_id = zone.get_id().clone();
 
-
-        let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
+        let ds_guard = data
+            .data_storage
+            .read()
+            .expect("DataStorage is poisoned [RWLock]");
         match ds_guard.insert_zone(zone) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(err) => {
-                return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).json(ErrorResponse {
-                    error_text: format!("Can't insert zone ID: {}. Error: {}", new_id, err)
-                }));
+                return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).json(
+                    ErrorResponse {
+                        error_text: format!("Can't insert zone ID: {}. Error: {}", new_id, err),
+                    },
+                ));
             }
         }
         drop(ds_guard);
@@ -453,14 +481,22 @@ pub async fn replace_all(data: web::Data<APIStorage>, _new_zones: web::Json<Zone
     }
 
     // Clean data
-    let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
+    let ds_guard = data
+        .data_storage
+        .read()
+        .expect("DataStorage is poisoned [RWLock]");
     for zone_id in need_to_clean.iter() {
         match ds_guard.delete_zone(zone_id) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(err) => {
-                return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).json(ErrorResponse {
-                    error_text: format!("Can't delete obsolete zone ID: {}. Error: {}", zone_id, err)
-                }));
+                return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).json(
+                    ErrorResponse {
+                        error_text: format!(
+                            "Can't delete obsolete zone ID: {}. Error: {}",
+                            zone_id, err
+                        ),
+                    },
+                ));
             }
         }
     }
@@ -468,7 +504,7 @@ pub async fn replace_all(data: web::Data<APIStorage>, _new_zones: web::Json<Zone
     // Rebuild zone grid once after all changes
     let _ = ds_guard.rebuild_zone_grid();
 
-    return Ok(HttpResponse::Created().json(ZonesOverwriteAllResponse{
-        zones_ids: response
+    return Ok(HttpResponse::Created().json(ZonesOverwriteAllResponse {
+        zones_ids: response,
     }));
 }

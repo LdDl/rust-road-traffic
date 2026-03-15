@@ -1,6 +1,6 @@
-use uuid::Uuid;
-use mot_rs::mot::{SimpleBlob, BlobBBox};
+use mot_rs::mot::{BlobBBox, SimpleBlob};
 use mot_rs::utils::{Point, Rect};
+use uuid::Uuid;
 
 /// Enum wrapper for tracked objects - allows runtime choice between centroid and bbox Kalman
 #[derive(Debug, Clone)]

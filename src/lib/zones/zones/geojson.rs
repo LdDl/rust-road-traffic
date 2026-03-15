@@ -9,15 +9,15 @@ pub struct ZonesFeatureCollection {
     #[schema(example = "FeatureCollection")]
     pub typ: String,
     /// Set of the GeoJSON features
-    pub features: Vec<ZoneFeature>
+    pub features: Vec<ZoneFeature>,
 }
 
 impl ZonesFeatureCollection {
     pub fn new() -> Self {
         return ZonesFeatureCollection {
             typ: "FeatureCollection".to_string(),
-            features: vec![]
-        }
+            features: vec![],
+        };
     }
 }
 
@@ -53,7 +53,7 @@ pub struct ZonePropertiesGeoJSON {
     #[schema(example = json!([255, 0, 0]))]
     pub color_rgb: [i16; 3],
     /// Information about virtual line (optional)
-    pub virtual_line: Option<VirtualLineFeature>
+    pub virtual_line: Option<VirtualLineFeature>,
 }
 
 /// Information about virtual line
