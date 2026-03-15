@@ -15,7 +15,6 @@ use od_opencv::model_format::{ModelFormat, ModelVersion};
 pub struct AppSettings {
     pub input: InputSettings,
     pub debug: Option<DebugSettings>,
-    pub output: OutputSettings,
     pub detection: DetectionSettings,
     pub tracking: TrackingSettings,
     pub equipment_info: EquipmentInfo,
@@ -36,14 +35,6 @@ pub struct InputSettings {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DebugSettings {
     pub enable: bool
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct OutputSettings {
-    pub enable: bool,
-    pub width: i32,
-    pub height: i32,
-    pub window_name: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -324,7 +315,6 @@ impl AppSettings {
         AppSettings{
             input: self.input.clone(),
             debug: self.debug.clone(),
-            output: self.output.clone(),
             detection: self.detection.clone(),
             tracking: self.tracking.clone(),
             equipment_info: self.equipment_info.clone(),

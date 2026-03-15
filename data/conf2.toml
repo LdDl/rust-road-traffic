@@ -10,13 +10,6 @@
 [debug]
     enable = true
 
-[output]
-    # Define attributes for imshow() if needed
-    enable = true
-    width = 1024
-    height = 720
-    window_name = "Toy GUI"
-
 [detection]
     # Available model_versions: v3, v4, v7, v8
     # Default is v3

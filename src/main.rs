@@ -234,9 +234,6 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         }
         None => (false, 80)
     };
-    if settings.output.enable {
-        println!("Warning: 'output.enable' is deprecated and ignored. Use MJPEG streaming via REST API instead.");
-    }
 
     println!("MJPEG is '{}' (quality: {})", enable_mjpeg, mjpeg_quality);
     if report_mode {
@@ -471,7 +468,6 @@ fn run(settings: &AppSettings, path_to_config: &str, tracker: &mut dyn TrackerTr
         .unwrap_or("centroid")
         .parse()
         .unwrap_or_default();
-
 
     let ds_tracker = data_storage.clone();
 
