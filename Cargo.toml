@@ -17,6 +17,8 @@ opencv-backend = ["opencv/dnn", "od_opencv/opencv-backend"]
 ort-backend = ["od_opencv/ort-backend", "od_opencv/ort-opencv-compat"]
 # CUDA acceleration for ORT backend
 ort-cuda = ["ort-backend", "od_opencv/ort-cuda-backend"]
+# TensorRT backend (Jetson Nano, NVIDIA GPUs with .engine files)
+tensorrt-backend = ["od_opencv/tensorrt-opencv-compat"]
 
 [dependencies]
 # OpenCV for video I/O, drawing, etc. DNN feature is conditional via features above
@@ -40,7 +42,7 @@ mot-rs = "0.5.0"
 utoipa = { version = "3", features = ["actix_extras"] }
 utoipa-rapidoc = { version = "0.1", features = ["actix-web"] }
 # Object detection with YOLO models
-od_opencv = { version = "0.4.1", default-features = false, features = ["letterbox"] }
+od_opencv = { version = "0.8.1", default-features = false, features = ["letterbox"] }
 rand = "0.9.2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
