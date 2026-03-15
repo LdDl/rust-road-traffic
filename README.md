@@ -10,7 +10,7 @@
 - [Dataset collection](#dataset-collection-auto-labeling)
 - [Report mode](#report-mode)
 - [ROADMAP](#roadmap)
-  - [Support](#support)
+- [Support](#support)
 
 ## Video showcase
 
@@ -38,10 +38,15 @@ This project supports two inference backends via compile-time feature flags:
 |---------|--------------|------------------|-------------|
 | OpenCV DNN | `opencv-backend` (default) | YOLOv3/v4/v7 (Darknet), YOLOv8/v9/v11 (ONNX) | CUDA, OpenCL |
 | ONNX Runtime | `ort-backend` | YOLOv8/v9/v11 (ONNX only) | CUDA 12.x |
+| TensorRT | `tensorrt-backend` | YOLOv3/v4/v7/v8/v9/v11 (`.engine` only) | CUDA (native TensorRT) |
 
 **How `ort-backend` works:** Uses ONNX Runtime for inference but still requires OpenCV for video I/O, drawing, and preprocessing. This is achieved via the `ort-opencv-compat` adapter from `od_opencv` crate, which allows ORT models to accept OpenCV `Mat` directly without enabling OpenCV's DNN module (avoiding static linking conflicts).
 
-**Important:** The `ort-backend` does NOT support Darknet weights (`.cfg` + `.weights` files). If you need YOLOv3/v4/v7 with Darknet format, use `opencv-backend`.
+**How `tensorrt-backend` works:** Uses NVIDIA TensorRT for inference via serialized `.engine` files. Still requires OpenCV for video I/O, drawing, and preprocessing (via `tensorrt-opencv-compat` adapter from `od_opencv` crate). This backend is designed for NVIDIA embedded platforms (Jetson Nano, Jetson Xavier, Jetson Orin) and discrete NVIDIA GPUs.
+
+**Important:**
+- The `ort-backend` does NOT support Darknet weights (`.cfg` + `.weights` files). If you need YOLOv3/v4/v7 with Darknet format, use `opencv-backend`.
+- The `tensorrt-backend` ONLY supports `.engine` files. You must convert your model to TensorRT engine format beforehand (e.g. via `trtexec`). Darknet (`.cfg` + `.weights`) and ONNX (`.onnx`) files will NOT work with this backend.
 
 ### Build Commands
 
@@ -51,6 +56,9 @@ cargo build --release
 
 # ORT backend - YOLOv8/v9/v11 ONNX only
 cargo build --release --no-default-features --features ort-backend
+
+# TensorRT backend - YOLOv3/v4/v7/v8/v9/v11 .engine only (Jetson / NVIDIA GPU)
+cargo build --release --no-default-features --features tensorrt-backend
 ```
 
 ### Run Commands
@@ -61,7 +69,22 @@ cargo run --release -- path-to-toml-file
 
 # ORT backend
 cargo run --release --no-default-features --features ort-backend -- path-to-toml-file
+
+# TensorRT backend
+cargo run --release --no-default-features --features tensorrt-backend -- path-to-toml-file
 ```
+
+### Converting models to TensorRT `.engine` format
+
+Use `trtexec` (included with TensorRT / JetPack) to convert an ONNX model:
+
+```bash
+trtexec --onnx=yolov8n.onnx --saveEngine=yolov8n.engine --fp16
+```
+
+On Jetson devices, `trtexec` is typically located at `/usr/src/tensorrt/bin/trtexec`.
+
+Be aware that Traditional models `v3`, `v4` and `v7` should be converted to ONNX first via [darknet2onnx](https://github.com/LdDl/darknet2onnx) and then via `trtexec` to TensorRT engine format.
 
 ## Traffic flow parameters
 

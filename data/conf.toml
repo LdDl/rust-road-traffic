@@ -20,16 +20,16 @@
 [detection]
     # Available model_versions: v3, v4, v7, v8
     # Default is v3
-    network_ver = 7
+    network_ver = 8
     # Available model formats: "darknet", "onnx"
     # Default is "darknet"
     network_format = "darknet"
-    network_weights = "./data/yolov7.weights"
+    network_weights = "/home/dimitrii/rust_work/object-detection-opencv-rust/pretrained/yolov8n.engine"
     network_cfg = "./data/yolov7.cfg"
     conf_threshold = 0.4
     nms_threshold = 0.2
-    net_width = 608
-    net_height = 608
+    net_width = 640
+    net_height = 640
     # Target classes to be used in filtering.
     # Leave array empty if all net classes should be used
     target_classes = ["car", "motorbike", "bus", "train", "truck"]
