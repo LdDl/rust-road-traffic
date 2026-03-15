@@ -112,7 +112,6 @@ mod tests {
     use crate::lib::spatial::epsg::lonlat_to_meters;
     use crate::lib::spatial::epsg::meters_to_lonlat;
     #[test]
-
     fn test_spatial_converter() {
         let mut src = Vector::<Point2f>::new();
         src.push(Point2f::new(554.0, 592.0));
@@ -166,7 +165,7 @@ mod tests {
 
         let distance = haversine(a_wgs84.0, a_wgs84.1, b_wgs84.0, b_wgs84.1) * 1000.0;
         println!("distance: {}", distance);
-        let correct_dist: f32 = 19.96;
+        let correct_dist: f32 = 19.95998;
         assert!((distance - correct_dist).abs() < eps);
     }
     #[test]

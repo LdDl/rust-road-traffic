@@ -25,6 +25,7 @@ use od_opencv::{Model, ModelTrait};
 use uuid::Uuid;
 use mot_rs::utils::Rect;
 
+#[path = "lib/mod.rs"]
 mod lib;
 use lib::data_storage::new_datastorage;
 use lib::draw;
