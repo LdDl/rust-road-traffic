@@ -24,6 +24,10 @@ use od_opencv::{Model, DnnBackend, DnnTarget, model_format::ModelFormat, model::
 #[cfg(all(feature = "ort-backend", not(feature = "opencv-backend")))]
 use od_opencv::{Model, ModelTrait};
 
+// TensorRT backend uses ModelTrait from opencv_compat (does not depend on opencv/dnn)
+#[cfg(all(feature = "tensorrt-backend", not(feature = "opencv-backend"), not(feature = "ort-backend")))]
+use od_opencv::{Model, ModelTrait};
+
 use uuid::Uuid;
 use mot_rs::utils::Rect;
 
@@ -199,6 +203,22 @@ fn prepare_neural_net(
     match model_result {
         Ok(model) => Ok(Box::new(model)),
         Err(err) => panic!("Can't create ORT model '{}' due the error: {:?}", weights, err),
+    }
+}
+
+// TensorRT backend (compile-time)
+#[cfg(all(feature = "tensorrt-backend", not(feature = "opencv-backend"), not(feature = "ort-backend")))]
+fn prepare_neural_net(
+    // ingore model format not used - TensorRT uses .engine files anyways
+    _mf: (),
+    weights: &str,
+    _configuration: Option<String>,
+    net_size: (i32, i32)
+) -> Result<Box<dyn ModelTrait>, AppError> {
+    println!("Using TensorRT backend");
+    match Model::tensorrt(weights, (net_size.0 as u32, net_size.1 as u32)) {
+        Ok(model) => Ok(Box::new(model)),
+        Err(err) => panic!("Can't create TensorRT model '{}' due the error: {:?}", weights, err),
     }
 }
 
@@ -836,6 +856,21 @@ fn main() {
 
     // ORT backend: only ONNX supported
     #[cfg(all(feature = "ort-backend", not(feature = "opencv-backend")))]
+    let mut neural_net = match prepare_neural_net(
+        (),
+        &app_settings.detection.network_weights,
+        app_settings.detection.network_cfg.clone(),
+        (app_settings.detection.net_width, app_settings.detection.net_height)
+    ) {
+        Ok(nn) => nn,
+        Err(err) => {
+            println!("Can't prepare neural network due the error: {}", err);
+            return
+        }
+    };
+
+    // TensorRT backend: .engine files only
+    #[cfg(all(feature = "tensorrt-backend", not(feature = "opencv-backend"), not(feature = "ort-backend")))]
     let mut neural_net = match prepare_neural_net(
         (),
         &app_settings.detection.network_weights,
