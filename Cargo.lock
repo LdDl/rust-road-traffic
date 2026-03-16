@@ -2626,6 +2626,7 @@ dependencies = [
  "futures",
  "mot-rs",
  "nalgebra",
+ "ndarray",
  "od_opencv",
  "opencv",
  "png",

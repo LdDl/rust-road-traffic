@@ -1,23 +1,24 @@
 use chrono::Utc;
-use opencv::{core::Mat, prelude::MatTraitManual};
 
 use lib::cv::Rect as RectCV;
 
-// Conditional imports based on backend feature
+// OpenCV DNN backend: needs Mat for inference + ModelTrait compat layer
 #[cfg(feature = "opencv-backend")]
-use od_opencv::{DnnBackend, DnnTarget, Model, model::ModelTrait, model_format::ModelFormat};
+use od_opencv::{DnnBackend, DnnTarget, Model, model::ModelTrait};
+#[cfg(feature = "opencv-backend")]
+use opencv::{core::Mat, prelude::MatTraitManual};
 
-// ORT backend uses ModelTrait from opencv_compat (does not depend on opencv/dnn)
+// ORT backend (without opencv): native od_opencv types
 #[cfg(all(feature = "ort-backend", not(feature = "opencv-backend")))]
-use od_opencv::{Model, ModelTrait};
+use od_opencv::{Model, ModelUltralyticsOrt};
 
-// TensorRT backend uses ModelTrait from opencv_compat (does not depend on opencv/dnn)
+// TensorRT backend (without opencv): native od_opencv types
 #[cfg(all(
     feature = "tensorrt-backend",
     not(feature = "opencv-backend"),
     not(feature = "ort-backend")
 ))]
-use od_opencv::{Model, ModelTrait};
+use od_opencv::{Model, ModelUltralyticsRt};
 
 use mot_rs::utils::Rect;
 use uuid::Uuid;
@@ -33,8 +34,8 @@ use lib::detection::process_yolo_detections;
 use lib::draw;
 use lib::perf_stats::{PerfStats, Timer};
 use lib::tracker::{SpatialInfo, TrackerTrait, new_tracker_from_type};
-use lib::zones::Zone;
 use lib::utils;
+use lib::zones::Zone;
 
 mod settings;
 use settings::AppSettings;
@@ -80,6 +81,7 @@ impl fmt::Display for AppVideoError {
 #[derive(Debug)]
 enum AppError {
     VideoError(AppVideoError),
+    #[cfg(feature = "opencv-backend")]
     OpenCVError(opencv::Error),
     CaptureError(video_capture::CaptureError),
 }
@@ -88,6 +90,7 @@ impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AppError::VideoError(e) => write!(f, "{}", e),
+            #[cfg(feature = "opencv-backend")]
             AppError::OpenCVError(e) => write!(f, "{}", e),
             AppError::CaptureError(e) => write!(f, "{}", e),
         }
@@ -100,6 +103,7 @@ impl From<AppVideoError> for AppError {
     }
 }
 
+#[cfg(feature = "opencv-backend")]
 impl From<opencv::Error> for AppError {
     fn from(e: opencv::Error) -> Self {
         AppError::OpenCVError(e)
@@ -112,14 +116,100 @@ impl From<video_capture::CaptureError> for AppError {
     }
 }
 
+// Backend-specific detector enum (like face_slop's PersonDetector pattern)
+enum Detector {
+    #[cfg(feature = "opencv-backend")]
+    OpenCV(Box<dyn ModelTrait>),
+
+    #[cfg(all(feature = "ort-backend", not(feature = "opencv-backend")))]
+    Ort(ModelUltralyticsOrt),
+
+    #[cfg(all(
+        feature = "tensorrt-backend",
+        not(feature = "opencv-backend"),
+        not(feature = "ort-backend")
+    ))]
+    TensorRT(ModelUltralyticsRt),
+}
+
+impl Detector {
+    fn detect_frame(
+        &mut self,
+        frame: &lib::cv::RawFrame,
+        conf_threshold: f32,
+        nms_threshold: f32,
+    ) -> Result<(Vec<RectCV>, Vec<usize>, Vec<f32>), String> {
+        match self {
+            #[cfg(feature = "opencv-backend")]
+            Detector::OpenCV(model) => {
+                let mut mat = Mat::new_rows_cols_with_default(
+                    frame.rows(),
+                    frame.cols(),
+                    opencv::core::CV_8UC3,
+                    opencv::core::Scalar::all(0.0),
+                )
+                .map_err(|e| e.to_string())?;
+                mat.data_bytes_mut()
+                    .map_err(|e| e.to_string())?
+                    .copy_from_slice(&frame.data);
+                let (rects, ids, confs) = model
+                    .forward(&mat, conf_threshold, nms_threshold)
+                    .map_err(|e| e.to_string())?;
+                let bboxes = rects
+                    .iter()
+                    .map(|r| RectCV::new(r.x, r.y, r.width, r.height))
+                    .collect();
+                Ok((bboxes, ids, confs))
+            }
+
+            #[cfg(all(feature = "ort-backend", not(feature = "opencv-backend")))]
+            Detector::Ort(model) => {
+                let img = raw_frame_to_image_buffer(frame);
+                let (bboxes, ids, confs) = model
+                    .forward(&img, conf_threshold, nms_threshold)
+                    .map_err(|e| format!("{:?}", e))?;
+                let rects = bboxes
+                    .iter()
+                    .map(|b| RectCV::new(b.x, b.y, b.width, b.height))
+                    .collect();
+                Ok((rects, ids, confs))
+            }
+
+            #[cfg(all(
+                feature = "tensorrt-backend",
+                not(feature = "opencv-backend"),
+                not(feature = "ort-backend")
+            ))]
+            Detector::TensorRT(model) => {
+                let img = raw_frame_to_image_buffer(frame);
+                let (bboxes, ids, confs) = model
+                    .forward(&img, conf_threshold, nms_threshold)
+                    .map_err(|e| format!("{:?}", e))?;
+                let rects = bboxes
+                    .iter()
+                    .map(|b| RectCV::new(b.x, b.y, b.width, b.height))
+                    .collect();
+                Ok((rects, ids, confs))
+            }
+        }
+    }
+}
+
+/// RawFrame (BGR24) => ImageBuffer for ort/tensorrt backends.
+/// Clones data since frame is needed later for drawing.
+#[cfg(not(feature = "opencv-backend"))]
+fn raw_frame_to_image_buffer(frame: &lib::cv::RawFrame) -> od_opencv::ImageBuffer {
+    let arr = ndarray::Array3::from_shape_vec(
+        (frame.height as usize, frame.width as usize, 3),
+        frame.data.clone(),
+    )
+    .expect("RawFrame dimensions mismatch");
+    od_opencv::ImageBuffer::from_bgr(arr)
+}
+
 // OpenCV DNN backend (compile-time)
 #[cfg(feature = "opencv-backend")]
-fn prepare_neural_net(
-    mf: ModelFormat,
-    weights: &str,
-    configuration: Option<String>,
-    net_size: (i32, i32),
-) -> Result<Box<dyn ModelTrait>, AppError> {
+fn prepare_neural_net(weights: &str, net_size: (i32, i32)) -> Result<Detector, AppError> {
     let cuda_available = utils::is_cuda_available();
     println!(
         "CUDA is {}",
@@ -145,38 +235,19 @@ fn prepare_neural_net(
         dnn_backend, dnn_target
     );
 
-    let neural_net: Box<dyn ModelTrait> = match mf {
-        ModelFormat::Darknet => {
-            let cfg = configuration
-                .as_deref()
-                .expect("Darknet format requires .cfg file");
-            match Model::darknet(cfg, weights, net_size, dnn_backend, dnn_target) {
-                Ok(model) => Box::new(model),
-                Err(err) => panic!(
-                    "Can't read Darknet network '{}' (with cfg '{}') due the error: {:?}",
-                    weights, cfg, err
-                ),
-            }
-        }
-        ModelFormat::ONNX => match Model::opencv(weights, net_size, dnn_backend, dnn_target) {
-            Ok(model) => Box::new(model),
-            Err(err) => panic!(
-                "Can't read ONNX network '{}' due the error: {:?}",
-                weights, err
-            ),
-        },
+    let model = match Model::opencv(weights, net_size, dnn_backend, dnn_target) {
+        Ok(model) => Box::new(model),
+        Err(err) => panic!(
+            "Can't read ONNX network '{}' due the error: {:?}",
+            weights, err
+        ),
     };
-    Ok(neural_net)
+    Ok(Detector::OpenCV(model))
 }
 
 // ORT backend (compile-time)
 #[cfg(all(feature = "ort-backend", not(feature = "opencv-backend")))]
-fn prepare_neural_net(
-    _mf: (), // Model format not used - ORT only supports ONNX
-    weights: &str,
-    _configuration: Option<String>,
-    net_size: (i32, i32),
-) -> Result<Box<dyn ModelTrait>, AppError> {
+fn prepare_neural_net(weights: &str, net_size: (i32, i32)) -> Result<Detector, AppError> {
     let cuda_available = utils::is_cuda_available();
     println!(
         "CUDA is {}",
@@ -194,18 +265,20 @@ fn prepare_neural_net(
 
     println!("Using ORT backend ({})", backend_name);
 
+    let net_size_u32 = (net_size.0 as u32, net_size.1 as u32);
+
     #[cfg(feature = "ort-cuda")]
     let model_result = if cuda_available {
-        Model::ort_cuda(weights, (net_size.0 as u32, net_size.1 as u32))
+        Model::ort_cuda(weights, net_size_u32)
     } else {
-        Model::ort(weights, (net_size.0 as u32, net_size.1 as u32))
+        Model::ort(weights, net_size_u32)
     };
 
     #[cfg(not(feature = "ort-cuda"))]
-    let model_result = Model::ort(weights, (net_size.0 as u32, net_size.1 as u32));
+    let model_result = Model::ort(weights, net_size_u32);
 
     match model_result {
-        Ok(model) => Ok(Box::new(model)),
+        Ok(model) => Ok(Detector::Ort(model)),
         Err(err) => panic!(
             "Can't create ORT model '{}' due the error: {:?}",
             weights, err
@@ -219,16 +292,11 @@ fn prepare_neural_net(
     not(feature = "opencv-backend"),
     not(feature = "ort-backend")
 ))]
-fn prepare_neural_net(
-    // ingore model format not used - TensorRT uses .engine files anyways
-    _mf: (),
-    weights: &str,
-    _configuration: Option<String>,
-    net_size: (i32, i32),
-) -> Result<Box<dyn ModelTrait>, AppError> {
+fn prepare_neural_net(weights: &str, net_size: (i32, i32)) -> Result<Detector, AppError> {
     println!("Using TensorRT backend");
-    match Model::tensorrt(weights, (net_size.0 as u32, net_size.1 as u32)) {
-        Ok(model) => Ok(Box::new(model)),
+    let net_size_u32 = (net_size.0 as u32, net_size.1 as u32);
+    match Model::tensorrt(weights, net_size_u32) {
+        Ok(model) => Ok(Detector::TensorRT(model)),
         Err(err) => panic!(
             "Can't create TensorRT model '{}' due the error: {:?}",
             weights, err
@@ -240,7 +308,7 @@ fn run(
     settings: &AppSettings,
     path_to_config: &str,
     tracker: &mut dyn TrackerTrait,
-    neural_net: &mut dyn ModelTrait,
+    detector: &mut Detector,
     verbose: bool,
 ) -> Result<(), AppError> {
     println!("Verbose is '{}'", verbose);
@@ -548,17 +616,9 @@ fn run(
         // Note: frame clone is deferred to only displaying
 
         /* Inference (preprocessing + forward pass + NMS) */
-        // Create Mat from RawFrame data for neural_net.forward()
-        let mut mat = Mat::new_rows_cols_with_default(
-            received.frame.rows(),
-            received.frame.cols(),
-            opencv::core::CV_8UC3,
-            opencv::core::Scalar::all(0.0),
-        )?;
-        mat.data_bytes_mut()?.copy_from_slice(&received.frame.data);
         let t_inference = Timer::start();
-        let (nms_bboxes_cv, nms_classes_ids, nms_confidences) =
-            match neural_net.forward(&mat, conf_threshold, nms_threshold) {
+        let (nms_bboxes, nms_classes_ids, nms_confidences) =
+            match detector.detect_frame(&received.frame, conf_threshold, nms_threshold) {
                 Ok((a, b, c)) => (a, b, c),
                 Err(err) => {
                     println!(
@@ -569,12 +629,6 @@ fn run(
                 }
             };
         let inference_time = t_inference.elapsed();
-
-        // Convert opencv::core::Rect to own Rect at the boundary
-        let nms_bboxes: Vec<RectCV> = nms_bboxes_cv
-            .iter()
-            .map(|r| RectCV::new(r.x, r.y, r.width, r.height))
-            .collect();
 
         /* Postprocessing: create detection blobs */
         let t_postprocess = Timer::start();
@@ -916,67 +970,14 @@ fn main() {
     );
     println!("Tracker is:\n\t{}", tracker);
 
-    // OpenCV backend: parse model format from config
-    #[cfg(feature = "opencv-backend")]
-    let mut neural_net = {
-        let model_format = match app_settings.detection.get_nn_format() {
-            Ok(mf) => mf,
-            Err(err) => {
-                println!("Can't get model format due the error: {}", err);
-                return;
-            }
-        };
-        match prepare_neural_net(
-            model_format,
-            &app_settings.detection.network_weights,
-            app_settings.detection.network_cfg.clone(),
-            (
-                app_settings.detection.net_width,
-                app_settings.detection.net_height,
-            ),
-        ) {
-            Ok(nn) => nn,
-            Err(err) => {
-                println!("Can't prepare neural network due the error: {}", err);
-                return;
-            }
-        }
-    };
-
-    // ORT backend: only ONNX supported
-    #[cfg(all(feature = "ort-backend", not(feature = "opencv-backend")))]
-    let mut neural_net = match prepare_neural_net(
-        (),
+    let mut detector = match prepare_neural_net(
         &app_settings.detection.network_weights,
-        app_settings.detection.network_cfg.clone(),
         (
             app_settings.detection.net_width,
             app_settings.detection.net_height,
         ),
     ) {
-        Ok(nn) => nn,
-        Err(err) => {
-            println!("Can't prepare neural network due the error: {}", err);
-            return;
-        }
-    };
-
-    // TensorRT backend: .engine files only
-    #[cfg(all(
-        feature = "tensorrt-backend",
-        not(feature = "opencv-backend"),
-        not(feature = "ort-backend")
-    ))]
-    let mut neural_net = match prepare_neural_net(
-        (),
-        &app_settings.detection.network_weights,
-        app_settings.detection.network_cfg.clone(),
-        (
-            app_settings.detection.net_width,
-            app_settings.detection.net_height,
-        ),
-    ) {
-        Ok(nn) => nn,
+        Ok(d) => d,
         Err(err) => {
             println!("Can't prepare neural network due the error: {}", err);
             return;
@@ -992,7 +993,7 @@ fn main() {
         &app_settings,
         path_to_config,
         &mut *tracker,
-        &mut *neural_net,
+        &mut detector,
         verbose,
     ) {
         Ok(_) => {}

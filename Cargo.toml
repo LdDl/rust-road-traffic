@@ -12,19 +12,21 @@ path = "src/main.rs"
 [features]
 default = ["opencv-backend"]
 # Use OpenCV DNN for inference (default)
-opencv-backend = ["opencv/dnn", "od_opencv/opencv-backend"]
-# Use ONNX Runtime for inference (no OpenCV DNN to avoid conflicts)
-ort-backend = ["od_opencv/ort-backend", "od_opencv/ort-opencv-compat"]
+opencv-backend = ["dep:opencv", "opencv/dnn", "od_opencv/opencv-backend"]
+# Use ONNX Runtime for inference (no OpenCV dependency)
+ort-backend = ["od_opencv/ort-backend"]
 # CUDA acceleration for ORT backend
 ort-cuda = ["ort-backend", "od_opencv/ort-cuda-backend"]
-# TensorRT backend (Jetson Nano, NVIDIA GPUs with .engine files)
-tensorrt-backend = ["od_opencv/tensorrt-opencv-compat"]
+# TensorRT backend (Jetson Nano, NVIDIA GPUs with .engine files, no OpenCV dependency)
+tensorrt-backend = ["od_opencv/tensorrt-backend"]
 # Build libjpeg-turbo from source via cmake (no system lib needed)
 turbojpeg-vendor = ["turbojpeg/cmake"]
 
 [dependencies]
-# OpenCV: only core::Mat for inference boundary. DNN feature is conditional via features above
-opencv = { version = "0.96.0", default-features = false, features = [] }
+# OpenCV: only needed for opencv-backend (DNN inference). Optional for ort/tensorrt backends.
+opencv = { version = "0.96.0", default-features = false, features = [], optional = true }
+# ndarray: RawFrame => ImageBuffer conversion for ort/tensorrt backends
+ndarray = "0.17"
 uuid = { version = "1.18.1", features = ["serde", "v4"] }
 nalgebra = "0.34.1"
 toml = "0.9.8"

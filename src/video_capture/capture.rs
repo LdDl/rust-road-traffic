@@ -432,11 +432,11 @@ fn spawn_gstreamer(pipeline: &str, _info: &VideoCaptureInfo) -> Result<Child, Ca
             cmd.arg("!");
         }
         // Split segment into tokens, but keep caps (containing parentheses) as one arg.
-        // Example: "v4l2src device=/dev/video0" → ["v4l2src", "device=/dev/video0"]
-        // Example: "video/x-raw, format=(string)YUY2, width=(int)1280" → one arg
+        // Example: "v4l2src device=/dev/video0" => ["v4l2src", "device=/dev/video0"]
+        // Example: "video/x-raw, format=(string)YUY2, width=(int)1280" => one arg
         if segment.contains("=(") {
             // Caps filter: remove spaces after commas so gst-launch-1.0 parses it as one token.
-            // "video/x-raw, format=(string)BGR, width=(int)640" → "video/x-raw,format=(string)BGR,width=(int)640"
+            // "video/x-raw, format=(string)BGR, width=(int)640" => "video/x-raw,format=(string)BGR,width=(int)640"
             let caps = segment.replace(", ", ",");
             cmd.arg(caps);
         } else {
