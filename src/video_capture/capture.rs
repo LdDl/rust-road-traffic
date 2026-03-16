@@ -93,9 +93,10 @@ impl VideoSource {
 
     /// Read the next frame. Returns `Ok(None)` on EOF.
     pub fn read_frame(&mut self) -> Result<Option<RawFrame>, CaptureError> {
-        let stdout = self.child.stdout.as_mut().ok_or_else(|| {
-            CaptureError::ProcessError("subprocess stdout not available".into())
-        })?;
+        let stdout =
+            self.child.stdout.as_mut().ok_or_else(|| {
+                CaptureError::ProcessError("subprocess stdout not available".into())
+            })?;
 
         let mut total_read = 0;
         while total_read < self.frame_size {
@@ -175,10 +176,14 @@ fn probe_ffprobe(video_src: &str, kind: &SourceKind) -> Result<VideoCaptureInfo,
             cmd.args(["-f", "v4l2"]);
             // Use device path instead of original src for ffprobe
             cmd.args([
-                "-v", "quiet",
-                "-select_streams", "v:0",
-                "-show_entries", "stream=width,height,r_frame_rate,nb_frames",
-                "-of", "json",
+                "-v",
+                "quiet",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height,r_frame_rate,nb_frames",
+                "-of",
+                "json",
                 dev,
             ]);
 
@@ -188,10 +193,14 @@ fn probe_ffprobe(video_src: &str, kind: &SourceKind) -> Result<VideoCaptureInfo,
     }
 
     cmd.args([
-        "-v", "quiet",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=width,height,r_frame_rate,nb_frames",
-        "-of", "json",
+        "-v",
+        "quiet",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height,r_frame_rate,nb_frames",
+        "-of",
+        "json",
         video_src,
     ]);
 
@@ -199,9 +208,9 @@ fn probe_ffprobe(video_src: &str, kind: &SourceKind) -> Result<VideoCaptureInfo,
 }
 
 fn run_ffprobe(mut cmd: Command) -> Result<VideoCaptureInfo, CaptureError> {
-    let output = cmd.output().map_err(|e| {
-        CaptureError::ProbeFailed(format!("Failed to run ffprobe: {}", e))
-    })?;
+    let output = cmd
+        .output()
+        .map_err(|e| CaptureError::ProbeFailed(format!("Failed to run ffprobe: {}", e)))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -212,9 +221,8 @@ fn run_ffprobe(mut cmd: Command) -> Result<VideoCaptureInfo, CaptureError> {
     }
 
     let json_str = String::from_utf8_lossy(&output.stdout);
-    let parsed: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
-        CaptureError::ProbeFailed(format!("Failed to parse ffprobe JSON: {}", e))
-    })?;
+    let parsed: serde_json::Value = serde_json::from_str(&json_str)
+        .map_err(|e| CaptureError::ProbeFailed(format!("Failed to parse ffprobe JSON: {}", e)))?;
 
     let stream = parsed["streams"]
         .as_array()
@@ -249,11 +257,13 @@ fn run_ffprobe(mut cmd: Command) -> Result<VideoCaptureInfo, CaptureError> {
 /// Parse width/height/fps from GStreamer pipeline string.
 /// Looks for patterns like `width=(int)1280`, `height=(int)720`, `framerate=(fraction)30/1`.
 fn probe_gstreamer_pipeline(pipeline: &str) -> Result<VideoCaptureInfo, CaptureError> {
-    let width = parse_gst_int(pipeline, "width")
-        .ok_or_else(|| CaptureError::ProbeFailed("Cannot parse width from GStreamer pipeline".into()))?;
+    let width = parse_gst_int(pipeline, "width").ok_or_else(|| {
+        CaptureError::ProbeFailed("Cannot parse width from GStreamer pipeline".into())
+    })?;
 
-    let height = parse_gst_int(pipeline, "height")
-        .ok_or_else(|| CaptureError::ProbeFailed("Cannot parse height from GStreamer pipeline".into()))?;
+    let height = parse_gst_int(pipeline, "height").ok_or_else(|| {
+        CaptureError::ProbeFailed("Cannot parse height from GStreamer pipeline".into())
+    })?;
 
     let fps = parse_gst_fraction(pipeline, "framerate").unwrap_or(30.0);
 
@@ -308,11 +318,7 @@ fn spawn_ffmpeg(video_src: &str, kind: &SourceKind) -> Result<Child, CaptureErro
         SourceKind::Camera(dev) => {
             cmd.args(["-f", "v4l2"]);
             cmd.args([
-                "-i", dev,
-                "-f", "rawvideo",
-                "-pix_fmt", "bgr24",
-                "-v", "quiet",
-                "-nostdin",
+                "-i", dev, "-f", "rawvideo", "-pix_fmt", "bgr24", "-v", "quiet", "-nostdin",
                 "pipe:1",
             ]);
 
@@ -320,29 +326,23 @@ fn spawn_ffmpeg(video_src: &str, kind: &SourceKind) -> Result<Child, CaptureErro
             cmd.stderr(Stdio::null());
             cmd.stdin(Stdio::null());
 
-            return cmd.spawn().map_err(|e| {
-                CaptureError::OpenFailed(format!("Failed to spawn ffmpeg: {}", e))
-            });
+            return cmd
+                .spawn()
+                .map_err(|e| CaptureError::OpenFailed(format!("Failed to spawn ffmpeg: {}", e)));
         }
         _ => {}
     }
 
     cmd.args([
-        "-i", video_src,
-        "-f", "rawvideo",
-        "-pix_fmt", "bgr24",
-        "-v", "quiet",
-        "-nostdin",
-        "pipe:1",
+        "-i", video_src, "-f", "rawvideo", "-pix_fmt", "bgr24", "-v", "quiet", "-nostdin", "pipe:1",
     ]);
 
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::null());
     cmd.stdin(Stdio::null());
 
-    cmd.spawn().map_err(|e| {
-        CaptureError::OpenFailed(format!("Failed to spawn ffmpeg: {}", e))
-    })
+    cmd.spawn()
+        .map_err(|e| CaptureError::OpenFailed(format!("Failed to spawn ffmpeg: {}", e)))
 }
 
 /// Spawn gst-launch-1.0 with the pipeline, replacing `appsink` with `fdsink fd=1`.
@@ -364,9 +364,8 @@ fn spawn_gstreamer(pipeline: &str, _info: &VideoCaptureInfo) -> Result<Child, Ca
     cmd.stderr(Stdio::null());
     cmd.stdin(Stdio::null());
 
-    cmd.spawn().map_err(|e| {
-        CaptureError::OpenFailed(format!("Failed to spawn gst-launch-1.0: {}", e))
-    })
+    cmd.spawn()
+        .map_err(|e| CaptureError::OpenFailed(format!("Failed to spawn gst-launch-1.0: {}", e)))
 }
 
 /// Parse frame rate string "num/den" into f32.
@@ -374,11 +373,7 @@ fn parse_frame_rate(s: &str) -> f32 {
     if let Some((num_str, den_str)) = s.split_once('/') {
         let num: f32 = num_str.parse().unwrap_or(30.0);
         let den: f32 = den_str.parse().unwrap_or(1.0);
-        if den > 0.0 {
-            num / den
-        } else {
-            30.0
-        }
+        if den > 0.0 { num / den } else { 30.0 }
     } else {
         s.parse().unwrap_or(30.0)
     }

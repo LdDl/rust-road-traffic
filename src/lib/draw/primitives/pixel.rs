@@ -43,7 +43,7 @@ pub fn set_pixel(
 
 /// Sets a single pixel without bounds checking.
 ///
-/// # Safety contract (not `unsafe` — caller must guarantee):
+/// # Safety contract (not `unsafe` - caller must guarantee):
 ///
 /// `x` and `y` must be within `[0, w)` and `[0, h)` respectively.
 /// Out-of-bounds coordinates will cause a panic via slice indexing.

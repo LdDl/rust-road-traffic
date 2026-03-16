@@ -13,7 +13,11 @@ pub fn draw_track(img: &mut RawFrame, tracker: &dyn TrackerTrait, class_colors: 
     draw_projections(img, tracker, class_colors);
 }
 
-pub fn draw_trajectories(img: &mut RawFrame, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
+pub fn draw_trajectories(
+    img: &mut RawFrame,
+    tracker: &dyn TrackerTrait,
+    class_colors: &ClassColors,
+) {
     let w = img.cols() as usize;
     let h = img.rows() as usize;
     let step = img.step();
@@ -89,7 +93,11 @@ pub fn draw_bboxes(img: &mut RawFrame, tracker: &dyn TrackerTrait, class_colors:
     }
 }
 
-pub fn draw_identifiers(img: &mut RawFrame, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
+pub fn draw_identifiers(
+    img: &mut RawFrame,
+    tracker: &dyn TrackerTrait,
+    class_colors: &ClassColors,
+) {
     let w = img.cols() as usize;
     let h = img.rows() as usize;
     let step = img.step();
@@ -164,7 +172,11 @@ pub fn draw_speeds(img: &mut RawFrame, tracker: &dyn TrackerTrait, class_colors:
     }
 }
 
-pub fn draw_projections(img: &mut RawFrame, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
+pub fn draw_projections(
+    img: &mut RawFrame,
+    tracker: &dyn TrackerTrait,
+    class_colors: &ClassColors,
+) {
     let w = img.cols() as usize;
     let h = img.rows() as usize;
     let step = img.step();

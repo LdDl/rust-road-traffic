@@ -13,6 +13,7 @@ use geometry::{get_orientation, is_intersects, is_on_segment};
 use geojson::{GeoPolygon, VirtualLineFeature, ZoneFeature, ZonePropertiesGeoJSON};
 
 use crate::lib::constants::EPSILON;
+use crate::lib::cv::RawFrame;
 use crate::lib::cv::Scalar;
 use crate::lib::draw::primitives::{draw_line_thick, draw_text, scalar_to_bgr};
 use crate::lib::spatial::PerspectiveTransform;
@@ -24,7 +25,6 @@ use crate::lib::zones::{
     Skeleton, Statistics, TrafficFlowParameters, VehicleTypeParameters, VirtualLine,
     VirtualLineDirection,
 };
-use crate::lib::cv::RawFrame;
 
 #[derive(Debug, Clone)]
 struct ObjectInfo {
