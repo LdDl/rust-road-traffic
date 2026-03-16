@@ -764,7 +764,11 @@ fn main() {
         &app_settings.detection.network_weights,
         net_size,
         app_settings.detection.network_cfg.as_deref(),
-    );
+    )
+    .unwrap_or_else(|e| {
+        eprintln!("Failed to create detector: {}", e);
+        std::process::exit(1);
+    });
 
     let verbose = match &app_settings.debug {
         Some(x) => x.enable,

@@ -1,3 +1,6 @@
+use std::fmt;
+use std::io;
+
 use crate::lib::cv::RawFrame;
 use crate::lib::cv::Rect as RectCV;
 use crate::lib::utils;
@@ -17,6 +20,33 @@ use od_opencv::{Model, ModelUltralyticsOrt};
 ))]
 use od_opencv::{Model, ModelUltralyticsRt};
 
+#[derive(Debug)]
+pub enum DetectorError {
+    Io(io::Error),
+    Config(String),
+    ModelLoad(String),
+    UnsupportedFormat(String),
+}
+
+impl fmt::Display for DetectorError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DetectorError::Io(e) => write!(f, "I/O error: {}", e),
+            DetectorError::Config(msg) => write!(f, "Configuration error: {}", msg),
+            DetectorError::ModelLoad(msg) => write!(f, "Model load error: {}", msg),
+            DetectorError::UnsupportedFormat(msg) => write!(f, "Unsupported format: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for DetectorError {}
+
+impl From<io::Error> for DetectorError {
+    fn from(e: io::Error) -> Self {
+        DetectorError::Io(e)
+    }
+}
+
 pub enum Detector {
     #[cfg(feature = "opencv-backend")]
     OpenCV(Box<dyn ModelTrait>),
@@ -34,7 +64,11 @@ pub enum Detector {
 
 impl Detector {
     #[cfg(feature = "opencv-backend")]
-    pub fn new(weights: &str, net_size: Option<(i32, i32)>, network_cfg: Option<&str>) -> Self {
+    pub fn new(
+        weights: &str,
+        net_size: Option<(i32, i32)>,
+        network_cfg: Option<&str>,
+    ) -> Result<Self, DetectorError> {
         let cuda_available = utils::is_cuda_available();
         println!(
             "CUDA is {}",
@@ -60,65 +94,67 @@ impl Detector {
             dnn_backend, dnn_target
         );
 
-        let format = utils::detect_model_format(weights)
-            .unwrap_or_else(|e| panic!("Can't read weights file '{}': {}", weights, e));
+        let format = utils::detect_model_format(weights)?;
         println!("Detected model format: {}", format);
 
         let model: Box<dyn ModelTrait> = match format {
             utils::ModelFileFormat::DarknetWeights => {
-                let cfg = network_cfg.unwrap_or_else(|| {
-                    panic!(
+                let cfg = network_cfg.ok_or_else(|| {
+                    DetectorError::Config(format!(
                         "Darknet weights '{}' require a .cfg file. Set 'network_cfg' in config.",
                         weights
-                    )
-                });
-                let cfg_net_size = utils::parse_darknet_cfg_net_size(cfg).unwrap_or_else(|e| {
-                    panic!(
-                        "Can't parse net_size from '{}': {}. Provide width/height in [net] section.",
-                        cfg, e
-                    )
-                });
+                    ))
+                })?;
+                let cfg_net_size = utils::parse_darknet_cfg_net_size(cfg)?;
                 println!(
                     "OpenCV Darknet network input size: {}x{} (from {})",
                     cfg_net_size.0, cfg_net_size.1, cfg
                 );
-                match Model::darknet(cfg, weights, cfg_net_size, dnn_backend, dnn_target) {
-                    Ok(model) => Box::new(model),
-                    Err(err) => panic!(
-                        "Can't read Darknet network '{}' / '{}' due the error: {:?}",
-                        cfg, weights, err
-                    ),
-                }
+                Model::darknet(cfg, weights, cfg_net_size, dnn_backend, dnn_target)
+                    .map(|m| Box::new(m) as Box<dyn ModelTrait>)
+                    .map_err(|e| {
+                        DetectorError::ModelLoad(format!(
+                            "Can't load Darknet network '{}' / '{}': {:?}",
+                            cfg, weights, e
+                        ))
+                    })?
             }
             utils::ModelFileFormat::Onnx => {
-                let net_size = net_size.unwrap_or_else(|| {
-                    panic!(
+                let net_size = net_size.ok_or_else(|| {
+                    DetectorError::Config(format!(
                         "ONNX model '{}' requires net_width/net_height in config.",
                         weights
-                    )
-                });
+                    ))
+                })?;
                 println!(
                     "OpenCV ONNX network input size: {}x{}",
                     net_size.0, net_size.1
                 );
-                match Model::opencv(weights, net_size, dnn_backend, dnn_target) {
-                    Ok(model) => Box::new(model),
-                    Err(err) => panic!(
-                        "Can't read ONNX network '{}' due the error: {:?}",
-                        weights, err
-                    ),
-                }
+                Model::opencv(weights, net_size, dnn_backend, dnn_target)
+                    .map(|m| Box::new(m) as Box<dyn ModelTrait>)
+                    .map_err(|e| {
+                        DetectorError::ModelLoad(format!(
+                            "Can't load ONNX network '{}': {:?}",
+                            weights, e
+                        ))
+                    })?
             }
-            other => panic!(
-                "Unsupported model format '{}' for OpenCV DNN backend. Use .weights (Darknet) or .onnx (ONNX).",
-                other
-            ),
+            other => {
+                return Err(DetectorError::UnsupportedFormat(format!(
+                    "'{}' for OpenCV DNN backend. Use .weights (Darknet) or .onnx (ONNX).",
+                    other
+                )));
+            }
         };
-        Detector::OpenCV(model)
+        Ok(Detector::OpenCV(model))
     }
 
     #[cfg(all(feature = "ort-backend", not(feature = "opencv-backend")))]
-    pub fn new(weights: &str, net_size: Option<(i32, i32)>, _network_cfg: Option<&str>) -> Self {
+    pub fn new(
+        weights: &str,
+        net_size: Option<(i32, i32)>,
+        _network_cfg: Option<&str>,
+    ) -> Result<Self, DetectorError> {
         let cuda_available = utils::is_cuda_available();
         println!(
             "CUDA is {}",
@@ -135,12 +171,12 @@ impl Detector {
         let backend_name = "CPU";
 
         println!("Using ORT backend ({})", backend_name);
-        let net_size = net_size.unwrap_or_else(|| {
-            panic!(
+        let net_size = net_size.ok_or_else(|| {
+            DetectorError::Config(format!(
                 "ONNX model '{}' requires net_width/net_height in config.",
                 weights
-            )
-        });
+            ))
+        })?;
         println!("ORT ONNX network input size: {}x{}", net_size.0, net_size.1);
 
         let net_size_u32 = (net_size.0 as u32, net_size.1 as u32);
@@ -155,13 +191,9 @@ impl Detector {
         #[cfg(not(feature = "ort-cuda"))]
         let model_result = Model::ort(weights, net_size_u32);
 
-        match model_result {
-            Ok(model) => Detector::Ort(model),
-            Err(err) => panic!(
-                "Can't create ORT model '{}' due the error: {:?}",
-                weights, err
-            ),
-        }
+        model_result
+            .map(Detector::Ort)
+            .map_err(|e| DetectorError::ModelLoad(format!("Can't load ORT model '{}': {:?}", weights, e)))
     }
 
     #[cfg(all(
@@ -169,22 +201,21 @@ impl Detector {
         not(feature = "opencv-backend"),
         not(feature = "ort-backend")
     ))]
-    pub fn new(weights: &str, _net_size: Option<(i32, i32)>, _network_cfg: Option<&str>) -> Self {
+    pub fn new(
+        weights: &str,
+        _net_size: Option<(i32, i32)>,
+        _network_cfg: Option<&str>,
+    ) -> Result<Self, DetectorError> {
         println!("Using TensorRT backend");
-        match Model::tensorrt(weights) {
-            Ok(model) => {
-                let (w, h) = model.input_size();
-                println!(
-                    "TensorRT network input size: {}x{} (from engine)",
-                    w, h
-                );
-                Detector::TensorRT(model)
-            }
-            Err(err) => panic!(
-                "Can't create TensorRT model '{}' due the error: {:?}",
-                weights, err
-            ),
-        }
+        let model = Model::tensorrt(weights).map_err(|e| {
+            DetectorError::ModelLoad(format!("Can't load TensorRT model '{}': {:?}", weights, e))
+        })?;
+        let (w, h) = model.input_size();
+        println!(
+            "TensorRT network input size: {}x{} (from engine)",
+            w, h
+        );
+        Ok(Detector::TensorRT(model))
     }
 
     pub fn detect_frame(
