@@ -34,6 +34,7 @@ use lib::draw;
 use lib::perf_stats::{PerfStats, Timer};
 use lib::tracker::{SpatialInfo, TrackerTrait, new_tracker_from_type};
 use lib::zones::Zone;
+use lib::utils;
 
 mod settings;
 use settings::AppSettings;
@@ -119,7 +120,7 @@ fn prepare_neural_net(
     configuration: Option<String>,
     net_size: (i32, i32),
 ) -> Result<Box<dyn ModelTrait>, AppError> {
-    let cuda_available = lib::utils::is_cuda_available();
+    let cuda_available = utils::is_cuda_available();
     println!(
         "CUDA is {}",
         if cuda_available {
@@ -176,7 +177,7 @@ fn prepare_neural_net(
     _configuration: Option<String>,
     net_size: (i32, i32),
 ) -> Result<Box<dyn ModelTrait>, AppError> {
-    let cuda_available = lib::utils::is_cuda_available();
+    let cuda_available = utils::is_cuda_available();
     println!(
         "CUDA is {}",
         if cuda_available {
