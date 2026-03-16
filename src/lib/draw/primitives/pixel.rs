@@ -41,6 +41,27 @@ pub fn set_pixel(
     }
 }
 
+/// Sets a single pixel without bounds checking.
+///
+/// # Safety contract (not `unsafe` — caller must guarantee):
+///
+/// `x` and `y` must be within `[0, w)` and `[0, h)` respectively.
+/// Out-of-bounds coordinates will cause a panic via slice indexing.
+/// Use this only after clipping coordinates to the image rectangle.
+#[inline]
+pub fn set_pixel_unchecked(
+    bytes: &mut [u8],
+    step: usize,
+    x: usize,
+    y: usize,
+    color: [u8; 3],
+) {
+    let offset = y * step + x * 3;
+    bytes[offset] = color[0];
+    bytes[offset + 1] = color[1];
+    bytes[offset + 2] = color[2];
+}
+
 /// Converts a [`Scalar`] (BGR `f64[4]`) to a packed BGR byte triple.
 ///
 /// # Arguments
