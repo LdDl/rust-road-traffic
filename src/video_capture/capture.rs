@@ -423,8 +423,29 @@ fn spawn_gstreamer(pipeline: &str, _info: &VideoCaptureInfo) -> Result<Child, Ca
         gst_pipeline.push_str(" ! fdsink fd=1");
     }
 
+    // gst-launch-1.0 parses pipeline elements separated by `!`.
+    // Each segment is: element_name [property=value ...] [caps_string]
+    // Caps like "video/x-raw, width=(int)640, height=(int)480" must be a single argument.
     let mut cmd = Command::new("gst-launch-1.0");
-    cmd.args(gst_pipeline.split_whitespace());
+
+    for (i, segment) in gst_pipeline.split(" ! ").enumerate() {
+        let segment = segment.trim();
+        if segment.is_empty() {
+            continue;
+        }
+        if i > 0 {
+            cmd.arg("!");
+        }
+        // Split segment into tokens, but keep caps (containing parentheses) as one arg.
+        // Example: "v4l2src device=/dev/video0" → ["v4l2src", "device=/dev/video0"]
+        // Example: "video/x-raw, format=(string)YUY2, width=(int)1280" → one arg
+        if segment.contains("=(") {
+            // Entire segment is a caps filter (e.g. "video/x-raw, width=(int)640")
+            cmd.arg(segment);
+        } else {
+            cmd.args(segment.split_whitespace());
+        }
+    }
 
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::null());
