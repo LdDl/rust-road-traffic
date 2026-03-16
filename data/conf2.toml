@@ -12,12 +12,8 @@
     enable = true
 
 [detection]
-    # Available model_versions: v3, v4, v7, v8
-    # Default is v3
-    network_ver = 7
-    # Available model formats: "darknet", "onnx"
-    # Default is "darknet"
-    network_format = "darknet"
+    # Weights file: .weights (Darknet), .onnx (ONNX), .engine/.trt (TensorRT)
+    # Format is auto-detected from file contents + extension
     network_weights = "./data/yolov7.weights"
     network_cfg = "./data/yolov7.cfg"
     conf_threshold = 0.4

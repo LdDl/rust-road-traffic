@@ -7,10 +7,6 @@ use std::fmt;
 use std::str::FromStr;
 use toml;
 
-// model_format is only available with opencv-backend
-#[cfg(feature = "opencv-backend")]
-use od_opencv::model_format::{ModelFormat, ModelVersion};
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppSettings {
     pub input: InputSettings,
@@ -38,8 +34,6 @@ pub struct DebugSettings {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DetectionSettings {
-    pub network_ver: Option<i32>,
-    pub network_format: Option<String>,
     pub network_weights: String,
     pub network_cfg: Option<String>,
     pub conf_threshold: f32,
@@ -56,44 +50,6 @@ pub struct DetectionSettings {
     pub perf_stats_interval: u32,
 }
 
-// These methods are only available with opencv-backend
-#[cfg(feature = "opencv-backend")]
-impl DetectionSettings {
-    pub fn get_nn_format(&self) -> Result<ModelFormat, Box<dyn Error>> {
-        match self.network_format.clone() {
-            Some(mf) => match mf.to_lowercase().as_str() {
-                "darknet" => Ok(ModelFormat::Darknet),
-                "onnx" => Ok(ModelFormat::ONNX),
-                _ => {
-                    return Err(format!(
-                        "Can't prepare neural network due the unhandled format: {}",
-                        mf
-                    )
-                    .into());
-                }
-            },
-            None => Ok(ModelFormat::Darknet),
-        }
-    }
-    pub fn get_nn_version(&self) -> Result<ModelVersion, Box<dyn Error>> {
-        match self.network_ver.clone() {
-            Some(mv) => match mv {
-                3 => Ok(ModelVersion::V3),
-                4 => Ok(ModelVersion::V4),
-                7 => Ok(ModelVersion::V7),
-                8 => Ok(ModelVersion::V8),
-                _ => {
-                    return Err(format!(
-                        "Can't prepare neural network due the unhandled version: {}",
-                        mv
-                    )
-                    .into());
-                }
-            },
-            None => Ok(ModelVersion::V3),
-        }
-    }
-}
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TrackingSettings {
     // Either "bytetrack" or "iou_naive". Default is "iou_naive"

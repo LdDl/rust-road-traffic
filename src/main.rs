@@ -209,7 +209,11 @@ fn raw_frame_to_image_buffer(frame: &lib::cv::RawFrame) -> od_opencv::ImageBuffe
 
 // OpenCV DNN backend (compile-time)
 #[cfg(feature = "opencv-backend")]
-fn prepare_neural_net(weights: &str, net_size: (i32, i32)) -> Result<Detector, AppError> {
+fn prepare_neural_net(
+    weights: &str,
+    net_size: (i32, i32),
+    network_cfg: Option<&str>,
+) -> Result<Detector, AppError> {
     let cuda_available = utils::is_cuda_available();
     println!(
         "CUDA is {}",
@@ -235,11 +239,38 @@ fn prepare_neural_net(weights: &str, net_size: (i32, i32)) -> Result<Detector, A
         dnn_backend, dnn_target
     );
 
-    let model = match Model::opencv(weights, net_size, dnn_backend, dnn_target) {
-        Ok(model) => Box::new(model),
-        Err(err) => panic!(
-            "Can't read ONNX network '{}' due the error: {:?}",
-            weights, err
+    let format = utils::detect_model_format(weights)
+        .unwrap_or_else(|e| panic!("Can't read weights file '{}': {}", weights, e));
+    println!("Detected model format: {}", format);
+
+    let model: Box<dyn ModelTrait> = match format {
+        utils::ModelFileFormat::DarknetWeights => {
+            let cfg = network_cfg.unwrap_or_else(|| {
+                panic!(
+                    "Darknet weights '{}' require a .cfg file. Set 'network_cfg' in config.",
+                    weights
+                )
+            });
+            match Model::darknet(cfg, weights, net_size, dnn_backend, dnn_target) {
+                Ok(model) => Box::new(model),
+                Err(err) => panic!(
+                    "Can't read Darknet network '{}' / '{}' due the error: {:?}",
+                    cfg, weights, err
+                ),
+            }
+        }
+        utils::ModelFileFormat::Onnx => {
+            match Model::opencv(weights, net_size, dnn_backend, dnn_target) {
+                Ok(model) => Box::new(model),
+                Err(err) => panic!(
+                    "Can't read ONNX network '{}' due the error: {:?}",
+                    weights, err
+                ),
+            }
+        }
+        other => panic!(
+            "Unsupported model format '{}' for OpenCV DNN backend. Use .weights (Darknet) or .onnx (ONNX).",
+            other
         ),
     };
     Ok(Detector::OpenCV(model))
@@ -970,6 +1001,22 @@ fn main() {
     );
     println!("Tracker is:\n\t{}", tracker);
 
+    #[cfg(feature = "opencv-backend")]
+    let mut detector = match prepare_neural_net(
+        &app_settings.detection.network_weights,
+        (
+            app_settings.detection.net_width,
+            app_settings.detection.net_height,
+        ),
+        app_settings.detection.network_cfg.as_deref(),
+    ) {
+        Ok(d) => d,
+        Err(err) => {
+            println!("Can't prepare neural network due the error: {}", err);
+            return;
+        }
+    };
+    #[cfg(not(feature = "opencv-backend"))]
     let mut detector = match prepare_neural_net(
         &app_settings.detection.network_weights,
         (
