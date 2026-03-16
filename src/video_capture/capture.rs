@@ -427,6 +427,8 @@ fn spawn_gstreamer(pipeline: &str, _info: &VideoCaptureInfo) -> Result<Child, Ca
     // Each segment is: element_name [property=value ...] [caps_string]
     // Caps like "video/x-raw, width=(int)640, height=(int)480" must be a single argument.
     let mut cmd = Command::new("gst-launch-1.0");
+    // Suppress status messages on stdout
+    cmd.arg("-q");
 
     for (i, segment) in gst_pipeline.split(" ! ").enumerate() {
         let segment = segment.trim();
