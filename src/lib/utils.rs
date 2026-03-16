@@ -68,9 +68,9 @@ impl std::fmt::Display for ModelFileFormat {
 
 /// Detect the model file format by examining file contents.
 ///
-/// Detection logic:
-/// - ONNX: protobuf format - the string "onnx" appears in the first 4KB (from opset domain "ai.onnx")
+/// Detection logic (order matters - most specific first):
 /// - Darknet weights: header is 3+ little-endian i32 values; major version = 0, minor = 1 or 2
+/// - ONNX: protobuf format - the string "onnx" appears in the first 4KB (from opset domain "ai.onnx")
 /// - TensorRT engine: no reliable magic bytes, detected by `.engine` / `.trt` extension
 /// - Falls back to `Unknown` if none match
 pub fn detect_model_format(path: &str) -> std::io::Result<ModelFileFormat> {
@@ -79,19 +79,21 @@ pub fn detect_model_format(path: &str) -> std::io::Result<ModelFileFormat> {
     let bytes_read = file.read(&mut header)?;
     let header = &header[..bytes_read];
 
-    // ONNX: protobuf contains "onnx" (from opset domain "ai.onnx")
-    if bytes_read >= 4 && header.windows(4).any(|w| w == b"onnx") {
-        return Ok(ModelFileFormat::Onnx);
-    }
-
     // Darknet weights: [major: i32 LE, minor: i32 LE, revision: i32 LE, ...]
     // major = 0, minor = 1 or 2
+    // Check first: Darknet header is specific, while ONNX substring search can false-positive
+    // on random float weights that happen to contain bytes "onnx"
     if bytes_read >= 12 {
         let major = i32::from_le_bytes([header[0], header[1], header[2], header[3]]);
         let minor = i32::from_le_bytes([header[4], header[5], header[6], header[7]]);
         if major == 0 && (minor == 1 || minor == 2) {
             return Ok(ModelFileFormat::DarknetWeights);
         }
+    }
+
+    // ONNX: protobuf contains "onnx" (from opset domain "ai.onnx")
+    if bytes_read >= 4 && header.windows(4).any(|w| w == b"onnx") {
+        return Ok(ModelFileFormat::Onnx);
     }
 
     // TensorRT engine: extension-based (no reliable magic bytes)
