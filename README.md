@@ -32,39 +32,40 @@ UI is developed in seprate repository: https://github.com/LdDl/rust-road-traffic
 
 ## Inference Backends
 
-This project supports two inference backends via compile-time feature flags:
+This project supports three inference backends via compile-time feature flags:
 
-| Backend | Feature Flag | Models Supported | GPU Support |
-|---------|--------------|------------------|-------------|
-| OpenCV DNN | `opencv-backend` (default) | YOLOv3/v4/v7 (Darknet), YOLOv8/v9/v11 (ONNX) | CUDA, OpenCL |
-| ONNX Runtime | `ort-backend` | YOLOv8/v9/v11 (ONNX only) | CUDA 12.x |
-| TensorRT | `tensorrt-backend` | YOLOv3/v4/v7/v8/v9/v11 (`.engine` only) | CUDA (native TensorRT) |
+| Backend | Feature Flag | Models Supported | GPU Support | Requires OpenCV |
+|---------|--------------|------------------|-------------|-----------------|
+| OpenCV DNN | `opencv-backend` (default) | YOLOv3/v4/v7 (Darknet), YOLOv8/v9/v11 (ONNX) | CUDA, OpenCL | Yes |
+| ONNX Runtime | `ort-backend` | YOLOv8/v9/v11 (ONNX only) | CUDA 12.x | No |
+| TensorRT | `tensorrt-backend` | YOLOv8/v9/v11 (`.engine` only) | CUDA (native TensorRT) | No |
 
-**How `ort-backend` works:** Uses ONNX Runtime for inference but still requires OpenCV for video I/O, drawing, and preprocessing. This is achieved via the `ort-opencv-compat` adapter from `od_opencv` crate, which allows ORT models to accept OpenCV `Mat` directly without enabling OpenCV's DNN module (avoiding static linking conflicts).
+**`ort-backend` and `tensorrt-backend` do NOT require OpenCV** on the system. Video capture uses ffmpeg/GStreamer subprocesses, drawing uses own primitives, image encoding uses [`turbojpeg`](https://github.com/libjpeg-turbo/libjpeg-turbo)/[`png`](https://github.com/image-rs/image-png) crates.
 
-**How `tensorrt-backend` works:** Uses NVIDIA TensorRT for inference via serialized `.engine` files. Still requires OpenCV for video I/O, drawing, and preprocessing (via `tensorrt-opencv-compat` adapter from `od_opencv` crate). This backend is designed for NVIDIA embedded platforms (Jetson Nano, Jetson Xavier, Jetson Orin) and discrete NVIDIA GPUs.
+**`tensorrt-backend`** is designed for NVIDIA embedded platforms (e.g. Jetson Nano) and discrete NVIDIA GPUs with TensorRT installed.
 
-**Important:**
-- The `ort-backend` does NOT support Darknet weights (`.cfg` + `.weights` files). If you need YOLOv3/v4/v7 with Darknet format, use `opencv-backend`.
-- The `tensorrt-backend` ONLY supports `.engine` files. You must convert your model to TensorRT engine format beforehand (e.g. via `trtexec`). Darknet (`.cfg` + `.weights`) and ONNX (`.onnx`) files will NOT work with this backend.
+**Network input size:** For Darknet models (`.cfg` + `.weights`), `net_width`/`net_height` in TOML config are __ignored__ - the input size is read directly from the `[net]` section of the `.cfg` file. For TensorRT (`.engine`), input size is also auto-detected from the engine bindings. For ONNX models, `net_width`/`net_height` must be specified in the TOML config.
+
+**Note:** In case of non-OpenCV backend, traditional models (YOLOv3/v4/v7) in Darknet format (`.cfg` + `.weights`) should be converted to ONNX first via [darknet2onnx](https://github.com/LdDl/darknet2onnx) with `--format yolov8` flag. The `--format yolov5` output is **not supported** (different post-processing). For TensorRT, convert ONNX to `.engine` via `trtexec`.
 
 ### Build Commands
 
 By default MJPEG streaming links to system `libturbojpeg` via `pkg-config`. Add `--features turbojpeg-vendor` to any build command below to build libjpeg-turbo from source instead (requires `cmake`).
 
 ```bash
-# OpenCV backend (default) - supports all YOLO versions
+# OpenCV backend (default) - requires OpenCV installed, supports traditional and Ultralytics models
 cargo build --release
 
-# ORT backend - YOLOv8/v9/v11 ONNX only
+# ORT backend - no OpenCV needed at all
 cargo build --release --no-default-features --features ort-backend
 
-# TensorRT backend - YOLOv3/v4/v7/v8/v9/v11 .engine only (Jetson / NVIDIA GPU)
+# TensorRT backend - no OpenCV needed at all (Jetson / NVIDIA GPU)
 cargo build --release --no-default-features --features tensorrt-backend
 
 # Any backend + vendored libjpeg-turbo (no system lib needed, requires cmake)
 cargo build --release --features turbojpeg-vendor
 cargo build --release --no-default-features --features tensorrt-backend,turbojpeg-vendor
+cargo build --release --no-default-features --features ort-backend,turbojpeg-vendor
 ```
 
 ### Run Commands
@@ -90,7 +91,7 @@ trtexec --onnx=yolov8n.onnx --saveEngine=yolov8n.engine --fp16
 
 On Jetson devices, `trtexec` is typically located at `/usr/src/tensorrt/bin/trtexec`.
 
-Be aware that Traditional models `v3`, `v4` and `v7` should be converted to ONNX first via [darknet2onnx](https://github.com/LdDl/darknet2onnx) and then via `trtexec` to TensorRT engine format.
+Be aware that Traditional models `v3`, `v4` and `v7` should be converted to ONNX first via [darknet2onnx](https://github.com/LdDl/darknet2onnx) with `--format yolov8` flag, and then via `trtexec` to TensorRT engine format.
 
 ## Traffic flow parameters
 
@@ -148,7 +149,8 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
 ## Installation and usage
 1. You need installed Rust compiler obviously. Follow instruction of official site: https://www.rust-lang.org/tools/install
 
-2. You need installed OpenCV and its contributors modules. I'm using OpenCV 4.7.0. I'd highly recommend to use OpenCV with CUDA. Here is [Makefile](Makefile) adopted from [this one](https://github.com/hybridgroup/gocv/blob/release/Makefile) if you want build it from sources (it's targeted for Linux user obviously).
+2. **OpenCV** is only required for `opencv-backend` (the default). If you use `ort-backend` or `tensorrt-backend`, skip this step.
+    I'm using OpenCV 4.7.0. In case of need `opencv-backend` I'd highly recommend to use OpenCV with CUDA. Here is [Makefile](Makefile) adopted from [this one](https://github.com/hybridgroup/gocv/blob/release/Makefile) if you want build it from sources (it's targeted for Linux user obviously).
     ```shell
     sudo make install_cuda
     ```
@@ -187,7 +189,7 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
     video_src = "v4l2src device=/dev/video0 ! video/x-raw, width=(int)640, height=(int)480, framerate=(fraction)30/1, format=(string)BGR ! appsink"
     ```
 
-4. OpenCV's bindings have already meant as dependencies in [Cargo.toml](Cargo.toml)
+4. Dependencies are managed via [Cargo.toml](Cargo.toml). OpenCV bindings are pulled automatically when using `opencv-backend`.
 
 5. Clone the repo
     ```shell
