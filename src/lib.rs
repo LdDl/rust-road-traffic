@@ -4,6 +4,8 @@
 pub mod lib {
     #[path = "constants.rs"]
     pub mod constants;
+    #[path = "cv/mod.rs"]
+    pub mod cv;
     #[path = "spatial/mod.rs"]
     pub mod spatial;
 }
