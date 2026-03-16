@@ -34,7 +34,7 @@ pub enum Detector {
 
 impl Detector {
     #[cfg(feature = "opencv-backend")]
-    pub fn new(weights: &str, net_size: (i32, i32), network_cfg: Option<&str>) -> Self {
+    pub fn new(weights: &str, net_size: Option<(i32, i32)>, network_cfg: Option<&str>) -> Self {
         let cuda_available = utils::is_cuda_available();
         println!(
             "CUDA is {}",
@@ -91,6 +91,12 @@ impl Detector {
                 }
             }
             utils::ModelFileFormat::Onnx => {
+                let net_size = net_size.unwrap_or_else(|| {
+                    panic!(
+                        "ONNX model '{}' requires net_width/net_height in config.",
+                        weights
+                    )
+                });
                 println!(
                     "OpenCV ONNX network input size: {}x{}",
                     net_size.0, net_size.1
@@ -112,7 +118,7 @@ impl Detector {
     }
 
     #[cfg(all(feature = "ort-backend", not(feature = "opencv-backend")))]
-    pub fn new(weights: &str, net_size: (i32, i32), _network_cfg: Option<&str>) -> Self {
+    pub fn new(weights: &str, net_size: Option<(i32, i32)>, _network_cfg: Option<&str>) -> Self {
         let cuda_available = utils::is_cuda_available();
         println!(
             "CUDA is {}",
@@ -129,6 +135,12 @@ impl Detector {
         let backend_name = "CPU";
 
         println!("Using ORT backend ({})", backend_name);
+        let net_size = net_size.unwrap_or_else(|| {
+            panic!(
+                "ONNX model '{}' requires net_width/net_height in config.",
+                weights
+            )
+        });
         println!("ORT ONNX network input size: {}x{}", net_size.0, net_size.1);
 
         let net_size_u32 = (net_size.0 as u32, net_size.1 as u32);
@@ -157,7 +169,7 @@ impl Detector {
         not(feature = "opencv-backend"),
         not(feature = "ort-backend")
     ))]
-    pub fn new(weights: &str, _net_size: (i32, i32), _network_cfg: Option<&str>) -> Self {
+    pub fn new(weights: &str, _net_size: Option<(i32, i32)>, _network_cfg: Option<&str>) -> Self {
         println!("Using TensorRT backend");
         match Model::tensorrt(weights) {
             Ok(model) => {

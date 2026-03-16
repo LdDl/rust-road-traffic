@@ -753,12 +753,16 @@ fn main() {
     );
     println!("Tracker is:\n\t{}", tracker);
 
+    let net_size = match (
+        app_settings.detection.net_width,
+        app_settings.detection.net_height,
+    ) {
+        (Some(w), Some(h)) => Some((w, h)),
+        _ => None,
+    };
     let mut detector = Detector::new(
         &app_settings.detection.network_weights,
-        (
-            app_settings.detection.net_width,
-            app_settings.detection.net_height,
-        ),
+        net_size,
         app_settings.detection.network_cfg.as_deref(),
     );
 

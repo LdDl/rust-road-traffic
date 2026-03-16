@@ -38,8 +38,8 @@ pub struct DetectionSettings {
     pub network_cfg: Option<String>,
     pub conf_threshold: f32,
     pub nms_threshold: f32,
-    pub net_width: i32,
-    pub net_height: i32,
+    pub net_width: Option<i32>,
+    pub net_height: Option<i32>,
     pub net_classes: Vec<String>,
     pub target_classes: Option<Vec<String>>,
     /// Inference backend: "ort" for ONNX Runtime, "opencv" for OpenCV DNN.
