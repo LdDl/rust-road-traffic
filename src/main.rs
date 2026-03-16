@@ -1,5 +1,5 @@
 use chrono::Utc;
-use opencv::{core::Mat, core::get_cuda_enabled_device_count, prelude::MatTraitManual};
+use opencv::{core::Mat, prelude::MatTraitManual};
 
 use lib::cv::Rect as RectCV;
 
@@ -119,8 +119,7 @@ fn prepare_neural_net(
     configuration: Option<String>,
     net_size: (i32, i32),
 ) -> Result<Box<dyn ModelTrait>, AppError> {
-    let cuda_count = get_cuda_enabled_device_count()?;
-    let cuda_available = cuda_count > 0;
+    let cuda_available = lib::utils::is_cuda_available();
     println!(
         "CUDA is {}",
         if cuda_available {
@@ -177,8 +176,7 @@ fn prepare_neural_net(
     _configuration: Option<String>,
     net_size: (i32, i32),
 ) -> Result<Box<dyn ModelTrait>, AppError> {
-    let cuda_count = get_cuda_enabled_device_count()?;
-    let cuda_available = cuda_count > 0;
+    let cuda_available = lib::utils::is_cuda_available();
     println!(
         "CUDA is {}",
         if cuda_available {
