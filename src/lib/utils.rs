@@ -213,7 +213,11 @@ mod tests {
     #[test]
     fn parse_cfg_net_size_basic() {
         let path = "/tmp/test_parse_cfg.cfg";
-        fs::write(path, "[net]\nbatch=1\nwidth=416\nheight=256\nchannels=3\n\n[convolutional]\n").unwrap();
+        fs::write(
+            path,
+            "[net]\nbatch=1\nwidth=416\nheight=256\nchannels=3\n\n[convolutional]\n",
+        )
+        .unwrap();
         let (w, h) = parse_darknet_cfg_net_size(path).unwrap();
         assert_eq!((w, h), (416, 256));
         fs::remove_file(path).unwrap();
