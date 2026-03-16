@@ -1,8 +1,10 @@
 use crate::lib::draw::primitives::pixel::set_pixel;
 
-/// Draws a filled circle using brute-force distance check.
+/// Draws a filled circle using scanline fill.
 ///
-/// Every pixel within Euclidean distance `r` from `(cx, cy)` is painted.
+/// For each row within the circle's vertical extent, the horizontal boundary
+/// is computed via integer square root, and only the pixels inside the circle
+/// are drawn. No per-pixel distance check is performed.
 /// Pixels outside the image boundaries are silently clipped.
 ///
 /// # Arguments
@@ -32,11 +34,28 @@ pub fn draw_filled_circle(
     r: i32,
     color: [u8; 3],
 ) {
+    let r_sq = r * r;
     for dy in -r..=r {
-        for dx in -r..=r {
-            if dx * dx + dy * dy <= r * r {
-                set_pixel(bytes, step, w, h, cx + dx, cy + dy, color);
-            }
+        let dx = isqrt(r_sq - dy * dy);
+        for x in (cx - dx)..=(cx + dx) {
+            set_pixel(bytes, step, w, h, x, cy + dy, color);
         }
     }
+}
+
+/// Integer square root: returns the largest `n` such that `n * n <= val`.
+#[inline]
+fn isqrt(val: i32) -> i32 {
+    if val <= 0 {
+        return 0;
+    }
+    let mut n = (val as f32).sqrt() as i32;
+    // correct potential off-by-one from float imprecision
+    while n * n > val {
+        n -= 1;
+    }
+    while (n + 1) * (n + 1) <= val {
+        n += 1;
+    }
+    n
 }
