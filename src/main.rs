@@ -735,7 +735,10 @@ fn main() {
             "./data/conf.toml"
         }
     };
-    let app_settings = AppSettings::new(path_to_config);
+    let app_settings = AppSettings::new(path_to_config).unwrap_or_else(|e| {
+        eprintln!("Failed to load settings '{}': {}", path_to_config, e);
+        std::process::exit(1);
+    });
     println!("Settings are:\n\t{}", app_settings);
 
     let kalman_filter: KalmanFilterType = app_settings

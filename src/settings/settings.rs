@@ -1,4 +1,5 @@
 use std::fs;
+use std::io;
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -6,6 +7,37 @@ use std::error::Error;
 use std::fmt;
 use std::str::FromStr;
 use toml;
+
+#[derive(Debug)]
+pub enum SettingsError {
+    Io(io::Error),
+    Parse(toml::de::Error),
+    Validation(String),
+}
+
+impl fmt::Display for SettingsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SettingsError::Io(e) => write!(f, "I/O error: {}", e),
+            SettingsError::Parse(e) => write!(f, "TOML parse error: {}", e),
+            SettingsError::Validation(msg) => write!(f, "Validation error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for SettingsError {}
+
+impl From<io::Error> for SettingsError {
+    fn from(e: io::Error) -> Self {
+        SettingsError::Io(e)
+    }
+}
+
+impl From<toml::de::Error> for SettingsError {
+    fn from(e: toml::de::Error) -> Self {
+        SettingsError::Parse(e)
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppSettings {
@@ -241,20 +273,10 @@ impl From<&RoadLanesSettings> for Zone {
 }
 
 impl AppSettings {
-    pub fn new(filename: &str) -> Self {
-        let toml_contents = fs::read_to_string(filename).expect(&format!(
-            "Something went wrong reading the file: '{}'",
-            &filename
-        ));
-        let mut app_settings = match toml::from_str::<AppSettings>(&toml_contents) {
-            Ok(result) => result,
-            Err(err) => {
-                panic!(
-                    "Can't parse TOML configuration file due the error: {:?}",
-                    err
-                );
-            }
-        };
+    pub fn new(filename: &str) -> Result<Self, SettingsError> {
+        let toml_contents = fs::read_to_string(filename)?;
+        let mut app_settings = toml::from_str::<AppSettings>(&toml_contents)?;
+
         // Set default values
         if app_settings.tracking.typ.is_none() {
             app_settings.tracking.typ = Some("iou_naive".to_string());
@@ -262,45 +284,38 @@ impl AppSettings {
         if app_settings.tracking.kalman_filter.is_none() {
             app_settings.tracking.kalman_filter = Some("centroid".to_string());
         }
-        // Check if tracker type is valid
-        if app_settings.tracking.typ.is_some() {
-            match app_settings.tracking.typ.as_ref().unwrap().as_str() {
-                "iou_naive" => {}
-                "bytetrack" => {}
+
+        // Validate tracker type
+        if let Some(ref typ) = app_settings.tracking.typ {
+            match typ.as_str() {
+                "iou_naive" | "bytetrack" => {}
                 _ => {
-                    panic!(
-                        "Invalid tracker type: '{}'. Supported types are 'iou_naive' and 'bytetrack'.",
-                        app_settings.tracking.typ.as_ref().unwrap()
-                    );
+                    return Err(SettingsError::Validation(format!(
+                        "Invalid tracker type: '{}'. Supported: 'iou_naive', 'bytetrack'.",
+                        typ
+                    )));
                 }
             }
         }
-        // Check if kalman filter type is valid
-        if app_settings.tracking.kalman_filter.is_some() {
-            match app_settings
-                .tracking
-                .kalman_filter
-                .as_ref()
-                .unwrap()
-                .as_str()
-            {
-                "centroid" => {}
-                "bbox" => {}
+
+        // Validate kalman filter type
+        if let Some(ref kf) = app_settings.tracking.kalman_filter {
+            match kf.as_str() {
+                "centroid" | "bbox" => {}
                 _ => {
-                    panic!(
-                        "Invalid kalman filter type: '{}'. Supported types are 'centroid' and 'bbox'.",
-                        app_settings.tracking.kalman_filter.as_ref().unwrap()
-                    );
+                    return Err(SettingsError::Validation(format!(
+                        "Invalid kalman filter type: '{}'. Supported: 'centroid', 'bbox'.",
+                        kf
+                    )));
                 }
             }
         }
-        match app_settings.debug {
-            None => {
-                app_settings.debug = Some(DebugSettings { enable: false });
-            }
-            _ => {}
+
+        if app_settings.debug.is_none() {
+            app_settings.debug = Some(DebugSettings { enable: false });
         }
-        return app_settings;
+
+        Ok(app_settings)
     }
     pub fn save(&self, filename: &str) -> Result<(), Box<dyn Error>> {
         fs::copy(
