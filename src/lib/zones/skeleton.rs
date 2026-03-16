@@ -1,17 +1,13 @@
-use opencv::{
-    core::{Mat, Point2i},
-    imgproc::LINE_8,
-    imgproc::line,
-};
+use opencv::{core::Mat, prelude::*};
 
 use crate::lib::constants::EPSILON_TINY;
-use crate::lib::cv::{Scalar, to_cv_scalar};
+use crate::lib::cv::Scalar;
+use crate::lib::draw::primitives::{draw_line_thick, scalar_to_bgr};
 use crate::lib::spatial::Point2f;
 
 #[derive(Debug)]
 pub struct Skeleton {
     line_cvf: [Point2f; 2],
-    line_cvi: [Point2i; 2],
     color: Scalar,
     pub length_pixels: f32,
     pub length_meters: f32,
@@ -23,10 +19,6 @@ impl Skeleton {
         let length_pixels = ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt();
         Skeleton {
             line_cvf: [a, b],
-            line_cvi: [
-                Point2i::new(a.x as i32, a.y as i32),
-                Point2i::new(b.x as i32, b.y as i32),
-            ],
             color: Scalar::from((0.0, 0.0, 0.0)),
             length_pixels: length_pixels,
             length_meters: -1.0,
@@ -36,7 +28,6 @@ impl Skeleton {
     pub fn default() -> Self {
         Skeleton {
             line_cvf: [Point2f::default(), Point2f::default()],
-            line_cvi: [Point2i::default(), Point2i::default()],
             color: Scalar::from((0.0, 0.0, 0.0)),
             length_pixels: -1.0,
             length_meters: -1.0,
@@ -85,22 +76,21 @@ impl Skeleton {
         }
     }
     pub fn draw_on_mat(&self, img: &mut Mat) {
-        match line(
-            img,
-            self.line_cvi[0],
-            self.line_cvi[1],
-            to_cv_scalar(&self.color),
+        let w = img.cols() as usize;
+        let h = img.rows() as usize;
+        let step = w * img.elem_size().unwrap();
+        let bytes = img.data_bytes_mut().unwrap();
+        draw_line_thick(
+            bytes,
+            step,
+            w,
+            h,
+            self.line_cvf[0].x as i32,
+            self.line_cvf[0].y as i32,
+            self.line_cvf[1].x as i32,
+            self.line_cvf[1].y as i32,
+            scalar_to_bgr(&self.color),
             2,
-            LINE_8,
-            0,
-        ) {
-            Ok(_) => {}
-            Err(err) => {
-                panic!(
-                    "Can't draw skeleton line for polygon due the error: {:?}",
-                    err
-                )
-            }
-        };
+        );
     }
 }
