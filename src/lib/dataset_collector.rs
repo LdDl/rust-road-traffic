@@ -208,8 +208,11 @@ impl DatasetCollector {
             // Save image
             let image_path = format!("{}/{}.jpg", self.images_dir, filename_base);
             if self.jpeg_encoder.is_none() {
-                self.jpeg_encoder =
-                    Some(JpegEncoder::new(frame_width as u32, frame_height as u32, 95));
+                self.jpeg_encoder = Some(JpegEncoder::new(
+                    frame_width as u32,
+                    frame_height as u32,
+                    95,
+                ));
             }
             let bgr_data = frame.data_bytes()?;
             let jpeg_buf = self.jpeg_encoder.as_mut().unwrap().encode(bgr_data)?;

@@ -1,8 +1,5 @@
 use chrono::Utc;
-use opencv::{
-    core::Mat, core::get_cuda_enabled_device_count, prelude::*,
-    videoio::VideoCapture,
-};
+use opencv::{core::Mat, core::get_cuda_enabled_device_count, prelude::*, videoio::VideoCapture};
 
 use lib::cv::Rect as RectCV;
 
