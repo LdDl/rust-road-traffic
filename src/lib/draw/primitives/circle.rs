@@ -36,26 +36,11 @@ pub fn draw_filled_circle(
 ) {
     let r_sq = r * r;
     for dy in -r..=r {
-        let dx = isqrt(r_sq - dy * dy);
+        // Use std `isqrt`, but need to know that it will panic
+        // on negative input
+        let dx = (r_sq - dy * dy).isqrt();
         for x in (cx - dx)..=(cx + dx) {
             set_pixel(bytes, step, w, h, x, cy + dy, color);
         }
     }
-}
-
-/// Integer square root: returns the largest `n` such that `n * n <= val`.
-#[inline]
-fn isqrt(val: i32) -> i32 {
-    if val <= 0 {
-        return 0;
-    }
-    let mut n = (val as f32).sqrt() as i32;
-    // correct potential off-by-one from float imprecision
-    while n * n > val {
-        n -= 1;
-    }
-    while (n + 1) * (n + 1) <= val {
-        n += 1;
-    }
-    n
 }
