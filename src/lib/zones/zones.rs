@@ -13,7 +13,8 @@ use geometry::{get_orientation, is_intersects, is_on_segment};
 use geojson::{GeoPolygon, VirtualLineFeature, ZoneFeature, ZonePropertiesGeoJSON};
 
 use crate::lib::constants::EPSILON;
-use crate::lib::cv::{Scalar, to_cv_scalar};
+use crate::lib::cv::Scalar;
+use crate::lib::draw::primitives::{draw_line_thick, draw_text, scalar_to_bgr};
 use crate::lib::spatial::PerspectiveTransform;
 use crate::lib::spatial::Point2f;
 use crate::lib::spatial::compute_center;
@@ -23,13 +24,7 @@ use crate::lib::zones::{
     Skeleton, Statistics, TrafficFlowParameters, VehicleTypeParameters, VirtualLine,
     VirtualLineDirection,
 };
-use opencv::{
-    core::{Mat, Point},
-    imgproc::FONT_HERSHEY_SIMPLEX,
-    imgproc::LINE_8,
-    imgproc::line,
-    imgproc::put_text,
-};
+use opencv::{core::Mat, prelude::*};
 
 #[derive(Debug, Clone)]
 struct ObjectInfo {
@@ -581,53 +576,26 @@ impl Zone {
         self.virtual_line = Some(_virtual_line);
     }
     pub fn draw_geom(&self, img: &mut Mat) {
-        // @todo: proper error handling
-        for i in 1..self.pixel_coordinates.len() {
-            let prev_pt = Point::new(
-                self.pixel_coordinates[i - 1].x as i32,
-                self.pixel_coordinates[i - 1].y as i32,
-            );
-            let current_pt = Point::new(
+        let w = img.cols() as usize;
+        let h = img.rows() as usize;
+        let step = w * img.elem_size().unwrap();
+        let bytes = img.data_bytes_mut().unwrap();
+        let bgr = scalar_to_bgr(&self.color);
+        for i in 0..self.pixel_coordinates.len() {
+            let j = (i + 1) % self.pixel_coordinates.len();
+            draw_line_thick(
+                bytes,
+                step,
+                w,
+                h,
                 self.pixel_coordinates[i].x as i32,
                 self.pixel_coordinates[i].y as i32,
-            );
-            match line(
-                img,
-                prev_pt,
-                current_pt,
-                to_cv_scalar(&self.color),
+                self.pixel_coordinates[j].x as i32,
+                self.pixel_coordinates[j].y as i32,
+                bgr,
                 2,
-                LINE_8,
-                0,
-            ) {
-                Ok(_) => {}
-                Err(err) => {
-                    panic!("Can't draw line for polygon due the error: {:?}", err)
-                }
-            };
+            );
         }
-        let last_pt = Point::new(
-            self.pixel_coordinates[self.pixel_coordinates.len() - 1].x as i32,
-            self.pixel_coordinates[self.pixel_coordinates.len() - 1].y as i32,
-        );
-        let first_pt = Point::new(
-            self.pixel_coordinates[0].x as i32,
-            self.pixel_coordinates[0].y as i32,
-        );
-        match line(
-            img,
-            last_pt,
-            first_pt,
-            to_cv_scalar(&self.color),
-            2,
-            LINE_8,
-            0,
-        ) {
-            Ok(_) => {}
-            Err(err) => {
-                panic!("Can't draw line for polygon due the error: {:?}", err)
-            }
-        };
     }
     pub fn draw_skeleton(&self, img: &mut Mat) {
         self.skeleton.draw_on_mat(img);
@@ -641,35 +609,27 @@ impl Zone {
         }
     }
     pub fn draw_current_intensity(&self, img: &mut Mat) {
-        let register_via_virtual_line = match &self.virtual_line {
-            Some(_) => true,
-            None => false,
-        };
+        let register_via_virtual_line = self.virtual_line.is_some();
         let current_intensity = match register_via_virtual_line {
             true => self.objects_crossed.len(),
             false => self.objects_registered.len(),
         };
-        let anchor = Point::new(
+        let w = img.cols() as usize;
+        let h = img.rows() as usize;
+        let step = w * img.elem_size().unwrap();
+        let bytes = img.data_bytes_mut().unwrap();
+        let black: [u8; 3] = [0, 0, 0];
+        draw_text(
+            bytes,
+            step,
+            w,
+            h,
             self.pixel_coordinates[0].x as i32 + 20,
             self.pixel_coordinates[0].y as i32 - 10,
-        );
-        let black = to_cv_scalar(&Scalar::from((0.0, 0.0, 0.0)));
-        match put_text(
-            img,
             &current_intensity.to_string(),
-            anchor,
-            FONT_HERSHEY_SIMPLEX,
-            0.5,
             black,
-            2,
-            LINE_8,
-            false,
-        ) {
-            Ok(_) => {}
-            Err(err) => {
-                println!("Can't display velocity of object due the error {:?}", err);
-            }
-        };
+            1,
+        );
     }
     pub fn to_geojson(&self) -> ZoneFeature {
         let mut euclidean: Vec<Vec<i32>> = Vec::new();

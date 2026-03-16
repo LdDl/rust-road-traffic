@@ -1,13 +1,10 @@
-use opencv::{
-    core::{Mat, Point2i},
-    imgproc::LINE_8,
-    imgproc::line,
-};
+use opencv::{core::Mat, prelude::*};
 use std::fmt;
 use std::str::FromStr;
 
 use crate::lib::constants::EPSILON;
-use crate::lib::cv::{Scalar, to_cv_scalar};
+use crate::lib::cv::Scalar;
+use crate::lib::draw::primitives::{draw_line_thick, scalar_to_bgr};
 use crate::lib::spatial::Point2f;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -49,7 +46,6 @@ impl FromStr for VirtualLineDirection {
 pub struct VirtualLine {
     pub line: [[i32; 2]; 2],
     pub line_cvf: [Point2f; 2],
-    pub line_cvi: [Point2i; 2],
     pub color_cv: Scalar,
     pub color: [i16; 3],
     pub direction: VirtualLineDirection,
@@ -60,10 +56,6 @@ impl VirtualLine {
         VirtualLine {
             line: [[a.x as i32, a.y as i32], [b.x as i32, b.y as i32]],
             line_cvf: [a, b],
-            line_cvi: [
-                Point2i::new(a.x as i32, a.y as i32),
-                Point2i::new(b.x as i32, b.y as i32),
-            ],
             color_cv: Scalar::from((0.0, 0.0, 0.0)),
             color: [0, 0, 0],
             direction: _direction,
@@ -75,10 +67,6 @@ impl VirtualLine {
             line_cvf: [
                 Point2f::new(ab[0][0] as f32, ab[0][1] as f32),
                 Point2f::new(ab[1][0] as f32, ab[1][1] as f32),
-            ],
-            line_cvi: [
-                Point2i::new(ab[0][0], ab[0][1]),
-                Point2i::new(ab[1][0], ab[1][1]),
             ],
             color_cv: Scalar::from((0.0, 0.0, 0.0)),
             color: [0, 0, 0],
@@ -102,30 +90,28 @@ impl VirtualLine {
         VirtualLine {
             line: self.line,
             line_cvf: self.line_cvf,
-            line_cvi: self.line_cvi,
             color_cv: self.color_cv,
             color: self.color,
             direction: self.direction,
         }
     }
     pub fn draw_on_mat(&self, img: &mut Mat) {
-        match line(
-            img,
-            self.line_cvi[0],
-            self.line_cvi[1],
-            to_cv_scalar(&self.color_cv),
+        let w = img.cols() as usize;
+        let h = img.rows() as usize;
+        let step = w * img.elem_size().unwrap();
+        let bytes = img.data_bytes_mut().unwrap();
+        draw_line_thick(
+            bytes,
+            step,
+            w,
+            h,
+            self.line[0][0],
+            self.line[0][1],
+            self.line[1][0],
+            self.line[1][1],
+            scalar_to_bgr(&self.color_cv),
             2,
-            LINE_8,
-            0,
-        ) {
-            Ok(_) => {}
-            Err(err) => {
-                panic!(
-                    "Can't draw virtual line for polygon due the error: {:?}",
-                    err
-                )
-            }
-        };
+        );
     }
 }
 

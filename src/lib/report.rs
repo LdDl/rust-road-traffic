@@ -5,13 +5,12 @@ use std::io::Write;
 use std::path::Path;
 
 use opencv::{
-    core::{Mat, Point, Vector},
+    core::{Mat, Vector},
     imgcodecs::imencode,
-    imgproc::{FONT_HERSHEY_SIMPLEX, LINE_8, line, put_text},
     prelude::*,
 };
 
-use crate::lib::cv::to_cv_scalar;
+use crate::lib::draw::primitives::{draw_line_thick, draw_text, scalar_to_bgr};
 
 use crate::lib::data_storage::DataStorage;
 
@@ -33,6 +32,10 @@ pub fn generate_report(
     let mut zones_csv = String::from("zone_id;x1;y1;x2;y2;x3;y3;x4;y4\n");
     let mut od_csv = String::from("zone_from;zone_to;count\n");
     let mut frame = first_frame.clone();
+
+    let w = frame.cols() as usize;
+    let h = frame.rows() as usize;
+    let step = w * frame.elem_size().unwrap();
 
     let mut zone_id_to_key: HashMap<String, String> = HashMap::new();
 
@@ -63,58 +66,51 @@ pub fn generate_report(
 
         // Draw zone polygon on frame
         let n = zone.pixel_coordinates.len();
+        let bgr = scalar_to_bgr(&zone.color);
+        let bytes = frame.data_bytes_mut()?;
         for i in 0..n {
-            let pt1 = Point::new(
+            let j = (i + 1) % n;
+            draw_line_thick(
+                bytes,
+                step,
+                w,
+                h,
                 zone.pixel_coordinates[i].x as i32,
                 zone.pixel_coordinates[i].y as i32,
-            );
-            let pt2 = Point::new(
-                zone.pixel_coordinates[(i + 1) % n].x as i32,
-                zone.pixel_coordinates[(i + 1) % n].y as i32,
-            );
-            line(
-                &mut frame,
-                pt1,
-                pt2,
-                to_cv_scalar(&zone.color),
+                zone.pixel_coordinates[j].x as i32,
+                zone.pixel_coordinates[j].y as i32,
+                bgr,
                 2,
-                LINE_8,
-                0,
-            )?;
+            );
         }
 
         // Draw zone ID label
-        let label_anchor = Point::new(
+        draw_text(
+            bytes,
+            step,
+            w,
+            h,
             zone.pixel_coordinates[0].x as i32 + 5,
             zone.pixel_coordinates[0].y as i32 - 15,
-        );
-        put_text(
-            &mut frame,
             &zone_id,
-            label_anchor,
-            FONT_HERSHEY_SIMPLEX,
-            0.6,
-            to_cv_scalar(&zone.color),
-            2,
-            LINE_8,
-            false,
-        )?;
+            bgr,
+            1,
+        );
 
         // Draw vertex coordinates
         for (idx, pt) in zone.pixel_coordinates.iter().enumerate() {
             let text = format!("P{}({},{})", idx + 1, pt.x as i32, pt.y as i32);
-            let anchor = Point::new(pt.x as i32 + 5, pt.y as i32 + 15);
-            put_text(
-                &mut frame,
+            draw_text(
+                bytes,
+                step,
+                w,
+                h,
+                pt.x as i32 + 5,
+                pt.y as i32 + 8,
                 &text,
-                anchor,
-                FONT_HERSHEY_SIMPLEX,
-                0.4,
-                to_cv_scalar(&zone.color),
+                bgr,
                 1,
-                LINE_8,
-                false,
-            )?;
+            );
         }
     }
 

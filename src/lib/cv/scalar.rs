@@ -21,10 +21,3 @@ impl std::ops::Index<usize> for Scalar {
         &self.0[i]
     }
 }
-
-/// Convert to opencv::core::Scalar for passing to OpenCV drawing functions.
-/// @todo: will be removed in future
-#[inline(always)]
-pub fn to_cv_scalar(s: &Scalar) -> opencv::core::Scalar {
-    opencv::core::Scalar::new(s[0], s[1], s[2], 0.0)
-}
