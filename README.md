@@ -175,7 +175,7 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
     | Video file | `"./data/video.mp4"` | ffmpeg |
     | RTSP stream | `"rtsp://user:pass@192.168.1.10:554/stream"` | ffmpeg (TCP) |
     | USB camera (V4L2) | `"0"` or `"/dev/video0"` | ffmpeg |
-    | GStreamer pipeline | any string containing `!` | gst-launch-1.0 |
+    | GStreamer pipeline | starts with known source element (e.g. `nvarguscamerasrc`, `v4l2src`), contains ` ! ` | gst-launch-1.0 |
 
     GStreamer pipeline examples (use `appsink` as sink - it will be replaced with `fdsink fd=1` automatically; pipeline must output BGR format; width/height/framerate are parsed from caps in the pipeline string):
 
