@@ -1,4 +1,4 @@
-use opencv::{prelude::*, videoio::VideoCapture, videoio::CAP_ANY};
+use opencv::{prelude::*, videoio::CAP_ANY, videoio::VideoCapture};
 
 pub fn get_video_capture(video_src: &str, typ: String) -> VideoCapture {
     if typ == "rtsp" {

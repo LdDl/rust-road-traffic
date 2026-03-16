@@ -1,9 +1,9 @@
-use actix_web::{HttpResponse, web, Error};
-use serde::Serialize;
-use utoipa::ToSchema;
 use crate::rest_api::APIStorage;
 use crate::settings::RoadLanesSettings;
 use crate::settings::VirtualLineSettings;
+use actix_web::{Error, HttpResponse, web};
+use serde::Serialize;
+use utoipa::ToSchema;
 
 /// Error response
 #[derive(Debug, Serialize, ToSchema)]
@@ -32,29 +32,45 @@ pub struct UpdateTOMLResponse<'a> {
 )]
 pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Error> {
     println!("Saving TOML configuration");
-    let ds_guard = data.data_storage.read().expect("DataStorage is poisoned [RWLock]");
-    let zones = ds_guard.zones.read().expect("Spatial data is poisoned [RWLock]");
+    let ds_guard = data
+        .data_storage
+        .read()
+        .expect("DataStorage is poisoned [RWLock]");
+    let zones = ds_guard
+        .zones
+        .read()
+        .expect("Spatial data is poisoned [RWLock]");
     let mut setting_cloned = data.app_settings.get_copy_no_roads();
     let road_lanes = setting_cloned.road_lanes.get_or_insert_with(Vec::new);
     for (_, zone_guarded) in zones.iter() {
         let zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
-        road_lanes.push(RoadLanesSettings{
-            color_rgb: [zone.color[2] as i16, zone.color[1] as i16, zone.color[0] as i16], // BGR -> RGB
-            geometry: zone.get_pixel_coordinates().iter().map(|pt| [pt.x as i32, pt.y as i32]).collect(),
-            geometry_wgs84: zone.get_spatial_coordinates_epsg4326().iter().map(|pt| [pt.x, pt.y]).collect(),
+        road_lanes.push(RoadLanesSettings {
+            color_rgb: [
+                zone.color[2] as i16,
+                zone.color[1] as i16,
+                zone.color[0] as i16,
+            ], // BGR -> RGB
+            geometry: zone
+                .get_pixel_coordinates()
+                .iter()
+                .map(|pt| [pt.x as i32, pt.y as i32])
+                .collect(),
+            geometry_wgs84: zone
+                .get_spatial_coordinates_epsg4326()
+                .iter()
+                .map(|pt| [pt.x, pt.y])
+                .collect(),
             lane_direction: zone.road_lane_direction,
             lane_number: zone.road_lane_num,
             virtual_line: match &zone.get_virtual_line() {
                 Some(vl) => {
-                    Some(VirtualLineSettings{
+                    Some(VirtualLineSettings {
                         geometry: vl.line,
                         color_rgb: [vl.color[0] as i16, vl.color[1] as i16, vl.color[2] as i16], // BGR -> RGB
                         direction: vl.direction.to_string(),
                     })
-                },
-                None => {
-                    None
                 }
+                None => None,
             },
         });
         drop(zone);
@@ -63,18 +79,16 @@ pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Erro
     drop(ds_guard);
     if setting_cloned.detection.target_classes.is_none() {
         // If option is empty, set one
-        setting_cloned.detection.target_classes = Some(setting_cloned.detection.net_classes.clone());
+        setting_cloned.detection.target_classes =
+            Some(setting_cloned.detection.net_classes.clone());
     }
     match setting_cloned.save(&data.settings_filename) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_err) => {
             return Ok(HttpResponse::InternalServerError().json(ErrorResponse {
                 error_text: format!("Can't save TOML due the error: {}", _err),
             }));
-        },
+        }
     };
-    return Ok(HttpResponse::Ok().json(UpdateTOMLResponse{
-        message: "ok"
-    }));
+    return Ok(HttpResponse::Ok().json(UpdateTOMLResponse { message: "ok" }));
 }
-

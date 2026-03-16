@@ -1,36 +1,39 @@
-use std::fmt;
+use mot_rs::mot::{BlobBBox, ByteTracker, IoUTracker, SimpleBlob, TrackerError};
 use std::collections::HashMap;
-use std::collections::hash_map::Entry::{
-    Occupied,
-    Vacant
-};
+use std::collections::hash_map::Entry::{Occupied, Vacant};
+use std::fmt;
 use uuid::Uuid;
-use mot_rs::mot::{
-    TrackerError,
-    IoUTracker,
-    ByteTracker,
-    SimpleBlob,
-    BlobBBox,
-};
 
-use crate::lib::detection::{Detections, DetectionBlobs, KalmanFilterType};
-use super::tracked_blob::{TrackedBlob, TrackedBlobRef};
 use super::object_extra::ObjectExtra;
+use super::tracked_blob::{TrackedBlob, TrackedBlobRef};
+use crate::lib::detection::{DetectionBlobs, Detections, KalmanFilterType};
 
 /// Trait for SimpleBlob trackers
 pub trait TrackerEngineSimple {
-    fn match_objects(&mut self, detections: &mut Vec<SimpleBlob>, confidences: &[f32]) -> Result<(), TrackerError>;
+    fn match_objects(
+        &mut self,
+        detections: &mut Vec<SimpleBlob>,
+        confidences: &[f32],
+    ) -> Result<(), TrackerError>;
     fn get_objects(&self) -> &HashMap<Uuid, SimpleBlob>;
 }
 
 /// Trait for BlobBBox trackers
 pub trait TrackerEngineBBox {
-    fn match_objects(&mut self, detections: &mut Vec<BlobBBox>, confidences: &[f32]) -> Result<(), TrackerError>;
+    fn match_objects(
+        &mut self,
+        detections: &mut Vec<BlobBBox>,
+        confidences: &[f32],
+    ) -> Result<(), TrackerError>;
     fn get_objects(&self) -> &HashMap<Uuid, BlobBBox>;
 }
 
 impl TrackerEngineSimple for IoUTracker<SimpleBlob> {
-    fn match_objects(&mut self, detections: &mut Vec<SimpleBlob>, _confidences: &[f32]) -> Result<(), TrackerError> {
+    fn match_objects(
+        &mut self,
+        detections: &mut Vec<SimpleBlob>,
+        _confidences: &[f32],
+    ) -> Result<(), TrackerError> {
         self.match_objects(detections)
     }
     fn get_objects(&self) -> &HashMap<Uuid, SimpleBlob> {
@@ -39,7 +42,11 @@ impl TrackerEngineSimple for IoUTracker<SimpleBlob> {
 }
 
 impl TrackerEngineSimple for ByteTracker<SimpleBlob> {
-    fn match_objects(&mut self, detections: &mut Vec<SimpleBlob>, confidences: &[f32]) -> Result<(), TrackerError> {
+    fn match_objects(
+        &mut self,
+        detections: &mut Vec<SimpleBlob>,
+        confidences: &[f32],
+    ) -> Result<(), TrackerError> {
         self.match_objects(detections, &confidences)
     }
     fn get_objects(&self) -> &HashMap<Uuid, SimpleBlob> {
@@ -48,7 +55,11 @@ impl TrackerEngineSimple for ByteTracker<SimpleBlob> {
 }
 
 impl TrackerEngineBBox for IoUTracker<BlobBBox> {
-    fn match_objects(&mut self, detections: &mut Vec<BlobBBox>, _confidences: &[f32]) -> Result<(), TrackerError> {
+    fn match_objects(
+        &mut self,
+        detections: &mut Vec<BlobBBox>,
+        _confidences: &[f32],
+    ) -> Result<(), TrackerError> {
         self.match_objects(detections)
     }
     fn get_objects(&self) -> &HashMap<Uuid, BlobBBox> {
@@ -57,7 +68,11 @@ impl TrackerEngineBBox for IoUTracker<BlobBBox> {
 }
 
 impl TrackerEngineBBox for ByteTracker<BlobBBox> {
-    fn match_objects(&mut self, detections: &mut Vec<BlobBBox>, confidences: &[f32]) -> Result<(), TrackerError> {
+    fn match_objects(
+        &mut self,
+        detections: &mut Vec<BlobBBox>,
+        confidences: &[f32],
+    ) -> Result<(), TrackerError> {
         self.match_objects(detections, &confidences)
     }
     fn get_objects(&self) -> &HashMap<Uuid, BlobBBox> {
@@ -78,7 +93,10 @@ pub struct TrackerBBox<T: TrackerEngineBBox> {
 }
 
 impl<T: TrackerEngineSimple> TrackerSimple<T> {
-    pub fn new_iou(max_no_match: usize, iou_threshold: f32) -> TrackerSimple<IoUTracker<SimpleBlob>> {
+    pub fn new_iou(
+        max_no_match: usize,
+        iou_threshold: f32,
+    ) -> TrackerSimple<IoUTracker<SimpleBlob>> {
         TrackerSimple {
             engine: IoUTracker::new(max_no_match, iou_threshold),
             objects_extra: HashMap::new(),
@@ -98,10 +116,18 @@ impl<T: TrackerEngineSimple> TrackerSimple<T> {
         }
     }
 
-    pub fn match_objects(&mut self, detections: &mut Detections, current_second: f32) -> Result<(), TrackerError> {
+    pub fn match_objects(
+        &mut self,
+        detections: &mut Detections,
+        current_second: f32,
+    ) -> Result<(), TrackerError> {
         let blobs = match &mut detections.blobs {
             DetectionBlobs::Simple(b) => b,
-            DetectionBlobs::BBox(_) => return Err(TrackerError::BadSize("Expected SimpleBlob detections for centroid tracker".to_string())),
+            DetectionBlobs::BBox(_) => {
+                return Err(TrackerError::BadSize(
+                    "Expected SimpleBlob detections for centroid tracker".to_string(),
+                ));
+            }
         };
 
         self.engine.match_objects(blobs, &detections.confidences)?;
@@ -129,7 +155,8 @@ impl<T: TrackerEngineSimple> TrackerSimple<T> {
         }
 
         let ref_engine_objects = &self.engine.get_objects();
-        self.objects_extra.retain(|object_id, _| ref_engine_objects.contains_key(object_id));
+        self.objects_extra
+            .retain(|object_id, _| ref_engine_objects.contains_key(object_id));
         Ok(())
     }
 }
@@ -155,10 +182,18 @@ impl<T: TrackerEngineBBox> TrackerBBox<T> {
         }
     }
 
-    pub fn match_objects(&mut self, detections: &mut Detections, current_second: f32) -> Result<(), TrackerError> {
+    pub fn match_objects(
+        &mut self,
+        detections: &mut Detections,
+        current_second: f32,
+    ) -> Result<(), TrackerError> {
         let blobs = match &mut detections.blobs {
             DetectionBlobs::BBox(b) => b,
-            DetectionBlobs::Simple(_) => return Err(TrackerError::BadSize("Expected BlobBBox detections for bbox tracker".to_string())),
+            DetectionBlobs::Simple(_) => {
+                return Err(TrackerError::BadSize(
+                    "Expected BlobBBox detections for bbox tracker".to_string(),
+                ));
+            }
         };
 
         self.engine.match_objects(blobs, &detections.confidences)?;
@@ -187,7 +222,8 @@ impl<T: TrackerEngineBBox> TrackerBBox<T> {
 
         let ref_engine_objects = &self.engine.get_objects();
         // Remove obsolete objects
-        self.objects_extra.retain(|object_id, _| ref_engine_objects.contains_key(object_id));
+        self.objects_extra
+            .retain(|object_id, _| ref_engine_objects.contains_key(object_id));
         Ok(())
     }
 }
@@ -203,34 +239,68 @@ pub fn new_tracker_from_type(
     tracker_type: &str,
     kalman_filter: KalmanFilterType,
     max_no_match: Option<usize>,
-    iou_threshold: Option<f32>
+    iou_threshold: Option<f32>,
 ) -> Box<dyn TrackerTrait> {
     let max_no_match = max_no_match.unwrap_or(60);
     let iou_threshold = iou_threshold.unwrap_or(0.3);
 
     match (tracker_type, kalman_filter) {
-        ("iou_naive", KalmanFilterType::BBox) => Box::new(TrackerBBox::<IoUTracker<BlobBBox>>::new_iou(max_no_match, iou_threshold)),
-        ("bytetrack", KalmanFilterType::BBox) => Box::new(TrackerBBox::<ByteTracker<BlobBBox>>::new_bytetrack(
-            max_no_match, iou_threshold, 0.7, 0.3, mot_rs::mot::MatchingAlgorithm::Hungarian
+        ("iou_naive", KalmanFilterType::BBox) => Box::new(
+            TrackerBBox::<IoUTracker<BlobBBox>>::new_iou(max_no_match, iou_threshold),
+        ),
+        ("bytetrack", KalmanFilterType::BBox) => {
+            Box::new(TrackerBBox::<ByteTracker<BlobBBox>>::new_bytetrack(
+                max_no_match,
+                iou_threshold,
+                0.7,
+                0.3,
+                mot_rs::mot::MatchingAlgorithm::Hungarian,
+            ))
+        }
+        ("iou_naive", KalmanFilterType::Centroid) => Box::new(TrackerSimple::<
+            IoUTracker<SimpleBlob>,
+        >::new_iou(
+            max_no_match, iou_threshold
         )),
-        ("iou_naive", KalmanFilterType::Centroid) => Box::new(TrackerSimple::<IoUTracker<SimpleBlob>>::new_iou(max_no_match, iou_threshold)),
-        ("bytetrack", KalmanFilterType::Centroid) => Box::new(TrackerSimple::<ByteTracker<SimpleBlob>>::new_bytetrack(
-            max_no_match, iou_threshold, 0.7, 0.3, mot_rs::mot::MatchingAlgorithm::Hungarian
-        )),
+        ("bytetrack", KalmanFilterType::Centroid) => {
+            Box::new(TrackerSimple::<ByteTracker<SimpleBlob>>::new_bytetrack(
+                max_no_match,
+                iou_threshold,
+                0.7,
+                0.3,
+                mot_rs::mot::MatchingAlgorithm::Hungarian,
+            ))
+        }
         (_, KalmanFilterType::BBox) => {
-            println!("Unknown tracker type '{}', falling back to iou_naive", tracker_type);
-            Box::new(TrackerBBox::<IoUTracker<BlobBBox>>::new_iou(max_no_match, iou_threshold))
+            println!(
+                "Unknown tracker type '{}', falling back to iou_naive",
+                tracker_type
+            );
+            Box::new(TrackerBBox::<IoUTracker<BlobBBox>>::new_iou(
+                max_no_match,
+                iou_threshold,
+            ))
         }
         _ => {
-            println!("Unknown tracker type '{}', falling back to iou_naive", tracker_type);
-            Box::new(TrackerSimple::<IoUTracker<SimpleBlob>>::new_iou(max_no_match, iou_threshold))
+            println!(
+                "Unknown tracker type '{}', falling back to iou_naive",
+                tracker_type
+            );
+            Box::new(TrackerSimple::<IoUTracker<SimpleBlob>>::new_iou(
+                max_no_match,
+                iou_threshold,
+            ))
         }
     }
 }
 
 /// Common trait for all tracker types (both SimpleBlob and BlobBBox based)
 pub trait TrackerTrait {
-    fn match_objects(&mut self, detections: &mut Detections, current_second: f32) -> Result<(), TrackerError>;
+    fn match_objects(
+        &mut self,
+        detections: &mut Detections,
+        current_second: f32,
+    ) -> Result<(), TrackerError>;
     fn get_objects_extra(&self) -> &HashMap<Uuid, ObjectExtra>;
     fn get_object_extra_mut(&mut self, object_id: &Uuid) -> Option<&mut ObjectExtra>;
     /// Returns tracked objects as TrackedBlob enum (works for both centroid and bbox tracking)
@@ -247,7 +317,11 @@ pub trait TrackerTrait {
 }
 
 impl<T: TrackerEngineSimple> TrackerTrait for TrackerSimple<T> {
-    fn match_objects(&mut self, detections: &mut Detections, current_second: f32) -> Result<(), TrackerError> {
+    fn match_objects(
+        &mut self,
+        detections: &mut Detections,
+        current_second: f32,
+    ) -> Result<(), TrackerError> {
         self.match_objects(detections, current_second)
     }
 
@@ -260,39 +334,58 @@ impl<T: TrackerEngineSimple> TrackerTrait for TrackerSimple<T> {
     }
 
     fn get_tracked_objects(&self) -> HashMap<Uuid, TrackedBlob> {
-        self.engine.get_objects().iter()
+        self.engine
+            .get_objects()
+            .iter()
             .map(|(id, blob)| (*id, TrackedBlob::Simple(blob.clone())))
             .collect()
     }
 
     fn get_tracked_object(&self, object_id: &Uuid) -> Option<TrackedBlob> {
-        self.engine.get_objects().get(object_id)
+        self.engine
+            .get_objects()
+            .get(object_id)
             .map(|blob| TrackedBlob::Simple(blob.clone()))
     }
 
     fn iter_tracked_objects(&self) -> Box<dyn Iterator<Item = (Uuid, TrackedBlobRef<'_>)> + '_> {
         Box::new(
-            self.engine.get_objects().iter()
-                .map(|(id, blob)| (*id, TrackedBlobRef::Simple(blob)))
+            self.engine
+                .get_objects()
+                .iter()
+                .map(|(id, blob)| (*id, TrackedBlobRef::Simple(blob))),
         )
     }
 
     fn get_tracked_object_ref(&self, object_id: &Uuid) -> Option<TrackedBlobRef<'_>> {
-        self.engine.get_objects().get(object_id)
+        self.engine
+            .get_objects()
+            .get(object_id)
             .map(|blob| TrackedBlobRef::Simple(blob))
     }
 
     fn description(&self) -> String {
         let type_name = std::any::type_name::<T>();
         let engine_name = type_name
-            .split('<').next().unwrap_or(type_name)  // Get part before generic <
-            .split("::").last().unwrap_or("unknown"); // Get last path segment
-        format!("Centroid tracker (4D Kalman: x, y, vx, vy) with {} engine", engine_name)
+            .split('<')
+            .next()
+            .unwrap_or(type_name) // Get part before generic <
+            .split("::")
+            .last()
+            .unwrap_or("unknown"); // Get last path segment
+        format!(
+            "Centroid tracker (4D Kalman: x, y, vx, vy) with {} engine",
+            engine_name
+        )
     }
 }
 
 impl<T: TrackerEngineBBox> TrackerTrait for TrackerBBox<T> {
-    fn match_objects(&mut self, detections: &mut Detections, current_second: f32) -> Result<(), TrackerError> {
+    fn match_objects(
+        &mut self,
+        detections: &mut Detections,
+        current_second: f32,
+    ) -> Result<(), TrackerError> {
         self.match_objects(detections, current_second)
     }
 
@@ -305,34 +398,49 @@ impl<T: TrackerEngineBBox> TrackerTrait for TrackerBBox<T> {
     }
 
     fn get_tracked_objects(&self) -> HashMap<Uuid, TrackedBlob> {
-        self.engine.get_objects().iter()
+        self.engine
+            .get_objects()
+            .iter()
             .map(|(id, blob)| (*id, TrackedBlob::BBox(blob.clone())))
             .collect()
     }
 
     fn get_tracked_object(&self, object_id: &Uuid) -> Option<TrackedBlob> {
-        self.engine.get_objects().get(object_id)
+        self.engine
+            .get_objects()
+            .get(object_id)
             .map(|blob| TrackedBlob::BBox(blob.clone()))
     }
 
     fn iter_tracked_objects(&self) -> Box<dyn Iterator<Item = (Uuid, TrackedBlobRef<'_>)> + '_> {
         Box::new(
-            self.engine.get_objects().iter()
-                .map(|(id, blob)| (*id, TrackedBlobRef::BBox(blob)))
+            self.engine
+                .get_objects()
+                .iter()
+                .map(|(id, blob)| (*id, TrackedBlobRef::BBox(blob))),
         )
     }
 
     fn get_tracked_object_ref(&self, object_id: &Uuid) -> Option<TrackedBlobRef<'_>> {
-        self.engine.get_objects().get(object_id)
+        self.engine
+            .get_objects()
+            .get(object_id)
             .map(|blob| TrackedBlobRef::BBox(blob))
     }
 
     fn description(&self) -> String {
         let type_name = std::any::type_name::<T>();
         let engine_name = type_name
-            .split('<').next().unwrap_or(type_name)  // Get part before generic <
-            .split("::").last().unwrap_or("unknown"); // Get last path segment
-        format!("BBox tracker (8D Kalman: x, y, w, h, vx, vy, vw, vh) with {} engine", engine_name)
+            .split('<')
+            .next()
+            .unwrap_or(type_name) // Get part before generic <
+            .split("::")
+            .last()
+            .unwrap_or("unknown"); // Get last path segment
+        format!(
+            "BBox tracker (8D Kalman: x, y, w, h, vx, vy, vw, vh) with {} engine",
+            engine_name
+        )
     }
 }
 

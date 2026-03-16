@@ -50,7 +50,11 @@ impl PerfStats {
         let avg_total = avg_inference + avg_postprocess + avg_tracking;
 
         // Estimate FPS based on processing time (not including capture/display)
-        let estimated_fps = if avg_total > 0.0 { 1000.0 / avg_total } else { 0.0 };
+        let estimated_fps = if avg_total > 0.0 {
+            1000.0 / avg_total
+        } else {
+            0.0
+        };
 
         println!(
             "[PerfStats] Last {} frames avg: inference={:.2}ms, postprocess={:.2}ms, tracking={:.2}ms | total={:.2}ms (~{:.1} FPS)",
@@ -77,7 +81,9 @@ pub struct Timer {
 
 impl Timer {
     pub fn start() -> Self {
-        Timer { start: Instant::now() }
+        Timer {
+            start: Instant::now(),
+        }
     }
 
     pub fn elapsed(&self) -> Duration {

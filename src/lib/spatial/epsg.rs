@@ -58,4 +58,3 @@ mod tests {
         assert!((lat - test_lat).abs() < eps_lonlat);
     }
 }
-

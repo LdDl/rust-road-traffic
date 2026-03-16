@@ -1,11 +1,11 @@
 use std::fs;
 
 use chrono::Utc;
-use serde::{ Deserialize, Serialize };
-use toml;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
 use std::str::FromStr;
+use toml;
 
 // model_format is only available with opencv-backend
 #[cfg(feature = "opencv-backend")]
@@ -34,7 +34,7 @@ pub struct InputSettings {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DebugSettings {
-    pub enable: bool
+    pub enable: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -60,34 +60,38 @@ pub struct DetectionSettings {
 // These methods are only available with opencv-backend
 #[cfg(feature = "opencv-backend")]
 impl DetectionSettings {
-    pub fn get_nn_format(&self) -> Result<ModelFormat,  Box<dyn Error>> {
+    pub fn get_nn_format(&self) -> Result<ModelFormat, Box<dyn Error>> {
         match self.network_format.clone() {
-            Some(mf) => {
-                match mf.to_lowercase().as_str() {
-                    "darknet" => { Ok(ModelFormat::Darknet) },
-                    "onnx" => { Ok(ModelFormat::ONNX) },
-                    _ => {
-                        return Err(format!("Can't prepare neural network due the unhandled format: {}", mf).into());
-                    }
+            Some(mf) => match mf.to_lowercase().as_str() {
+                "darknet" => Ok(ModelFormat::Darknet),
+                "onnx" => Ok(ModelFormat::ONNX),
+                _ => {
+                    return Err(format!(
+                        "Can't prepare neural network due the unhandled format: {}",
+                        mf
+                    )
+                    .into());
                 }
             },
-            None => { Ok(ModelFormat::Darknet) }
+            None => Ok(ModelFormat::Darknet),
         }
     }
-    pub fn get_nn_version(&self) -> Result<ModelVersion,  Box<dyn Error>> {
+    pub fn get_nn_version(&self) -> Result<ModelVersion, Box<dyn Error>> {
         match self.network_ver.clone() {
-            Some(mv) => {
-                match mv {
-                    3 => { Ok(ModelVersion::V3) },
-                    4 => { Ok(ModelVersion::V4) },
-                    7 => { Ok(ModelVersion::V7) },
-                    8 => { Ok(ModelVersion::V8) },
-                    _ => {
-                        return Err(format!("Can't prepare neural network due the unhandled version: {}", mv).into());
-                    }
+            Some(mv) => match mv {
+                3 => Ok(ModelVersion::V3),
+                4 => Ok(ModelVersion::V4),
+                7 => Ok(ModelVersion::V7),
+                8 => Ok(ModelVersion::V8),
+                _ => {
+                    return Err(format!(
+                        "Can't prepare neural network due the unhandled version: {}",
+                        mv
+                    )
+                    .into());
                 }
             },
-            None => { Ok(ModelVersion::V3) }
+            None => Ok(ModelVersion::V3),
         }
     }
 }
@@ -117,7 +121,7 @@ pub struct RoadLanesSettings {
     pub geometry: Vec<[i32; 2]>,
     pub geometry_wgs84: Vec<[f32; 2]>,
     pub color_rgb: [i16; 3],
-    pub virtual_line: Option<VirtualLineSettings>
+    pub virtual_line: Option<VirtualLineSettings>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -162,7 +166,9 @@ pub struct MJPEGStreamingSettings {
     pub quality: i32,
 }
 
-fn default_mjpeg_quality() -> i32 { 80 }
+fn default_mjpeg_quality() -> i32 {
+    80
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DatasetCollectorSettings {
@@ -188,12 +194,24 @@ pub struct DatasetCollectorSettings {
     pub capture_interval: u32,
 }
 
-fn default_label_format() -> String { "yolo".to_string() }
-fn default_min_track_age() -> u32 { 15 }
-fn default_skip_edge_objects() -> bool { true }
-fn default_edge_margin_pixels() -> u32 { 5 }
-fn default_max_captures_per_track() -> u32 { 1 }
-fn default_capture_interval() -> u32 { 30 }
+fn default_label_format() -> String {
+    "yolo".to_string()
+}
+fn default_min_track_age() -> u32 {
+    15
+}
+fn default_skip_edge_objects() -> bool {
+    true
+}
+fn default_edge_margin_pixels() -> u32 {
+    5
+}
+fn default_max_captures_per_track() -> u32 {
+    1
+}
+fn default_capture_interval() -> u32 {
+    30
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ReportSettings {
@@ -201,26 +219,29 @@ pub struct ReportSettings {
     pub output_path: String,
 }
 
-use crate::lib::zones::Zone;
-use crate::lib::zones::{VirtualLineDirection, VirtualLine};
+use crate::lib::cv::Scalar;
+use crate::lib::spatial::Point2f;
 use crate::lib::spatial::epsg::lonlat_to_meters;
-use opencv::core::Point2f;
-use opencv::core::Scalar;
+use crate::lib::zones::Zone;
+use crate::lib::zones::{VirtualLine, VirtualLineDirection};
 use std::convert::From;
 
 impl From<&RoadLanesSettings> for Zone {
     fn from(setting: &RoadLanesSettings) -> Self {
-        let geom = setting.geometry
+        let geom = setting
+            .geometry
             .iter()
             .map(|pt| Point2f::new(pt[0] as f32, pt[1] as f32))
             .collect();
 
-        let geom_epsg4326 = setting.geometry_wgs84
+        let geom_epsg4326 = setting
+            .geometry_wgs84
             .iter()
             .map(|pt| Point2f::new(pt[0], pt[1]))
             .collect();
 
-        let geom_epsg3857 = setting.geometry_wgs84
+        let geom_epsg3857 = setting
+            .geometry_wgs84
             .iter()
             .map(|pt| {
                 let lonlat = lonlat_to_meters(pt[0], pt[1]);
@@ -230,7 +251,7 @@ impl From<&RoadLanesSettings> for Zone {
 
         let virtual_line = match &setting.virtual_line {
             Some(vl) => {
-                if vl.geometry.len() != 2{
+                if vl.geometry.len() != 2 {
                     None
                 } else {
                     let dir = VirtualLineDirection::from_str(&vl.direction).unwrap_or_default();
@@ -240,32 +261,43 @@ impl From<&RoadLanesSettings> for Zone {
                     line.set_color_rgb(vl.color_rgb[0], vl.color_rgb[1], vl.color_rgb[2]);
                     Some(line)
                 }
-            },
-            None => {
-                None
             }
+            None => None,
         };
 
         Zone::new(
-            format!("dir_{}_lane_{}", setting.lane_direction, setting.lane_number),
+            format!(
+                "dir_{}_lane_{}",
+                setting.lane_direction, setting.lane_number
+            ),
             geom,
             geom_epsg4326,
             geom_epsg3857,
-            Scalar::from((setting.color_rgb[2] as f64, setting.color_rgb[1] as f64, setting.color_rgb[0] as f64)),
+            Scalar::from((
+                setting.color_rgb[2] as f64,
+                setting.color_rgb[1] as f64,
+                setting.color_rgb[0] as f64,
+            )),
             setting.lane_number,
             setting.lane_direction,
-            virtual_line
+            virtual_line,
         )
     }
 }
 
 impl AppSettings {
     pub fn new(filename: &str) -> Self {
-        let toml_contents = fs::read_to_string(filename).expect(&format!("Something went wrong reading the file: '{}'", &filename));
+        let toml_contents = fs::read_to_string(filename).expect(&format!(
+            "Something went wrong reading the file: '{}'",
+            &filename
+        ));
         let mut app_settings = match toml::from_str::<AppSettings>(&toml_contents) {
             Ok(result) => result,
             Err(err) => {
-                panic!("Can't parse TOML configuration file due the error: {:?}", err);
+                panic!(
+                    "Can't parse TOML configuration file due the error: {:?}",
+                    err
+                );
             }
         };
         // Set default values
@@ -278,41 +310,54 @@ impl AppSettings {
         // Check if tracker type is valid
         if app_settings.tracking.typ.is_some() {
             match app_settings.tracking.typ.as_ref().unwrap().as_str() {
-                "iou_naive" => { },
-                "bytetrack" => { },
+                "iou_naive" => {}
+                "bytetrack" => {}
                 _ => {
-                    panic!("Invalid tracker type: '{}'. Supported types are 'iou_naive' and 'bytetrack'.", app_settings.tracking.typ.as_ref().unwrap());
+                    panic!(
+                        "Invalid tracker type: '{}'. Supported types are 'iou_naive' and 'bytetrack'.",
+                        app_settings.tracking.typ.as_ref().unwrap()
+                    );
                 }
             }
         }
         // Check if kalman filter type is valid
         if app_settings.tracking.kalman_filter.is_some() {
-            match app_settings.tracking.kalman_filter.as_ref().unwrap().as_str() {
-                "centroid" => { },
-                "bbox" => { },
+            match app_settings
+                .tracking
+                .kalman_filter
+                .as_ref()
+                .unwrap()
+                .as_str()
+            {
+                "centroid" => {}
+                "bbox" => {}
                 _ => {
-                    panic!("Invalid kalman filter type: '{}'. Supported types are 'centroid' and 'bbox'.", app_settings.tracking.kalman_filter.as_ref().unwrap());
+                    panic!(
+                        "Invalid kalman filter type: '{}'. Supported types are 'centroid' and 'bbox'.",
+                        app_settings.tracking.kalman_filter.as_ref().unwrap()
+                    );
                 }
             }
         }
         match app_settings.debug {
             None => {
-                app_settings.debug = Some(DebugSettings{
-                    enable: false,
-                });
-            },
-            _ => {  }
+                app_settings.debug = Some(DebugSettings { enable: false });
+            }
+            _ => {}
         }
         return app_settings;
     }
-    pub fn save(&self, filename: &str) -> Result<(), Box<dyn Error>>{
-        fs::copy(filename, filename.to_owned() + &format!(".{}.bak", Utc::now().format("%Y-%m-%dT%H-%M-%S-%f")))?;
+    pub fn save(&self, filename: &str) -> Result<(), Box<dyn Error>> {
+        fs::copy(
+            filename,
+            filename.to_owned() + &format!(".{}.bak", Utc::now().format("%Y-%m-%dT%H-%M-%S-%f")),
+        )?;
         let docs = toml::to_string(self)?;
         fs::write(filename, docs)?;
         Ok(())
     }
     pub fn get_copy_no_roads(&self) -> AppSettings {
-        AppSettings{
+        AppSettings {
             input: self.input.clone(),
             debug: self.debug.clone(),
             detection: self.detection.clone(),
@@ -333,12 +378,17 @@ impl AppSettings {
 
 impl fmt::Display for AppSettings {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Equipment ID: {}\n\tVideo input: {}\n\tNetwork weights:{}\n\tNetwork configuration:{:?}\n\tTracker type:{}\n\tRefresh data (millis): {}\n\tBack-end host: {}\n\tBack-end port: {}",
+        write!(
+            f,
+            "Equipment ID: {}\n\tVideo input: {}\n\tNetwork weights:{}\n\tNetwork configuration:{:?}\n\tTracker type:{}\n\tRefresh data (millis): {}\n\tBack-end host: {}\n\tBack-end port: {}",
             self.equipment_info.id,
             self.input.video_src,
             self.detection.network_weights,
             self.detection.network_cfg,
-            self.tracking.typ.as_ref().unwrap_or(&"undefined".to_string()),
+            self.tracking
+                .typ
+                .as_ref()
+                .unwrap_or(&"undefined".to_string()),
             self.worker.reset_data_milliseconds,
             self.rest_api.host,
             self.rest_api.back_end_port,

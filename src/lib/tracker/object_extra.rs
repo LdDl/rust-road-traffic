@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
-use crate::lib::spatial::haversine;
 use crate::lib::constants::EPSILON;
+use crate::lib::spatial::haversine;
 
 pub struct ObjectExtra {
     class_name: String,
@@ -80,7 +80,15 @@ impl SpatialInfo {
 
     // Same as update(), but calculations are done between first and last points
     // This approach helps to avoid situation when distance between two points is approx. 0
-    pub fn update_avg(&mut self, _time: f32, _x: f32, _y: f32, _x_projected: f32, _y_projected: f32, pixels_per_meter: f32) {
+    pub fn update_avg(
+        &mut self,
+        _time: f32,
+        _x: f32,
+        _y: f32,
+        _x_projected: f32,
+        _y_projected: f32,
+        pixels_per_meter: f32,
+    ) {
         // Update position tracking regardless of speed calculation validity
         self.last_time = _time;
         self.last_x = _x;
@@ -97,13 +105,23 @@ impl SpatialInfo {
         if time_diff < EPSILON {
             return;
         }
-        let distance_pixels = ((_x_projected - self.first_x_projected).powi(2) + (_y_projected - self.first_y_projected).powi(2)).sqrt();
+        let distance_pixels = ((_x_projected - self.first_x_projected).powi(2)
+            + (_y_projected - self.first_y_projected).powi(2))
+        .sqrt();
         let distance_meters = distance_pixels / pixels_per_meter;
         let velocity = distance_meters / time_diff; // meters per second
         self.speed = velocity * 3.6; // convert m/s to km/h
     }
 
-    pub fn update(&mut self, _time: f32, _x: f32, _y: f32, _x_projected: f32, _y_projected: f32, pixels_per_meter: f32) {
+    pub fn update(
+        &mut self,
+        _time: f32,
+        _x: f32,
+        _y: f32,
+        _x_projected: f32,
+        _y_projected: f32,
+        pixels_per_meter: f32,
+    ) {
         // Capture previous position before updating
         let prev_x_projected = self.last_x_projected;
         let prev_y_projected = self.last_y_projected;
@@ -125,7 +143,9 @@ impl SpatialInfo {
         if time_diff < EPSILON {
             return;
         }
-        let distance_pixels = ((_x_projected - prev_x_projected).powi(2) + (_y_projected - prev_y_projected).powi(2)).sqrt();
+        let distance_pixels = ((_x_projected - prev_x_projected).powi(2)
+            + (_y_projected - prev_y_projected).powi(2))
+        .sqrt();
         let distance_meters = distance_pixels / pixels_per_meter;
         let velocity = distance_meters / time_diff; // meters per second
         self.speed = velocity * 3.6; // convert m/s to km/h

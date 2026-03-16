@@ -1,8 +1,8 @@
 extern crate redis;
 
-use crate::{lib::data_storage::ThreadedDataStorage, rest_api::zones_stats::TrafficFlowInfo};
 use crate::lib::publisher::RedisMessage;
 use crate::rest_api::zones_stats::{AllZonesStats, VehicleTypeParameters, ZoneStats};
+use crate::{lib::data_storage::ThreadedDataStorage, rest_api::zones_stats::TrafficFlowInfo};
 use redis::{Client, Commands};
 use std::collections::HashMap;
 use std::error::Error;
@@ -84,12 +84,15 @@ impl RedisConnection {
                 period_start: element.statistics.period_start,
                 period_end: element.statistics.period_end,
                 statistics: HashMap::new(),
-                traffic_flow_parameters: TrafficFlowInfo{
+                traffic_flow_parameters: TrafficFlowInfo {
                     avg_speed: element.statistics.traffic_flow_parameters.avg_speed,
                     sum_intensity: element.statistics.traffic_flow_parameters.sum_intensity,
-                    defined_sum_intensity: element.statistics.traffic_flow_parameters.defined_sum_intensity,
-                    avg_headway: element.statistics.traffic_flow_parameters.avg_headway
-                }
+                    defined_sum_intensity: element
+                        .statistics
+                        .traffic_flow_parameters
+                        .defined_sum_intensity,
+                    avg_headway: element.statistics.traffic_flow_parameters.avg_headway,
+                },
             };
             for (vehicle_type, statistics) in element.statistics.vehicles_data.iter() {
                 stats.statistics.insert(
@@ -97,7 +100,7 @@ impl RedisConnection {
                     VehicleTypeParameters {
                         estimated_avg_speed: statistics.avg_speed,
                         estimated_sum_intensity: statistics.sum_intensity,
-                        estimated_defined_sum_intensity: statistics.defined_sum_intensity
+                        estimated_defined_sum_intensity: statistics.defined_sum_intensity,
                     },
                 );
             }

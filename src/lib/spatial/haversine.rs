@@ -17,8 +17,7 @@ pub fn haversine(src_lon: f32, src_lat: f32, dst_lon: f32, dst_lat: f32) -> f32 
     let sin_dlat_half = (diff_lat * 0.5).sin();
     let sin_dlon_half = (diff_lon * 0.5).sin();
 
-    let a = sin_dlat_half * sin_dlat_half
-          + lat1.cos() * lat2.cos() * sin_dlon_half * sin_dlon_half;
+    let a = sin_dlat_half * sin_dlat_half + lat1.cos() * lat2.cos() * sin_dlon_half * sin_dlon_half;
     // Clamp to [0, 1] to prevent NaN from floating-point rounding errors
     let a = a.clamp(0.0, 1.0);
     let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
@@ -54,7 +53,9 @@ pub fn compute_center(lon1: f32, lat1: f32, lon2: f32, lat2: f32) -> (f32, f32) 
 
     // Convert the Cartesian coordinates back to spherical coordinates and then to degrees
     let center_lon = center_y.atan2(center_x).to_degrees();
-    let center_lat = center_z.atan2((center_x * center_x + center_y * center_y).sqrt()).to_degrees();
+    let center_lat = center_z
+        .atan2((center_x * center_x + center_y * center_y).sqrt())
+        .to_degrees();
 
     (center_lon, center_lat)
 }

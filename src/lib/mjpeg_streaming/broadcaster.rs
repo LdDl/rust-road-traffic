@@ -1,22 +1,17 @@
 // Based on https://github.com/LdDl/mjpeg-rs/blob/master/src/mjpeg_streaming/broadcaster.rs
 
-use opencv::core::Vector;
-
 use std::{
-    thread,
-    sync::{
-        Mutex,
-        mpsc::Receiver as STDReceiver
-    },
+    pin::Pin,
+    sync::{Mutex, mpsc::Receiver as STDReceiver},
     task::{Context, Poll},
-    pin::Pin
+    thread,
 };
 
-use actix_web::{web, Error};
+use actix_web::{Error, web};
 
 use futures::Stream;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::mpsc::error::TrySendError;
+use tokio::sync::mpsc::{Receiver, Sender, channel};
 
 /// Channel buffer size for each client.
 /// Larger buffer allows clients to handle temporary slowdowns without being disconnected.
@@ -53,8 +48,8 @@ impl Broadcaster {
         Client(rx)
     }
 
-    pub fn make_message_block(buffer: &Vector<u8>) -> Vec<u8> {
-        let bfu8 = buffer.as_ref();
+    pub fn make_message_block(buffer: &[u8]) -> Vec<u8> {
+        let bfu8 = buffer;
         let header = format!(
             "--boundarydonotcross\r\nContent-Length:{}\r\nContent-Type:image/jpeg\r\n\r\n",
             bfu8.len()
@@ -81,7 +76,10 @@ impl Broadcaster {
                     // Channel full - client is slow, increment failure count
                     client.consecutive_failures += 1;
                     if client.consecutive_failures >= MAX_CONSECUTIVE_FAILURES {
-                        println!("[MJPEG] Removing slow client after {} consecutive failures", MAX_CONSECUTIVE_FAILURES);
+                        println!(
+                            "[MJPEG] Removing slow client after {} consecutive failures",
+                            MAX_CONSECUTIVE_FAILURES
+                        );
                         false
                     } else {
                         // Keep client, they might recover
@@ -96,7 +94,7 @@ impl Broadcaster {
         });
     }
 
-    pub fn spawn_reciever(_self: web::Data<Mutex<Self>>, rx_frames_data: STDReceiver<Vector<u8>>) {
+    pub fn spawn_reciever(_self: web::Data<Mutex<Self>>, rx_frames_data: STDReceiver<Vec<u8>>) {
         thread::spawn(move || {
             for received in rx_frames_data {
                 let msg = Broadcaster::make_message_block(&received);
@@ -106,9 +104,7 @@ impl Broadcaster {
     }
 }
 
-pub struct Client (
-    Receiver<web::Bytes>
-);
+pub struct Client(Receiver<web::Bytes>);
 
 impl Stream for Client {
     type Item = Result<web::Bytes, Error>;
@@ -116,7 +112,7 @@ impl Stream for Client {
         match Pin::new(&mut self.0).poll_recv(cx) {
             Poll::Ready(Some(v)) => Poll::Ready(Some(Ok(v))),
             Poll::Ready(None) => Poll::Ready(None),
-            Poll::Pending => Poll::Pending
+            Poll::Pending => Poll::Pending,
         }
     }
 }

@@ -1,4 +1,5 @@
-mod colors;
-mod draw;
+pub mod colors;
+pub mod draw;
+pub mod primitives;
 
-pub use self::{colors::*, draw::*};
+pub use self::{colors::*, draw::*, primitives::*};

@@ -13,24 +13,25 @@ use geometry::{get_orientation, is_intersects, is_on_segment};
 use geojson::{GeoPolygon, VirtualLineFeature, ZoneFeature, ZonePropertiesGeoJSON};
 
 use crate::lib::constants::EPSILON;
-use crate::{lib::{spatial::compute_center}};
+use crate::lib::cv::Scalar;
+use crate::lib::draw::primitives::{draw_line_thick, draw_text, scalar_to_bgr};
+use crate::lib::spatial::PerspectiveTransform;
+use crate::lib::spatial::Point2f;
+use crate::lib::spatial::compute_center;
 use crate::lib::spatial::epsg::lonlat_to_meters;
 use crate::lib::spatial::haversine;
-use crate::lib::spatial::PerspectiveTransform;
 use crate::lib::zones::{
-    Skeleton, Statistics, VehicleTypeParameters, TrafficFlowParameters, VirtualLine, VirtualLineDirection,
+    Skeleton, Statistics, TrafficFlowParameters, VehicleTypeParameters, VirtualLine,
+    VirtualLineDirection,
 };
-use opencv::{
-    core::Mat, core::Point2f, core::Point2i, core::Scalar, imgproc::line, imgproc::put_text,
-    imgproc::FONT_HERSHEY_SIMPLEX, imgproc::LINE_8,
-};
+use opencv::{core::Mat, prelude::*};
 
 #[derive(Debug, Clone)]
 struct ObjectInfo {
     classname: String,
     speed: f32,
     crossed_virtual_line: bool,
-    timestamp_registration: f32
+    timestamp_registration: f32,
 }
 
 type Registered = HashMap<Uuid, ObjectInfo>;
@@ -118,7 +119,7 @@ impl Zone {
             skeleton.pixels_per_meter = if length_meters > EPSILON {
                 skeleton.length_pixels / skeleton.length_meters
             } else {
-                0.0  // Invalid - will be filtered in speed calculations
+                0.0 // Invalid - will be filtered in speed calculations
             };
             make_perspective_transform(&coordinates, &spatial_coordinates_epsg3857)
         } else {
@@ -213,7 +214,7 @@ impl Zone {
         skeleton.pixels_per_meter = if length_meters > EPSILON {
             skeleton.length_pixels / skeleton.length_meters
         } else {
-            0.0  // Invalid - will be filtered in speed calculations
+            0.0 // Invalid - will be filtered in speed calculations
         };
         self.skeleton = skeleton;
     }
@@ -234,10 +235,8 @@ impl Zone {
                 })
                 .collect();
         }
-        self.spatial_converter = make_perspective_transform(
-            &self.pixel_coordinates,
-            &self.spatial_coordinates_epsg3857,
-        );
+        self.spatial_converter =
+            make_perspective_transform(&self.pixel_coordinates, &self.spatial_coordinates_epsg3857);
         self.update_skeleton();
     }
     pub fn update_spatial_map_cv(&mut self, spatial_dest_points: Vec<Point2f>) {
@@ -257,10 +256,8 @@ impl Zone {
                 .map(|pt| Point2f::new(pt.x as f32, pt.y as f32))
                 .collect();
         }
-        self.spatial_converter = make_perspective_transform(
-            &self.pixel_coordinates,
-            &self.spatial_coordinates_epsg3857,
-        );
+        self.spatial_converter =
+            make_perspective_transform(&self.pixel_coordinates, &self.spatial_coordinates_epsg3857);
         self.update_skeleton();
     }
     pub fn update_pixel_map(&mut self, pixel_src_points: [[u16; 2]; 4]) {
@@ -315,19 +312,21 @@ impl Zone {
                     classname: _classname,
                     speed: _speed,
                     crossed_virtual_line: register_as_crossed,
-                    timestamp_registration: _timestamp
+                    timestamp_registration: _timestamp,
                 });
             }
         }
         if !register_as_crossed {
-            return
+            return;
         }
         // Check if this object has crossed the virtual line before
         if !self.objects_crossed.contains(&object_id) {
             // First time crossing - add to crossed objects and update OD matrix
             self.objects_crossed.insert(object_id);
             if let Some(zone_id_from) = _zone_id_from {
-                *self.current_statistics.income
+                *self
+                    .current_statistics
+                    .income
                     .entry(zone_id_from)
                     .or_insert(0) += 1;
             }
@@ -335,7 +334,9 @@ impl Zone {
             // Object has crossed before - this could be a U-turn
             // For now, let's count every crossing (you can add time-based logic later)
             if let Some(zone_id_from) = _zone_id_from {
-                *self.current_statistics.income
+                *self
+                    .current_statistics
+                    .income
                     .entry(zone_id_from)
                     .or_insert(0) += 1;
             }
@@ -364,7 +365,9 @@ impl Zone {
         let register_via_virtual_line = self.virtual_line.is_some();
         let headway_avg = match register_via_virtual_line {
             true => {
-                let mut sorted_by_time = self.objects_crossed.iter()
+                let mut sorted_by_time = self
+                    .objects_crossed
+                    .iter()
                     .filter_map(|&object_id| self.objects_registered.get(&object_id))
                     .map(|object_info| object_info.timestamp_registration)
                     .collect::<Vec<f32>>();
@@ -376,11 +379,13 @@ impl Zone {
                 } else {
                     0.0
                 }
-            },
+            }
             _ => {
                 // Need at least 2 objects to compute headway
                 if self.objects_registered.len() >= 2 {
-                    let mut sorted_by_time: Vec<f32> = self.objects_registered.values()
+                    let mut sorted_by_time: Vec<f32> = self
+                        .objects_registered
+                        .values()
                         .map(|object_info| object_info.timestamp_registration)
                         .collect();
                     sorted_by_time.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -396,13 +401,14 @@ impl Zone {
         for (_, object_info) in self.objects_registered.iter() {
             let classname = object_info.classname.to_owned();
             let speed = object_info.speed;
-            let vehicle_type_parameters = match self.statistics.vehicles_data.entry(classname.clone()) {
-                Occupied(o) => o.into_mut(),
-                Vacant(v) => {
-                    let new_params = v.insert(VehicleTypeParameters::default());
-                    new_params
-                }
-            };
+            let vehicle_type_parameters =
+                match self.statistics.vehicles_data.entry(classname.clone()) {
+                    Occupied(o) => o.into_mut(),
+                    Vacant(v) => {
+                        let new_params = v.insert(VehicleTypeParameters::default());
+                        new_params
+                    }
+                };
             if register_via_virtual_line && !object_info.crossed_virtual_line {
                 continue;
             }
@@ -410,7 +416,7 @@ impl Zone {
             total_sum_intensity += 1;
             // Ignore undefined vehicle speed (but keep it as counted in intensity parameter)
             if speed < 0.0 || !speed.is_finite() {
-                continue
+                continue;
             }
             vehicle_type_parameters.defined_sum_intensity += 1;
             total_defined_sum_intensity += 1;
@@ -421,11 +427,16 @@ impl Zone {
                 vehicle_type_parameters.avg_speed = speed;
                 continue;
             }
-            vehicle_type_parameters.avg_speed = vehicle_type_parameters.avg_speed + (speed - vehicle_type_parameters.avg_speed) / (vehicle_type_parameters.defined_sum_intensity as f32);
+            vehicle_type_parameters.avg_speed = vehicle_type_parameters.avg_speed
+                + (speed - vehicle_type_parameters.avg_speed)
+                    / (vehicle_type_parameters.defined_sum_intensity as f32);
         }
         self.statistics.traffic_flow_parameters.avg_speed = if total_defined_sum_intensity > 0 {
             // Could have non-estimated speed for some vehicle classes. Therefore it is needed to filter those
-            let speeds = self.statistics.vehicles_data.iter()
+            let speeds = self
+                .statistics
+                .vehicles_data
+                .iter()
                 .filter(|vt_param| vt_param.1.avg_speed > 0.0 && vt_param.1.avg_speed.is_finite())
                 .map(|v| v.1.avg_speed)
                 .collect::<Vec<f32>>();
@@ -438,7 +449,9 @@ impl Zone {
             -1.0
         };
         self.statistics.traffic_flow_parameters.sum_intensity = total_sum_intensity;
-        self.statistics.traffic_flow_parameters.defined_sum_intensity = total_defined_sum_intensity;
+        self.statistics
+            .traffic_flow_parameters
+            .defined_sum_intensity = total_defined_sum_intensity;
         self.statistics.traffic_flow_parameters.avg_headway = headway_avg;
         // self.statistics.traffic_flow_parameters.avg_speed = self.statistics.vehicles_data.values().map(|vt_param| vt_param.sum_intensity).sum::<u32>();
         self.reset_objects_registered();
@@ -563,37 +576,26 @@ impl Zone {
         self.virtual_line = Some(_virtual_line);
     }
     pub fn draw_geom(&self, img: &mut Mat) {
-        // @todo: proper error handling
-        for i in 1..self.pixel_coordinates.len() {
-            let prev_pt = Point2i::new(
-                self.pixel_coordinates[i - 1].x as i32,
-                self.pixel_coordinates[i - 1].y as i32,
-            );
-            let current_pt = Point2i::new(
+        let w = img.cols() as usize;
+        let h = img.rows() as usize;
+        let step = w * img.elem_size().unwrap();
+        let bytes = img.data_bytes_mut().unwrap();
+        let bgr = scalar_to_bgr(&self.color);
+        for i in 0..self.pixel_coordinates.len() {
+            let j = (i + 1) % self.pixel_coordinates.len();
+            draw_line_thick(
+                bytes,
+                step,
+                w,
+                h,
                 self.pixel_coordinates[i].x as i32,
                 self.pixel_coordinates[i].y as i32,
+                self.pixel_coordinates[j].x as i32,
+                self.pixel_coordinates[j].y as i32,
+                bgr,
+                2,
             );
-            match line(img, prev_pt, current_pt, self.color, 2, LINE_8, 0) {
-                Ok(_) => {}
-                Err(err) => {
-                    panic!("Can't draw line for polygon due the error: {:?}", err)
-                }
-            };
         }
-        let last_pt = Point2i::new(
-            self.pixel_coordinates[self.pixel_coordinates.len() - 1].x as i32,
-            self.pixel_coordinates[self.pixel_coordinates.len() - 1].y as i32,
-        );
-        let first_pt = Point2i::new(
-            self.pixel_coordinates[0].x as i32,
-            self.pixel_coordinates[0].y as i32,
-        );
-        match line(img, last_pt, first_pt, self.color, 2, LINE_8, 0) {
-            Ok(_) => {}
-            Err(err) => {
-                panic!("Can't draw line for polygon due the error: {:?}", err)
-            }
-        };
     }
     pub fn draw_skeleton(&self, img: &mut Mat) {
         self.skeleton.draw_on_mat(img);
@@ -607,34 +609,27 @@ impl Zone {
         }
     }
     pub fn draw_current_intensity(&self, img: &mut Mat) {
-        let register_via_virtual_line = match &self.virtual_line {
-            Some(_) => true,
-            None => false,
-        };
+        let register_via_virtual_line = self.virtual_line.is_some();
         let current_intensity = match register_via_virtual_line {
             true => self.objects_crossed.len(),
             false => self.objects_registered.len(),
         };
-        let anchor = Point2i::new(
+        let w = img.cols() as usize;
+        let h = img.rows() as usize;
+        let step = w * img.elem_size().unwrap();
+        let bytes = img.data_bytes_mut().unwrap();
+        let black: [u8; 3] = [0, 0, 0];
+        draw_text(
+            bytes,
+            step,
+            w,
+            h,
             self.pixel_coordinates[0].x as i32 + 20,
             self.pixel_coordinates[0].y as i32 - 10,
-        );
-        match put_text(
-            img,
             &current_intensity.to_string(),
-            anchor,
-            FONT_HERSHEY_SIMPLEX,
-            0.5,
-            Scalar::from((0.0, 0.0, 0.0)),
-            2,
-            LINE_8,
-            false,
-        ) {
-            Ok(_) => {}
-            Err(err) => {
-                println!("Can't display velocity of object due the error {:?}", err);
-            }
-        };
+            black,
+            1,
+        );
     }
     pub fn to_geojson(&self) -> ZoneFeature {
         let mut euclidean: Vec<Vec<i32>> = Vec::new();
@@ -688,7 +683,8 @@ fn make_perspective_transform(
         return None;
     }
     let src: [(f32, f32); 4] = core::array::from_fn(|i| (pixel_coords[i].x, pixel_coords[i].y));
-    let dst: [(f32, f32); 4] = core::array::from_fn(|i| (epsg3857_coords[i].x, epsg3857_coords[i].y));
+    let dst: [(f32, f32); 4] =
+        core::array::from_fn(|i| (epsg3857_coords[i].x, epsg3857_coords[i].y));
     PerspectiveTransform::new(&src, &dst)
 }
 

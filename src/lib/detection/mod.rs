@@ -1,3 +1,3 @@
 mod postprocess;
 
-pub use self::{postprocess::*};
+pub use self::postprocess::*;

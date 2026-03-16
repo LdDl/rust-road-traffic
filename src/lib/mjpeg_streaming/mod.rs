@@ -1,3 +1,3 @@
 mod broadcaster;
 
-pub use self::{broadcaster::*};
+pub use self::broadcaster::*;

@@ -16,7 +16,7 @@ impl VehicleTypeParameters {
         VehicleTypeParameters {
             avg_speed: -1.0,
             sum_intensity: 0,
-            defined_sum_intensity: 0
+            defined_sum_intensity: 0,
         }
     }
 }
@@ -38,7 +38,7 @@ impl TrafficFlowParameters {
             avg_speed: -1.0,
             sum_intensity: 0,
             defined_sum_intensity: 0,
-            avg_headway: 0.0
+            avg_headway: 0.0,
         }
     }
 }
@@ -65,4 +65,3 @@ impl Statistics {
         }
     }
 }
-
