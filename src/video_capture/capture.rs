@@ -521,7 +521,7 @@ mod tests {
 
     #[test]
     fn gst_caps_without_explicit_sink() {
-        // No sink element, but has width=(int) caps — valid (sink appended by spawn_gstreamer)
+        // No sink element, but has width=(int) caps - valid (sink appended by spawn_gstreamer)
         let p = "v4l2src device=/dev/video0 ! video/x-raw, width=(int)640, height=(int)480 ! videoconvert";
         assert!(is_gstreamer_pipeline(p));
     }

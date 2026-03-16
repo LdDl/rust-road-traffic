@@ -13,10 +13,10 @@ use std::process::Command;
 /// - `false` otherwise
 ///
 /// # Platform notes
-/// - Desktop Linux: requires NVIDIA driver package (`nvidia-smi` in PATH)
-/// - Jetson Nano/TX2/Xavier/Orin: detected via `/dev/nvhost-ctrl-gpu`
+/// - Desktop Linux: `nvidia-smi` (installed with NVIDIA driver package)
+/// - Jetson Nano/TX2/Xavier/Orin: `/dev/nvhost-ctrl-gpu` (no `nvidia-smi` on Tegra)
+/// - Windows: `nvidia-smi` is at `C:\Windows\System32\nvidia-smi.exe` (installed with driver, but I've not tested it)
 /// - Does not require CUDA toolkit - only the driver
-/// - Windows is not tested
 pub fn is_cuda_available() -> bool {
     // 1. Try nvidia-smi (desktop GPUs)
     if let Ok(output) = Command::new("nvidia-smi")
