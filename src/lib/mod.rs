@@ -10,4 +10,5 @@ pub mod publisher;
 pub mod report;
 pub mod spatial;
 pub mod tracker;
+pub mod utils;
 pub mod zones;

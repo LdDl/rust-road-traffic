@@ -191,26 +191,19 @@ fn is_gstreamer_pipeline(src: &str) -> bool {
     let first_segment = src.split(" ! ").next().unwrap_or("");
     let first_token = first_segment.split_whitespace().next().unwrap_or("");
 
-    let has_known_source = GST_SOURCE_ELEMENTS
-        .iter()
-        .any(|el| first_token == *el);
+    let has_known_source = GST_SOURCE_ELEMENTS.iter().any(|el| first_token == *el);
 
     if !has_known_source {
         return false;
     }
 
     // Must have a sink or caps with width=(int) (meaning user specified format)
-    const GST_SINK_ELEMENTS: &[&str] = &[
-        "appsink",
-        "fdsink",
-        "fakesink",
-        "filesink",
-        "autovideosink",
-    ];
+    const GST_SINK_ELEMENTS: &[&str] =
+        &["appsink", "fdsink", "fakesink", "filesink", "autovideosink"];
 
-    let has_sink = GST_SINK_ELEMENTS.iter().any(|el| {
-        src.split_whitespace().any(|token| token == *el)
-    });
+    let has_sink = GST_SINK_ELEMENTS
+        .iter()
+        .any(|el| src.split_whitespace().any(|token| token == *el));
 
     let has_caps = src.contains("width=(int)");
 
@@ -528,7 +521,7 @@ mod tests {
 
     #[test]
     fn gst_caps_without_explicit_sink() {
-        // No sink element, but has width=(int) caps — valid (sink appended by spawn_gstreamer)
+        // No sink element, but has width=(int) caps - valid (sink appended by spawn_gstreamer)
         let p = "v4l2src device=/dev/video0 ! video/x-raw, width=(int)640, height=(int)480 ! videoconvert";
         assert!(is_gstreamer_pipeline(p));
     }
@@ -552,7 +545,9 @@ mod tests {
 
     #[test]
     fn not_gst_rtsp_with_exclamation_in_password() {
-        assert!(!is_gstreamer_pipeline("rtsp://user:p@ss!word@192.168.1.1:554/stream"));
+        assert!(!is_gstreamer_pipeline(
+            "rtsp://user:p@ss!word@192.168.1.1:554/stream"
+        ));
     }
 
     #[test]
@@ -595,12 +590,18 @@ mod tests {
 
     #[test]
     fn detect_rtsp() {
-        assert!(matches!(detect_source_kind("rtsp://192.168.1.1:554/stream"), SourceKind::Rtsp));
+        assert!(matches!(
+            detect_source_kind("rtsp://192.168.1.1:554/stream"),
+            SourceKind::Rtsp
+        ));
     }
 
     #[test]
     fn detect_rtsps() {
-        assert!(matches!(detect_source_kind("rtsps://secure.cam/live"), SourceKind::Rtsp));
+        assert!(matches!(
+            detect_source_kind("rtsps://secure.cam/live"),
+            SourceKind::Rtsp
+        ));
     }
 
     #[test]
@@ -637,24 +638,34 @@ mod tests {
 
     #[test]
     fn detect_file_mp4() {
-        assert!(matches!(detect_source_kind("./data/video.mp4"), SourceKind::File));
+        assert!(matches!(
+            detect_source_kind("./data/video.mp4"),
+            SourceKind::File
+        ));
     }
 
     #[test]
     fn detect_file_absolute() {
-        assert!(matches!(detect_source_kind("/home/user/video.avi"), SourceKind::File));
+        assert!(matches!(
+            detect_source_kind("/home/user/video.avi"),
+            SourceKind::File
+        ));
     }
 
     #[test]
     fn detect_gstreamer() {
-        let p = "v4l2src device=/dev/video0 ! video/x-raw, width=(int)640, height=(int)480 ! appsink";
+        let p =
+            "v4l2src device=/dev/video0 ! video/x-raw, width=(int)640, height=(int)480 ! appsink";
         assert!(matches!(detect_source_kind(p), SourceKind::GStreamer));
     }
 
     #[test]
     fn detect_file_not_gstreamer_despite_exclamation() {
         // Has `!` but not ` ! ` with spaces and not a known source
-        assert!(matches!(detect_source_kind("./video!test.mp4"), SourceKind::File));
+        assert!(matches!(
+            detect_source_kind("./video!test.mp4"),
+            SourceKind::File
+        ));
     }
 
     #[test]
