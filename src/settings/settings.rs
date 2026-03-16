@@ -29,7 +29,6 @@ pub struct AppSettings {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InputSettings {
     pub video_src: String,
-    pub typ: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -23,8 +23,8 @@ tensorrt-backend = ["od_opencv/tensorrt-opencv-compat"]
 turbojpeg-vendor = ["turbojpeg/cmake"]
 
 [dependencies]
-# OpenCV for video I/O. DNN feature is conditional via features above
-opencv = { version = "0.96.0", default-features = false, features = ["videoio"] }
+# OpenCV: only core::Mat for inference boundary. DNN feature is conditional via features above
+opencv = { version = "0.96.0", default-features = false, features = [] }
 uuid = { version = "1.18.1", features = ["serde", "v4"] }
 nalgebra = "0.34.1"
 toml = "0.9.8"

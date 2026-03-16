@@ -4,8 +4,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-use opencv::{core::Mat, prelude::*};
-
+use crate::lib::cv::RawFrame;
 use crate::lib::draw::primitives::{draw_line_thick, draw_text, scalar_to_bgr};
 
 use crate::lib::data_storage::DataStorage;
@@ -14,7 +13,7 @@ pub fn generate_report(
     data_storage: &DataStorage,
     video_src: &str,
     output_path: &str,
-    first_frame: &Mat,
+    first_frame: &RawFrame,
 ) -> Result<String, Box<dyn Error>> {
     let video_stem = Path::new(video_src)
         .file_stem()
@@ -31,7 +30,7 @@ pub fn generate_report(
 
     let w = frame.cols() as usize;
     let h = frame.rows() as usize;
-    let step = w * frame.elem_size().unwrap();
+    let step = frame.step();
 
     let mut zone_id_to_key: HashMap<String, String> = HashMap::new();
 
@@ -63,7 +62,7 @@ pub fn generate_report(
         // Draw zone polygon on frame
         let n = zone.pixel_coordinates.len();
         let bgr = scalar_to_bgr(&zone.color);
-        let bytes = frame.data_bytes_mut()?;
+        let bytes = frame.data_bytes_mut();
         for i in 0..n {
             let j = (i + 1) % n;
             draw_line_thick(
@@ -124,8 +123,8 @@ pub fn generate_report(
     }
     drop(zones);
 
-    // Encode PNG (BGR → RGB, then png crate)
-    let bgr = frame.data_bytes()?;
+    // Encode PNG (BGR to RGB, then png crate)
+    let bgr = frame.data_bytes();
     let mut rgb = vec![0u8; bgr.len()];
     for i in (0..bgr.len()).step_by(3) {
         rgb[i] = bgr[i + 2];

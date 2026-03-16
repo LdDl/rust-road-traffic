@@ -1,4 +1,4 @@
+pub mod capture;
 mod frame;
-mod video_capture;
 
-pub use self::{frame::*, video_capture::*};
+pub use self::{capture::*, frame::*};

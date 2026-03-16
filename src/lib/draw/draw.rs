@@ -1,12 +1,11 @@
-use crate::lib::cv::Scalar;
+use crate::lib::cv::{RawFrame, Scalar};
 use crate::lib::draw::colors::ClassColors;
 use crate::lib::draw::primitives::{
     draw_filled_circle, draw_rounded_rect, draw_text, scalar_to_bgr,
 };
 use crate::lib::tracker::TrackerTrait;
-use opencv::{core::Mat, prelude::*};
 
-pub fn draw_track(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
+pub fn draw_track(img: &mut RawFrame, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
     draw_trajectories(img, tracker, class_colors);
     draw_bboxes(img, tracker, class_colors);
     draw_identifiers(img, tracker, class_colors);
@@ -14,11 +13,11 @@ pub fn draw_track(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &Clas
     draw_projections(img, tracker, class_colors);
 }
 
-pub fn draw_trajectories(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
+pub fn draw_trajectories(img: &mut RawFrame, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
     let w = img.cols() as usize;
     let h = img.rows() as usize;
-    let step = w * img.elem_size().unwrap();
-    let bytes = img.data_bytes_mut().unwrap();
+    let step = img.step();
+    let bytes = img.data_bytes_mut();
 
     let objects_extra = tracker.get_objects_extra();
     for (object_id, object) in tracker.iter_tracked_objects() {
@@ -47,11 +46,11 @@ pub fn draw_trajectories(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors
     }
 }
 
-pub fn draw_bboxes(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
+pub fn draw_bboxes(img: &mut RawFrame, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
     let w = img.cols() as usize;
     let h = img.rows() as usize;
-    let step = w * img.elem_size().unwrap();
-    let bytes = img.data_bytes_mut().unwrap();
+    let step = img.step();
+    let bytes = img.data_bytes_mut();
 
     let objects_extra = tracker.get_objects_extra();
     for (object_id, object) in tracker.iter_tracked_objects() {
@@ -90,11 +89,11 @@ pub fn draw_bboxes(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &Cla
     }
 }
 
-pub fn draw_identifiers(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
+pub fn draw_identifiers(img: &mut RawFrame, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
     let w = img.cols() as usize;
     let h = img.rows() as usize;
-    let step = w * img.elem_size().unwrap();
-    let bytes = img.data_bytes_mut().unwrap();
+    let step = img.step();
+    let bytes = img.data_bytes_mut();
 
     let objects_extra = tracker.get_objects_extra();
     for (object_id, object) in tracker.iter_tracked_objects() {
@@ -128,11 +127,11 @@ pub fn draw_identifiers(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors:
     }
 }
 
-pub fn draw_speeds(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
+pub fn draw_speeds(img: &mut RawFrame, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
     let w = img.cols() as usize;
     let h = img.rows() as usize;
-    let step = w * img.elem_size().unwrap();
-    let bytes = img.data_bytes_mut().unwrap();
+    let step = img.step();
+    let bytes = img.data_bytes_mut();
 
     let objects_extra = tracker.get_objects_extra();
     for (object_id, object_extra) in objects_extra.iter() {
@@ -165,11 +164,11 @@ pub fn draw_speeds(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &Cla
     }
 }
 
-pub fn draw_projections(img: &mut Mat, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
+pub fn draw_projections(img: &mut RawFrame, tracker: &dyn TrackerTrait, class_colors: &ClassColors) {
     let w = img.cols() as usize;
     let h = img.rows() as usize;
-    let step = w * img.elem_size().unwrap();
-    let bytes = img.data_bytes_mut().unwrap();
+    let step = img.step();
+    let bytes = img.data_bytes_mut();
 
     let objects_extra = tracker.get_objects_extra();
     for (object_id, object_extra) in objects_extra.iter() {

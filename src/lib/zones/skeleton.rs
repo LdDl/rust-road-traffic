@@ -1,6 +1,5 @@
-use opencv::{core::Mat, prelude::*};
-
 use crate::lib::constants::EPSILON_TINY;
+use crate::lib::cv::RawFrame;
 use crate::lib::cv::Scalar;
 use crate::lib::draw::primitives::{draw_line_thick, scalar_to_bgr};
 use crate::lib::spatial::Point2f;
@@ -75,11 +74,11 @@ impl Skeleton {
             (x_p_prime, y_p_prime)
         }
     }
-    pub fn draw_on_mat(&self, img: &mut Mat) {
+    pub fn draw_on_frame(&self, img: &mut RawFrame) {
         let w = img.cols() as usize;
         let h = img.rows() as usize;
-        let step = w * img.elem_size().unwrap();
-        let bytes = img.data_bytes_mut().unwrap();
+        let step = img.step();
+        let bytes = img.data_bytes_mut();
         draw_line_thick(
             bytes,
             step,

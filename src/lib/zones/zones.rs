@@ -24,7 +24,7 @@ use crate::lib::zones::{
     Skeleton, Statistics, TrafficFlowParameters, VehicleTypeParameters, VirtualLine,
     VirtualLineDirection,
 };
-use opencv::{core::Mat, prelude::*};
+use crate::lib::cv::RawFrame;
 
 #[derive(Debug, Clone)]
 struct ObjectInfo {
@@ -575,11 +575,11 @@ impl Zone {
     pub fn set_virtual_line(&mut self, _virtual_line: VirtualLine) {
         self.virtual_line = Some(_virtual_line);
     }
-    pub fn draw_geom(&self, img: &mut Mat) {
+    pub fn draw_geom(&self, img: &mut RawFrame) {
         let w = img.cols() as usize;
         let h = img.rows() as usize;
-        let step = w * img.elem_size().unwrap();
-        let bytes = img.data_bytes_mut().unwrap();
+        let step = img.step();
+        let bytes = img.data_bytes_mut();
         let bgr = scalar_to_bgr(&self.color);
         for i in 0..self.pixel_coordinates.len() {
             let j = (i + 1) % self.pixel_coordinates.len();
@@ -597,18 +597,18 @@ impl Zone {
             );
         }
     }
-    pub fn draw_skeleton(&self, img: &mut Mat) {
-        self.skeleton.draw_on_mat(img);
+    pub fn draw_skeleton(&self, img: &mut RawFrame) {
+        self.skeleton.draw_on_frame(img);
     }
-    pub fn draw_virtual_line(&self, img: &mut Mat) {
+    pub fn draw_virtual_line(&self, img: &mut RawFrame) {
         match &self.virtual_line {
             Some(vl) => {
-                vl.draw_on_mat(img);
+                vl.draw_on_frame(img);
             }
             None => {}
         }
     }
-    pub fn draw_current_intensity(&self, img: &mut Mat) {
+    pub fn draw_current_intensity(&self, img: &mut RawFrame) {
         let register_via_virtual_line = self.virtual_line.is_some();
         let current_intensity = match register_via_virtual_line {
             true => self.objects_crossed.len(),
@@ -616,8 +616,8 @@ impl Zone {
         };
         let w = img.cols() as usize;
         let h = img.rows() as usize;
-        let step = w * img.elem_size().unwrap();
-        let bytes = img.data_bytes_mut().unwrap();
+        let step = img.step();
+        let bytes = img.data_bytes_mut();
         let black: [u8; 3] = [0, 0, 0];
         draw_text(
             bytes,
