@@ -44,7 +44,7 @@ This project supports three inference backends via compile-time feature flags:
 
 **`tensorrt-backend`** is designed for NVIDIA embedded platforms (e.g. Jetson Nano) and discrete NVIDIA GPUs with TensorRT installed.
 
-**Network input size:** For Darknet models (`.cfg` + `.weights`), `net_width`/`net_height` in TOML config are **ignored** - the input size is read directly from the `[net]` section of the `.cfg` file. For ONNX and TensorRT models, `net_width`/`net_height` must be specified in the TOML config.
+**Network input size:** For Darknet models (`.cfg` + `.weights`), `net_width`/`net_height` in TOML config are __ignored__ - the input size is read directly from the `[net]` section of the `.cfg` file. For TensorRT (`.engine`), input size is also auto-detected from the engine bindings. For ONNX models, `net_width`/`net_height` must be specified in the TOML config.
 
 **Note:** In case of non-OpenCV backend, traditional models (YOLOv3/v4/v7) in Darknet format (`.cfg` + `.weights`) should be converted to ONNX first via [darknet2onnx](https://github.com/LdDl/darknet2onnx) with `--format yolov8` flag. The `--format yolov5` output is **not supported** (different post-processing). For TensorRT, convert ONNX to `.engine` via `trtexec`.
 

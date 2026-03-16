@@ -157,12 +157,17 @@ impl Detector {
         not(feature = "opencv-backend"),
         not(feature = "ort-backend")
     ))]
-    pub fn new(weights: &str, net_size: (i32, i32), _network_cfg: Option<&str>) -> Self {
+    pub fn new(weights: &str, _net_size: (i32, i32), _network_cfg: Option<&str>) -> Self {
         println!("Using TensorRT backend");
-        println!("TensorRT network input size: {}x{}", net_size.0, net_size.1);
-        let net_size_u32 = (net_size.0 as u32, net_size.1 as u32);
-        match Model::tensorrt(weights, net_size_u32) {
-            Ok(model) => Detector::TensorRT(model),
+        match Model::tensorrt(weights) {
+            Ok(model) => {
+                let (w, h) = model.input_size();
+                println!(
+                    "TensorRT network input size: {}x{} (from engine)",
+                    w, h
+                );
+                Detector::TensorRT(model)
+            }
             Err(err) => panic!(
                 "Can't create TensorRT model '{}' due the error: {:?}",
                 weights, err
