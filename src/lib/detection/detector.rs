@@ -72,7 +72,17 @@ impl Detector {
                         weights
                     )
                 });
-                match Model::darknet(cfg, weights, net_size, dnn_backend, dnn_target) {
+                let cfg_net_size = utils::parse_darknet_cfg_net_size(cfg).unwrap_or_else(|e| {
+                    panic!(
+                        "Can't parse net_size from '{}': {}. Provide width/height in [net] section.",
+                        cfg, e
+                    )
+                });
+                println!(
+                    "OpenCV Darknet network input size: {}x{} (from {})",
+                    cfg_net_size.0, cfg_net_size.1, cfg
+                );
+                match Model::darknet(cfg, weights, cfg_net_size, dnn_backend, dnn_target) {
                     Ok(model) => Box::new(model),
                     Err(err) => panic!(
                         "Can't read Darknet network '{}' / '{}' due the error: {:?}",
@@ -81,6 +91,10 @@ impl Detector {
                 }
             }
             utils::ModelFileFormat::Onnx => {
+                println!(
+                    "OpenCV ONNX network input size: {}x{}",
+                    net_size.0, net_size.1
+                );
                 match Model::opencv(weights, net_size, dnn_backend, dnn_target) {
                     Ok(model) => Box::new(model),
                     Err(err) => panic!(
@@ -115,6 +129,7 @@ impl Detector {
         let backend_name = "CPU";
 
         println!("Using ORT backend ({})", backend_name);
+        println!("ORT ONNX network input size: {}x{}", net_size.0, net_size.1);
 
         let net_size_u32 = (net_size.0 as u32, net_size.1 as u32);
 
@@ -144,6 +159,7 @@ impl Detector {
     ))]
     pub fn new(weights: &str, net_size: (i32, i32), _network_cfg: Option<&str>) -> Self {
         println!("Using TensorRT backend");
+        println!("TensorRT network input size: {}x{}", net_size.0, net_size.1);
         let net_size_u32 = (net_size.0 as u32, net_size.1 as u32);
         match Model::tensorrt(weights, net_size_u32) {
             Ok(model) => Detector::TensorRT(model),

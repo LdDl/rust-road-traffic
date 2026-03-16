@@ -1,4 +1,5 @@
-use std::io::Read;
+use std::fs;
+use std::io::{self, Read};
 use std::path::Path;
 use std::process::Command;
 
@@ -73,8 +74,8 @@ impl std::fmt::Display for ModelFileFormat {
 /// - ONNX: protobuf format - the string "onnx" appears in the first 4KB (from opset domain "ai.onnx")
 /// - TensorRT engine: no reliable magic bytes, detected by `.engine` / `.trt` extension
 /// - Falls back to `Unknown` if none match
-pub fn detect_model_format(path: &str) -> std::io::Result<ModelFileFormat> {
-    let mut file = std::fs::File::open(path)?;
+pub fn detect_model_format(path: &str) -> io::Result<ModelFileFormat> {
+    let mut file = fs::File::open(path)?;
     let mut header = [0u8; 4096];
     let bytes_read = file.read(&mut header)?;
     let header = &header[..bytes_read];
@@ -104,10 +105,53 @@ pub fn detect_model_format(path: &str) -> std::io::Result<ModelFileFormat> {
     Ok(ModelFileFormat::Unknown)
 }
 
+/// Parse `width` and `height` from the `[net]` section of a Darknet .cfg file.
+///
+/// Darknet .cfg files are INI-style with sections like `[net]`, `[convolutional]`, etc.
+/// The `[net]` section always comes first and contains `width=N` and `height=N`.
+pub fn parse_darknet_cfg_net_size(cfg_path: &str) -> io::Result<(i32, i32)> {
+    let content = fs::read_to_string(cfg_path)?;
+    let mut width: Option<i32> = None;
+    let mut height: Option<i32> = None;
+    let mut in_net = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed == "[net]" {
+            in_net = true;
+        } else if trimmed.starts_with('[') {
+            if in_net {
+                break;
+            }
+        } else if in_net {
+            if let Some(v) = trimmed
+                .strip_prefix("width=")
+                .or_else(|| trimmed.strip_prefix("width ="))
+            {
+                width = v.trim().parse().ok();
+            } else if let Some(v) = trimmed
+                .strip_prefix("height=")
+                .or_else(|| trimmed.strip_prefix("height ="))
+            {
+                height = v.trim().parse().ok();
+            }
+        }
+    }
+
+    match (width, height) {
+        (Some(w), Some(h)) if w > 0 && h > 0 => Ok((w, h)),
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "Could not find valid width/height in [net] section of '{}'",
+                cfg_path
+            ),
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
     use super::*;
 
     #[test]
@@ -164,6 +208,48 @@ mod tests {
         let fmt = detect_model_format(path).unwrap();
         assert_eq!(fmt, ModelFileFormat::Unknown);
         fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn parse_cfg_net_size_basic() {
+        let path = "/tmp/test_parse_cfg.cfg";
+        fs::write(path, "[net]\nbatch=1\nwidth=416\nheight=256\nchannels=3\n\n[convolutional]\n").unwrap();
+        let (w, h) = parse_darknet_cfg_net_size(path).unwrap();
+        assert_eq!((w, h), (416, 256));
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn parse_cfg_net_size_spaces_around_eq() {
+        let path = "/tmp/test_parse_cfg_spaces.cfg";
+        fs::write(path, "[net]\nwidth = 608\nheight = 608\n").unwrap();
+        let (w, h) = parse_darknet_cfg_net_size(path).unwrap();
+        assert_eq!((w, h), (608, 608));
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn parse_cfg_net_size_no_net_section() {
+        let path = "/tmp/test_parse_cfg_no_net.cfg";
+        fs::write(path, "[convolutional]\nfilters=32\n").unwrap();
+        let result = parse_darknet_cfg_net_size(path);
+        assert!(result.is_err());
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn parse_cfg_net_size_nonexistent_file() {
+        let result = parse_darknet_cfg_net_size("/tmp/nonexistent_cfg_12345.cfg");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_cfg_net_size_real_file() {
+        // Test against actual project .cfg files
+        if Path::new("./data/yolov4-tiny.cfg").exists() {
+            let (w, h) = parse_darknet_cfg_net_size("./data/yolov4-tiny.cfg").unwrap();
+            assert_eq!((w, h), (416, 416));
+        }
     }
 
     #[test]
