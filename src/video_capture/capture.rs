@@ -64,7 +64,7 @@ pub struct VideoSource {
 impl VideoSource {
     /// Open a video source. Source type is auto-detected from `video_src`:
     /// - `rtsp://...` / `rtsps://...` means RTSP (ffmpeg, TCP transport)
-    /// - Contains `!` => GStreamer pipeline (gst-launch-1.0)
+    /// - GStreamer pipeline: contains ` ! `, starts with known source element, has sink/caps
     /// - Parseable as i32 => V4L2 camera `/dev/video{N}` (ffmpeg)
     /// - Starts with `/dev/video` => V4L2 camera (ffmpeg)
     /// - Otherwise => just file (ffmpeg)
@@ -145,7 +145,7 @@ impl Drop for VideoSource {
 fn detect_source_kind(src: &str) -> SourceKind {
     if src.starts_with("rtsp://") || src.starts_with("rtsps://") {
         SourceKind::Rtsp
-    } else if src.contains('!') {
+    } else if is_gstreamer_pipeline(src) {
         SourceKind::GStreamer
     } else if let Ok(idx) = src.parse::<i32>() {
         SourceKind::Camera(format!("/dev/video{}", idx))
@@ -154,6 +154,67 @@ fn detect_source_kind(src: &str) -> SourceKind {
     } else {
         SourceKind::File
     }
+}
+
+/// Validate that `src` is a GStreamer pipeline.
+///
+/// Requirements (all must be true):
+/// 1. Contains ` ! ` (element separator with spaces)
+/// 2. First token (before first ` ! `) is a known GStreamer source element
+/// 3. Contains a sink element (`appsink`, `fdsink`, `fakesink`, `filesink`, `autovideosink`)
+///    OR caps with `width=(int)` (implicit sink will be appended later)
+fn is_gstreamer_pipeline(src: &str) -> bool {
+    if !src.contains(" ! ") {
+        return false;
+    }
+
+    // Known GStreamer source elements for video capture
+    const GST_SOURCE_ELEMENTS: &[&str] = &[
+        "nvarguscamerasrc",
+        "v4l2src",
+        "videotestsrc",
+        "rtspsrc",
+        "uridecodebin",
+        "filesrc",
+        "souphttpsrc",
+        "tcpclientsrc",
+        "udpsrc",
+        "multifilesrc",
+        "rpicamsrc",
+        "libcamerasrc",
+        "ksvideosrc",
+        "avfvideosrc",
+        "autovideosrc",
+    ];
+
+    // First element of the pipeline (before first ` ! `)
+    let first_segment = src.split(" ! ").next().unwrap_or("");
+    let first_token = first_segment.split_whitespace().next().unwrap_or("");
+
+    let has_known_source = GST_SOURCE_ELEMENTS
+        .iter()
+        .any(|el| first_token == *el);
+
+    if !has_known_source {
+        return false;
+    }
+
+    // Must have a sink or caps with width=(int) (meaning user specified format)
+    const GST_SINK_ELEMENTS: &[&str] = &[
+        "appsink",
+        "fdsink",
+        "fakesink",
+        "filesink",
+        "autovideosink",
+    ];
+
+    let has_sink = GST_SINK_ELEMENTS.iter().any(|el| {
+        src.split_whitespace().any(|token| token == *el)
+    });
+
+    let has_caps = src.contains("width=(int)");
+
+    has_sink || has_caps
 }
 
 /// Probe video source for width, height, fps, total_frames.
@@ -376,5 +437,259 @@ fn parse_frame_rate(s: &str) -> f32 {
         if den > 0.0 { num / den } else { 30.0 }
     } else {
         s.parse().unwrap_or(30.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // just helper for test assertions (SourceKind doesn't derive Debug)
+    fn source_kind_name(kind: &SourceKind) -> &'static str {
+        match kind {
+            SourceKind::File => "File",
+            SourceKind::Rtsp => "Rtsp",
+            SourceKind::Camera(_) => "Camera",
+            SourceKind::GStreamer => "GStreamer",
+        }
+    }
+
+    #[test]
+    fn gst_nvarguscamerasrc_appsink() {
+        let p = "nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM), width=(int)1280, height=(int)720, format=(string)NV12, framerate=(fraction)30/1 ! nvvidconv flip-method=0 ! video/x-raw, width=(int)1280, height=(int)720, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
+        assert!(is_gstreamer_pipeline(p));
+    }
+
+    #[test]
+    fn gst_v4l2src_appsink() {
+        let p = "v4l2src device=/dev/video0 ! video/x-raw, width=(int)640, height=(int)480 ! videoconvert ! appsink";
+        assert!(is_gstreamer_pipeline(p));
+    }
+
+    #[test]
+    fn gst_videotestsrc_fakesink() {
+        let p = "videotestsrc ! video/x-raw, width=(int)320, height=(int)240 ! fakesink";
+        assert!(is_gstreamer_pipeline(p));
+    }
+
+    #[test]
+    fn gst_v4l2src_fdsink() {
+        let p = "v4l2src device=/dev/video0 ! videoconvert ! video/x-raw, format=(string)BGR, width=(int)640, height=(int)480 ! fdsink fd=1";
+        assert!(is_gstreamer_pipeline(p));
+    }
+
+    #[test]
+    fn gst_uridecodebin_autovideosink() {
+        let p = "uridecodebin uri=file:///tmp/test.mp4 ! videoconvert ! autovideosink";
+        assert!(is_gstreamer_pipeline(p));
+    }
+
+    #[test]
+    fn gst_rpicamsrc_appsink() {
+        let p = "rpicamsrc ! video/x-raw, width=(int)1280, height=(int)720 ! appsink";
+        assert!(is_gstreamer_pipeline(p));
+    }
+
+    #[test]
+    fn gst_libcamerasrc_appsink() {
+        let p = "libcamerasrc ! video/x-raw, width=(int)640, height=(int)480 ! appsink";
+        assert!(is_gstreamer_pipeline(p));
+    }
+
+    #[test]
+    fn gst_caps_without_explicit_sink() {
+        // No sink element, but has width=(int) caps — valid (sink appended by spawn_gstreamer)
+        let p = "v4l2src device=/dev/video0 ! video/x-raw, width=(int)640, height=(int)480 ! videoconvert";
+        assert!(is_gstreamer_pipeline(p));
+    }
+
+    // Invalid: not GStreamer
+    #[test]
+    fn not_gst_regular_file() {
+        assert!(!is_gstreamer_pipeline("./data/video.mp4"));
+    }
+
+    #[test]
+    fn not_gst_file_with_exclamation_no_spaces() {
+        assert!(!is_gstreamer_pipeline("./data/my!video.mp4"));
+    }
+
+    #[test]
+    fn not_gst_file_with_spaced_exclamation() {
+        // Has ` ! ` but first token is not a known source element
+        assert!(!is_gstreamer_pipeline("./data/my ! video.mp4"));
+    }
+
+    #[test]
+    fn not_gst_rtsp_with_exclamation_in_password() {
+        assert!(!is_gstreamer_pipeline("rtsp://user:p@ss!word@192.168.1.1:554/stream"));
+    }
+
+    #[test]
+    fn not_gst_empty_string() {
+        assert!(!is_gstreamer_pipeline(""));
+    }
+
+    #[test]
+    fn not_gst_just_exclamation() {
+        assert!(!is_gstreamer_pipeline(" ! "));
+    }
+
+    #[test]
+    fn not_gst_unknown_source_with_sink() {
+        // Has ` ! ` and appsink, but source is not in allowlist
+        assert!(!is_gstreamer_pipeline("hackersrc ! appsink"));
+    }
+
+    #[test]
+    fn not_gst_known_source_no_sink_no_caps() {
+        // Known source but no sink and no width=(int) caps
+        assert!(!is_gstreamer_pipeline("v4l2src ! videoconvert"));
+    }
+
+    #[test]
+    fn not_gst_source_in_middle() {
+        // v4l2src is not the first token
+        assert!(!is_gstreamer_pipeline("someprefix v4l2src ! appsink"));
+    }
+
+    #[test]
+    fn not_gst_camera_number() {
+        assert!(!is_gstreamer_pipeline("0"));
+    }
+
+    #[test]
+    fn not_gst_dev_video() {
+        assert!(!is_gstreamer_pipeline("/dev/video0"));
+    }
+
+    #[test]
+    fn detect_rtsp() {
+        assert!(matches!(detect_source_kind("rtsp://192.168.1.1:554/stream"), SourceKind::Rtsp));
+    }
+
+    #[test]
+    fn detect_rtsps() {
+        assert!(matches!(detect_source_kind("rtsps://secure.cam/live"), SourceKind::Rtsp));
+    }
+
+    #[test]
+    fn detect_rtsp_with_credentials() {
+        assert!(matches!(
+            detect_source_kind("rtsp://admin:p@ss!w0rd@10.0.0.1/h264"),
+            SourceKind::Rtsp
+        ));
+    }
+
+    #[test]
+    fn detect_camera_number() {
+        match detect_source_kind("0") {
+            SourceKind::Camera(dev) => assert_eq!(dev, "/dev/video0"),
+            other => panic!("expected Camera, got {:?}", source_kind_name(&other)),
+        }
+    }
+
+    #[test]
+    fn detect_camera_number_2() {
+        match detect_source_kind("2") {
+            SourceKind::Camera(dev) => assert_eq!(dev, "/dev/video2"),
+            other => panic!("expected Camera, got {:?}", source_kind_name(&other)),
+        }
+    }
+
+    #[test]
+    fn detect_camera_dev_path() {
+        match detect_source_kind("/dev/video1") {
+            SourceKind::Camera(dev) => assert_eq!(dev, "/dev/video1"),
+            other => panic!("expected Camera, got {:?}", source_kind_name(&other)),
+        }
+    }
+
+    #[test]
+    fn detect_file_mp4() {
+        assert!(matches!(detect_source_kind("./data/video.mp4"), SourceKind::File));
+    }
+
+    #[test]
+    fn detect_file_absolute() {
+        assert!(matches!(detect_source_kind("/home/user/video.avi"), SourceKind::File));
+    }
+
+    #[test]
+    fn detect_gstreamer() {
+        let p = "v4l2src device=/dev/video0 ! video/x-raw, width=(int)640, height=(int)480 ! appsink";
+        assert!(matches!(detect_source_kind(p), SourceKind::GStreamer));
+    }
+
+    #[test]
+    fn detect_file_not_gstreamer_despite_exclamation() {
+        // Has `!` but not ` ! ` with spaces and not a known source
+        assert!(matches!(detect_source_kind("./video!test.mp4"), SourceKind::File));
+    }
+
+    #[test]
+    fn fps_fraction_30_1() {
+        assert!((parse_frame_rate("30/1") - 30.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn fps_fraction_25_1() {
+        assert!((parse_frame_rate("25/1") - 25.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn fps_fraction_30000_1001() {
+        assert!((parse_frame_rate("30000/1001") - 29.97).abs() < 0.01);
+    }
+
+    #[test]
+    fn fps_plain_number() {
+        assert!((parse_frame_rate("60") - 60.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn fps_invalid_fallback() {
+        assert!((parse_frame_rate("N/A") - 30.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn fps_zero_denominator() {
+        assert!((parse_frame_rate("30/0") - 30.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn fps_empty() {
+        assert!((parse_frame_rate("") - 30.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn gst_parse_width() {
+        let caps = "video/x-raw, width=(int)1280, height=(int)720";
+        assert_eq!(parse_gst_int(caps, "width"), Some(1280));
+    }
+
+    #[test]
+    fn gst_parse_height() {
+        let caps = "video/x-raw, width=(int)1280, height=(int)720";
+        assert_eq!(parse_gst_int(caps, "height"), Some(720));
+    }
+
+    #[test]
+    fn gst_parse_missing_key() {
+        let caps = "video/x-raw, width=(int)1280";
+        assert_eq!(parse_gst_int(caps, "height"), None);
+    }
+
+    #[test]
+    fn gst_parse_framerate() {
+        let caps = "video/x-raw, framerate=(fraction)30/1";
+        let fps = parse_gst_fraction(caps, "framerate").unwrap();
+        assert!((fps - 30.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn gst_parse_framerate_missing() {
+        let caps = "video/x-raw, width=(int)640";
+        assert!(parse_gst_fraction(caps, "framerate").is_none());
     }
 }
