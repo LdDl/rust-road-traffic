@@ -36,13 +36,15 @@ This project supports three inference backends via compile-time feature flags:
 
 | Backend | Feature Flag | Models Supported | GPU Support | Requires OpenCV |
 |---------|--------------|------------------|-------------|-----------------|
-| OpenCV DNN | `opencv-backend` (default) | YOLOv8/v9/v11 (ONNX) | CUDA, OpenCL | Yes |
+| OpenCV DNN | `opencv-backend` (default) | YOLOv3/v4/v7 (Darknet), YOLOv8/v9/v11 (ONNX) | CUDA, OpenCL | Yes |
 | ONNX Runtime | `ort-backend` | YOLOv8/v9/v11 (ONNX only) | CUDA 12.x | No |
 | TensorRT | `tensorrt-backend` | YOLOv8/v9/v11 (`.engine` only) | CUDA (native TensorRT) | No |
 
 **`ort-backend` and `tensorrt-backend` do NOT require OpenCV** on the system. Video capture uses ffmpeg/GStreamer subprocesses, drawing uses own primitives, image encoding uses [`turbojpeg`](https://github.com/libjpeg-turbo/libjpeg-turbo)/[`png`](https://github.com/image-rs/image-png) crates.
 
 **`tensorrt-backend`** is designed for NVIDIA embedded platforms (e.g. Jetson Nano) and discrete NVIDIA GPUs with TensorRT installed.
+
+**Network input size:** For Darknet models (`.cfg` + `.weights`), `net_width`/`net_height` in TOML config are **ignored** - the input size is read directly from the `[net]` section of the `.cfg` file. For ONNX and TensorRT models, `net_width`/`net_height` must be specified in the TOML config.
 
 **Note:** In case of non-OpenCV backend, traditional models (YOLOv3/v4/v7) in Darknet format (`.cfg` + `.weights`) should be converted to ONNX first via [darknet2onnx](https://github.com/LdDl/darknet2onnx) with `--format yolov8` flag. The `--format yolov5` output is **not supported** (different post-processing). For TensorRT, convert ONNX to `.engine` via `trtexec`.
 
