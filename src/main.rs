@@ -1,5 +1,5 @@
 use chrono::Utc;
-use opencv::{core::Mat, core::get_cuda_enabled_device_count, prelude::*, videoio::VideoCapture};
+use opencv::{core::Mat, core::get_cuda_enabled_device_count, prelude::MatTraitManual};
 
 use lib::cv::Rect as RectCV;
 
@@ -39,7 +39,7 @@ mod settings;
 use settings::AppSettings;
 
 mod video_capture;
-use video_capture::{ThreadedFrame, get_video_capture};
+use video_capture::{ThreadedFrame, VideoSource};
 
 use lib::publisher::RedisConnection;
 
@@ -54,8 +54,6 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration as STDDuration;
 use std::time::SystemTime;
-
-const EMPTY_FRAMES_LIMIT: u16 = 60;
 
 fn get_sys_time_in_secs() -> u64 {
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
@@ -82,6 +80,7 @@ impl fmt::Display for AppVideoError {
 enum AppError {
     VideoError(AppVideoError),
     OpenCVError(opencv::Error),
+    CaptureError(video_capture::CaptureError),
 }
 
 impl fmt::Display for AppError {
@@ -89,6 +88,7 @@ impl fmt::Display for AppError {
         match self {
             AppError::VideoError(e) => write!(f, "{}", e),
             AppError::OpenCVError(e) => write!(f, "{}", e),
+            AppError::CaptureError(e) => write!(f, "{}", e),
         }
     }
 }
@@ -105,23 +105,10 @@ impl From<opencv::Error> for AppError {
     }
 }
 
-fn probe_video(capture: &mut VideoCapture) -> Result<(f32, f32, f32, f32), AppError> {
-    let fps = capture.get(opencv::videoio::CAP_PROP_FPS)? as f32;
-    let frame_cols = capture.get(opencv::videoio::CAP_PROP_FRAME_WIDTH)? as f32;
-    let frame_rows = capture.get(opencv::videoio::CAP_PROP_FRAME_HEIGHT)? as f32;
-    let total_frames = capture.get(opencv::videoio::CAP_PROP_FRAME_COUNT)? as f32;
-
-    // Is it better to get width/height from frame information?
-    // let mut frame = Mat::default();
-    // match capture.read(&mut frame) {
-    //     Ok(_) => {},
-    //     Err(_) => {
-    //         return Err(AppError::VideoError(AppVideoError{typ: 2}));
-    //     }
-    // };
-    // let frame_cols = frame.cols() as f32;
-    // let frame_rows = frame.rows() as f32;
-    Ok((frame_cols, frame_rows, fps, total_frames))
+impl From<video_capture::CaptureError> for AppError {
+    fn from(e: video_capture::CaptureError) -> Self {
+        AppError::CaptureError(e)
+    }
 }
 
 // OpenCV DNN backend (compile-time)
@@ -401,16 +388,11 @@ fn run(
     }
 
     /* Probe video */
-    let mut video_capture =
-        get_video_capture(&settings.input.video_src, settings.input.typ.clone());
-    let opened = VideoCapture::is_opened(&video_capture).map_err(AppError::from)?;
-    if !opened {
-        return Err(AppError::VideoError(AppVideoError { typ: 1 }));
-    }
-    let (width, height, fps, total_frames) = probe_video(&mut video_capture)?;
-    println!(
-        "Video probe: {{Width: {width}px | Height: {height}px | FPS: {fps} | Total frames: {total_frames}}}"
-    );
+    let mut video_source = VideoSource::open(&settings.input.video_src)?;
+    let width = video_source.width();
+    let height = video_source.height();
+    let fps = video_source.fps();
+    let total_frames = video_source.total_frames();
 
     // Initialize zone grid with frame dimensions
     {
@@ -436,32 +418,22 @@ fn run(
         let mut frames_counter: f32 = 0.0;
         let mut total_seconds: f32 = 0.0;
         let mut overall_seconds: f32 = 0.0;
-        let mut empty_frames_countrer: u16 = 0;
         let mut processed_frames: u32 = 0;
         // @experimental
         let skip_every_n_frame = 2;
-        // @todo: remove hardcode
-        // let fps = 18.0;
         loop {
-            let mut read_frame = Mat::default();
-            match video_capture.read(&mut read_frame) {
-                Ok(_) => {}
-                Err(_) => {
-                    println!("Can't read next frame");
+            let read_frame = match video_source.read_frame() {
+                Ok(Some(frame)) => frame,
+                Ok(None) => {
+                    println!("End of video stream");
+                    break;
+                }
+                Err(e) => {
+                    println!("Can't read next frame: {}", e);
                     break;
                 }
             };
-            if read_frame.empty() {
-                if verbose {
-                    println!("[WARNING]: Empty frame");
-                }
-                empty_frames_countrer += 1;
-                if empty_frames_countrer >= EMPTY_FRAMES_LIMIT {
-                    println!("Too many empty frames");
-                    break;
-                }
-                continue;
-            }
+
             frames_counter += 1.0;
             let second_fraction = total_seconds + (frames_counter / fps);
             if frames_counter >= fps {
@@ -472,7 +444,6 @@ fn run(
             if frames_counter as i32 % skip_every_n_frame != 0 {
                 continue;
             }
-            // println!("Frame {frames_counter} | Second: {total_seconds} | Fraction: {second_fraction}");
 
             /* Send frame and capture info */
             let frame = ThreadedFrame {
@@ -498,7 +469,6 @@ fn run(
                 );
             }
 
-            // println!("Total seconds: {}", total_seconds);
             if total_seconds >= next_reset {
                 println!(
                     "Reset timer due analytics. Current local time is: {}",
@@ -531,14 +501,7 @@ fn run(
                 }
             }
         }
-        match video_capture.release() {
-            Ok(_) => {
-                println!("Video capture has been closed successfully");
-            }
-            Err(err) => {
-                println!("Can't release video capturer due the error: {}", err);
-            }
-        };
+        // VideoSource cleans up via Drop (kills subprocess)
     });
 
     /* Detection thread */
@@ -577,7 +540,7 @@ fn run(
     };
 
     /* Can't create colors as const/static currently */
-    let mut first_frame: Option<Mat> = None;
+    let mut first_frame: Option<lib::cv::RawFrame> = None;
     for received in rx_capture {
         if report_mode && first_frame.is_none() {
             first_frame = Some(received.frame.clone());
@@ -586,9 +549,17 @@ fn run(
         // Note: frame clone is deferred to only displaying
 
         /* Inference (preprocessing + forward pass + NMS) */
+        // Create Mat from RawFrame data for neural_net.forward()
+        let mut mat = Mat::new_rows_cols_with_default(
+            received.frame.rows(),
+            received.frame.cols(),
+            opencv::core::CV_8UC3,
+            opencv::core::Scalar::all(0.0),
+        )?;
+        mat.data_bytes_mut()?.copy_from_slice(&received.frame.data);
         let t_inference = Timer::start();
         let (nms_bboxes_cv, nms_classes_ids, nms_confidences) =
-            match neural_net.forward(&received.frame, conf_threshold, nms_threshold) {
+            match neural_net.forward(&mat, conf_threshold, nms_threshold) {
                 Ok((a, b, c)) => (a, b, c),
                 Err(err) => {
                     println!(
@@ -857,14 +828,7 @@ fn run(
             drop(ds_guard);
             draw::draw_track(&mut frame, tracker, &class_colors);
 
-            let bgr_data = match frame.data_bytes() {
-                Ok(data) => data,
-                Err(e) => {
-                    println!("Failed to get frame bytes: {}", e);
-                    continue;
-                }
-            };
-            match jpeg_encoder.as_mut().unwrap().encode(bgr_data) {
+            match jpeg_encoder.as_mut().unwrap().encode(frame.data_bytes()) {
                 Ok(jpeg_buf) => {
                     match tx_mjpeg.send(jpeg_buf) {
                         Ok(_) => {}

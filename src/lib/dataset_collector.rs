@@ -1,8 +1,5 @@
-use opencv::{core::Mat, prelude::*};
-
+use crate::lib::cv::{RawFrame, Rect as RectCV};
 use crate::lib::mjpeg_streaming::JpegEncoder;
-
-use crate::lib::cv::Rect as RectCV;
 
 use std::collections::HashMap;
 use std::fs;
@@ -111,7 +108,7 @@ impl DatasetCollector {
     /// * track_ages - Number of points in track (track age) for each detection
     pub fn process_frame(
         &mut self,
-        frame: &Mat,
+        frame: &RawFrame,
         bboxes: &[RectCV],
         class_names: &[String],
         track_ids: &[Uuid],
@@ -214,7 +211,7 @@ impl DatasetCollector {
                     95,
                 ));
             }
-            let bgr_data = frame.data_bytes()?;
+            let bgr_data = frame.data_bytes();
             let jpeg_buf = self.jpeg_encoder.as_mut().unwrap().encode(bgr_data)?;
             fs::write(&image_path, &jpeg_buf)?;
 

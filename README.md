@@ -155,24 +155,56 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
 
     __Be aware: OpenCV < 4.7.0 probably wont work with YOLOv8 (even with ONNX opset12) if you need those.__
 
-3. OpenCV's bindings have already meant as dependencies in [Cargo.toml](Cargo.toml)
+3. You need `ffmpeg` and `ffprobe` installed for video capture (files, RTSP streams, USB cameras). For GStreamer pipelines (e.g. CSI cameras on Jetson) you need `gst-launch-1.0` as well.
+    ```shell
+    # Debian/Ubuntu
+    sudo apt install ffmpeg
+    # GStreamer (optional, for CSI/MIPI cameras)
+    sudo apt install gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good
 
-4. Clone the repo
+    # Arch Linux
+    sudo pacman -S ffmpeg
+    # GStreamer (optional, for CSI/MIPI cameras)
+    sudo pacman -S gstreamer gst-plugins-base gst-plugins-good
+    ```
+
+    Source type is auto-detected from `video_src` in the configuration file:
+
+    | Source | Example `video_src` | Backend |
+    |--------|---------------------|---------|
+    | Video file | `"./data/video.mp4"` | ffmpeg |
+    | RTSP stream | `"rtsp://user:pass@192.168.1.10:554/stream"` | ffmpeg (TCP) |
+    | USB camera (V4L2) | `"0"` or `"/dev/video0"` | ffmpeg |
+    | GStreamer pipeline | starts with known source element (e.g. `nvarguscamerasrc`, `v4l2src`), contains ` ! ` | gst-launch-1.0 |
+
+    GStreamer pipeline examples (use `appsink` as sink - it will be replaced with `fdsink fd=1` automatically; pipeline must output BGR format; width/height/framerate are parsed from caps in the pipeline string):
+
+    ```toml
+    # CSI camera via nvarguscamerasrc (Jetson Nano 4gb in my case)
+    video_src = "nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM), width=(int)1280, height=(int)720, format=(string)NV12, framerate=(fraction)30/1 ! nvvidconv flip-method=0 ! video/x-raw, width=(int)1280, height=(int)720, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink"
+
+    # USB camera via GStreamer (alternative to V4L2)
+    video_src = "v4l2src device=/dev/video0 ! video/x-raw, width=(int)640, height=(int)480, framerate=(fraction)30/1, format=(string)BGR ! appsink"
+    ```
+
+4. OpenCV's bindings have already meant as dependencies in [Cargo.toml](Cargo.toml)
+
+5. Clone the repo
     ```shell
     git clone https://github.com/LdDl/rust-road-traffic.git
     ```
     Well, actually I provide yolov4-tiny configuration and weights file from [official repository](https://github.com/AlexeyAB/darknet) (authors of YOLOv4), but you are free to use yours.
     I provide video file as sample also.
     
-5. Сhange parameters for this utility by using template of [configuration file](data/conf.toml). There is detailed explanation of each parameter.
+6. Сhange parameters for this utility by using template of [configuration file](data/conf.toml). There is detailed explanation of each parameter.
 
-6. Download weights and configuration files (optional)
+7. Download weights and configuration files (optional)
 
     - YOLO v4 tiny - [yolov4-tiny-vehicles-rect_best.weights](https://github.com/LdDl/yolo_vehicles/releases/download/v0.0.1/yolov4-tiny-vehicles-rect_best.weights) + [yolov4-tiny-vehicles-rect.cfg](https://github.com/LdDl/yolo_vehicles/releases/download/v0.0.1/yolov4-tiny-vehicles-rect.cfg). It has been trained on filtered COCO dataset; classes are: "car", "motorbike", "bus", "train", "truck"
 
     - YOLO v3 tiny - [tinyv3-vehicles_best.weights](https://github.com/LdDl/yolo_vehicles/releases/download/v0.0.1/tinyv3-vehicles_best.weights) + [tinyv3-vehicles.cfg](https://github.com/LdDl/yolo_vehicles/releases/download/v0.0.1/tinyv3-vehicles.cfg). It has been trained on AIC HCMC 2020 challenge data; classes are: "car", "motorbike", "bus", "truck". More information here: https://github.com/LdDl/yolo_vehicles . I like it more personally.
 
-7. Run
+8. Run
     ```shell
     cargo run path-to-toml-file
     ```
@@ -185,7 +217,7 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
     export RUSTFLAGS='-C link-arg=-s' && cargo build --release && ./target/release/rust-road-traffic path-to-toml-file
     ```
 
-8. UI configuration
+9. UI configuration
 
     If you enabled both REST API and MJPEG streaming and you want to adjust parameters for detection zones you could open http://localhost:42001/ in your browser and adjust polygons as you need (this UI still needs to be debugged and polished):
 
@@ -204,7 +236,7 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
             quality = 80
     ```
 
-7. Tracker configuration
+10. Tracker configuration
     It is possible to pick either iou_naive or bytetrack tracker for tracking objects.
 
     ```toml
@@ -257,7 +289,7 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
     - Lower computational requirements
     - Simpler tracking scenarios
 
-8. REST API
+11. REST API
 
     If you want to do some REST calls you can do following (based on *rest_api* field in TOML configuration files)
     ```bash
@@ -267,7 +299,7 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
     curl -XGET 'http://localhost:42001/api/stats/all'
     ```
    
-9. Export data
+12. Export data
 
     If you've enabled Redis output you can connect to Redis server (e.g. via CLI) and monitor incoming messages:
     
@@ -375,7 +407,7 @@ Example label file:
 ### Tips
 - Use a strong/accurate model for better pseudo-labels quality
 - Set higher `min_track_age` (e.g., 20-30) for cleaner samples
-- Review collected data before training — auto-labels may contain errors
+- Review collected data before training - auto-labels may contain errors
 - Class IDs in labels correspond to `net_classes` order in `[detection]` section
 - You can use https://github.com/LdDl/yolo-ann tool to visualize and manage collected dataset
 

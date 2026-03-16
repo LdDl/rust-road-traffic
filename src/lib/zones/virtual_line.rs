@@ -1,5 +1,6 @@
-use opencv::{core::Mat, prelude::*};
 use std::fmt;
+
+use crate::lib::cv::RawFrame;
 use std::str::FromStr;
 
 use crate::lib::constants::EPSILON;
@@ -95,11 +96,11 @@ impl VirtualLine {
             direction: self.direction,
         }
     }
-    pub fn draw_on_mat(&self, img: &mut Mat) {
+    pub fn draw_on_frame(&self, img: &mut RawFrame) {
         let w = img.cols() as usize;
         let h = img.rows() as usize;
-        let step = w * img.elem_size().unwrap();
-        let bytes = img.data_bytes_mut().unwrap();
+        let step = img.step();
+        let bytes = img.data_bytes_mut();
         draw_line_thick(
             bytes,
             step,

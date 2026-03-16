@@ -129,7 +129,7 @@ pub fn compute_perspective_matrix(
     // OpenCV-compatible matrix setup matching getPerspectiveTransform in imgwarp.cpp:
     // - Row layout: rows 0-3 for X equations, rows 4-7 for Y equations
     // - Products (src*dst) computed in f32 first, then promoted to f64,
-    //   matching C++ implicit float*float→float→double conversion
+    //   matching C++ implicit float*float => float => double conversion
     for i in 0..4 {
         let (sx, sy) = (src[i].0, src[i].1);
         let (dx, dy) = (dst[i].0, dst[i].1);

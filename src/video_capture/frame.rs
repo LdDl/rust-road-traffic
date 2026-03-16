@@ -1,9 +1,7 @@
-use opencv::core::Mat;
-
-use chrono::{DateTime, Utc};
+use crate::lib::cv::RawFrame;
 
 pub struct ThreadedFrame {
-    pub frame: Mat,
+    pub frame: RawFrame,
     pub overall_seconds: f32,
     pub current_second: f32,
 }
