@@ -234,8 +234,13 @@ fn probe_ffprobe(video_src: &str, kind: &SourceKind) -> Result<VideoCaptureInfo,
             cmd.args(["-rtsp_transport", "tcp"]);
         }
         SourceKind::Camera(dev) => {
+            if !std::path::Path::new(dev).exists() {
+                return Err(CaptureError::ProbeFailed(format!(
+                    "Camera device not found: {}",
+                    dev
+                )));
+            }
             cmd.args(["-f", "v4l2"]);
-            // Use device path instead of original src for ffprobe
             cmd.args([
                 "-v",
                 "quiet",
