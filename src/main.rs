@@ -1,6 +1,6 @@
 use chrono::Utc;
 use opencv::{
-    core::Mat, core::Vector, core::get_cuda_enabled_device_count, imgcodecs::imencode, prelude::*,
+    core::Mat, core::get_cuda_enabled_device_count, prelude::*,
     videoio::VideoCapture,
 };
 
@@ -568,6 +568,17 @@ fn run(
         None
     };
 
+    /* JPEG encoder for MJPEG streaming (reused across frames) */
+    let mut jpeg_encoder = if enable_mjpeg {
+        Some(lib::mjpeg_streaming::JpegEncoder::new(
+            width as u32,
+            height as u32,
+            mjpeg_quality,
+        ))
+    } else {
+        None
+    };
+
     /* Can't create colors as const/static currently */
     let mut first_frame: Option<Mat> = None;
     for received in rx_capture {
@@ -849,20 +860,26 @@ fn run(
             drop(ds_guard);
             draw::draw_track(&mut frame, tracker, &class_colors);
 
-            let mut buffer_cv = Vector::<u8>::new();
-            // IMWRITE_JPEG_QUALITY = 1, quality value 0-100
-            let params = Vector::<i32>::from_slice(&[1, mjpeg_quality]);
-            let encoded = imencode(".jpg", &frame, &mut buffer_cv, &params).unwrap();
-            if !encoded {
-                println!("image has not been encoded");
-                continue;
-            }
-            match tx_mjpeg.send(buffer_cv.to_vec()) {
-                Ok(_) => {}
-                Err(_err) => {
-                    println!("Error on send frame to MJPEG thread: {}", _err)
+            let bgr_data = match frame.data_bytes() {
+                Ok(data) => data,
+                Err(e) => {
+                    println!("Failed to get frame bytes: {}", e);
+                    continue;
                 }
             };
+            match jpeg_encoder.as_mut().unwrap().encode(bgr_data) {
+                Ok(jpeg_buf) => {
+                    match tx_mjpeg.send(jpeg_buf) {
+                        Ok(_) => {}
+                        Err(_err) => {
+                            println!("Error on send frame to MJPEG thread: {}", _err)
+                        }
+                    };
+                }
+                Err(e) => {
+                    println!("JPEG encode failed: {}", e);
+                }
+            }
         } else {
             // No visualization, but need release still
             drop(zone_grid);

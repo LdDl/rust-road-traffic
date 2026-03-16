@@ -19,6 +19,8 @@ ort-backend = ["od_opencv/ort-backend", "od_opencv/ort-opencv-compat"]
 ort-cuda = ["ort-backend", "od_opencv/ort-cuda-backend"]
 # TensorRT backend (Jetson Nano, NVIDIA GPUs with .engine files)
 tensorrt-backend = ["od_opencv/tensorrt-opencv-compat"]
+# Build libjpeg-turbo from source via cmake (no system lib needed)
+turbojpeg-vendor = ["turbojpeg/cmake"]
 
 [dependencies]
 # OpenCV for video I/O, drawing, etc. DNN feature is conditional via features above
@@ -45,6 +47,10 @@ utoipa-rapidoc = { version = "0.1", features = ["actix-web"] }
 od_opencv = { version = "0.8.1", default-features = false, features = ["letterbox"] }
 rand = "0.9.2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+# JPEG encoding for MJPEG streaming (libjpeg-turbo).
+# By default links to system libturbojpeg via pkg-config.
+# Use `--features turbojpeg-vendor` to build from source via cmake.
+turbojpeg = { version = "1.4", default-features = false, features = ["pkg-config"] }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

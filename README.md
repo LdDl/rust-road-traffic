@@ -50,6 +50,8 @@ This project supports two inference backends via compile-time feature flags:
 
 ### Build Commands
 
+By default MJPEG streaming links to system `libturbojpeg` via `pkg-config`. Add `--features turbojpeg-vendor` to any build command below to build libjpeg-turbo from source instead (requires `cmake`).
+
 ```bash
 # OpenCV backend (default) - supports all YOLO versions
 cargo build --release
@@ -59,6 +61,10 @@ cargo build --release --no-default-features --features ort-backend
 
 # TensorRT backend - YOLOv3/v4/v7/v8/v9/v11 .engine only (Jetson / NVIDIA GPU)
 cargo build --release --no-default-features --features tensorrt-backend
+
+# Any backend + vendored libjpeg-turbo (no system lib needed, requires cmake)
+cargo build --release --features turbojpeg-vendor
+cargo build --release --no-default-features --features tensorrt-backend,turbojpeg-vendor
 ```
 
 ### Run Commands
