@@ -1,5 +1,5 @@
 use chrono::Utc;
-use opencv::{core::Mat, core::get_cuda_enabled_device_count};
+use opencv::{core::Mat, core::get_cuda_enabled_device_count, prelude::MatTraitManual};
 
 use lib::cv::Rect as RectCV;
 
@@ -549,15 +549,14 @@ fn run(
         // Note: frame clone is deferred to only displaying
 
         /* Inference (preprocessing + forward pass + NMS) */
-        // Create temporary Mat wrapping RawFrame data (zero-copy) for neural_net.forward()
-        let mat = unsafe {
-            Mat::new_rows_cols_with_data_unsafe_def(
-                received.frame.rows(),
-                received.frame.cols(),
-                opencv::core::CV_8UC3,
-                received.frame.data.as_ptr() as *mut std::ffi::c_void,
-            )?
-        };
+        // Create Mat from RawFrame data for neural_net.forward()
+        let mut mat = Mat::new_rows_cols_with_default(
+            received.frame.rows(),
+            received.frame.cols(),
+            opencv::core::CV_8UC3,
+            opencv::core::Scalar::all(0.0),
+        )?;
+        mat.data_bytes_mut()?.copy_from_slice(&received.frame.data);
         let t_inference = Timer::start();
         let (nms_bboxes_cv, nms_classes_ids, nms_confidences) =
             match neural_net.forward(&mat, conf_threshold, nms_threshold) {
