@@ -1,8 +1,6 @@
-use opencv::{
-    core::{Mat, Vector},
-    imgcodecs::imwrite,
-    prelude::*,
-};
+use opencv::{core::Mat, prelude::*};
+
+use crate::lib::mjpeg_streaming::JpegEncoder;
 
 use crate::lib::cv::Rect as RectCV;
 
@@ -33,6 +31,8 @@ pub struct DatasetCollector {
     frame_counter: u64,
     /// Class name to class ID mapping
     class_to_id: HashMap<String, usize>,
+    /// JPEG encoder (lazy-initialized on first frame)
+    jpeg_encoder: Option<JpegEncoder>,
 }
 
 impl DatasetCollector {
@@ -70,6 +70,7 @@ impl DatasetCollector {
             track_states: HashMap::new(),
             frame_counter: 0,
             class_to_id,
+            jpeg_encoder: None,
         })
     }
 
@@ -206,8 +207,13 @@ impl DatasetCollector {
 
             // Save image
             let image_path = format!("{}/{}.jpg", self.images_dir, filename_base);
-            let params = Vector::<i32>::new();
-            imwrite(&image_path, frame, &params)?;
+            if self.jpeg_encoder.is_none() {
+                self.jpeg_encoder =
+                    Some(JpegEncoder::new(frame_width as u32, frame_height as u32, 95));
+            }
+            let bgr_data = frame.data_bytes()?;
+            let jpeg_buf = self.jpeg_encoder.as_mut().unwrap().encode(bgr_data)?;
+            fs::write(&image_path, &jpeg_buf)?;
 
             // Build annotations for ALL mature objects (not just triggers)
             let mut annotations = String::new();

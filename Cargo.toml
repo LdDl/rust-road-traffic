@@ -23,8 +23,8 @@ tensorrt-backend = ["od_opencv/tensorrt-opencv-compat"]
 turbojpeg-vendor = ["turbojpeg/cmake"]
 
 [dependencies]
-# OpenCV for video I/O, drawing, etc. DNN feature is conditional via features above
-opencv = { version = "0.96.0", default-features = false, features = ["imgcodecs", "videoio"] }
+# OpenCV for video I/O. DNN feature is conditional via features above
+opencv = { version = "0.96.0", default-features = false, features = ["videoio"] }
 uuid = { version = "1.18.1", features = ["serde", "v4"] }
 nalgebra = "0.34.1"
 toml = "0.9.8"
@@ -51,6 +51,8 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 # By default links to system libturbojpeg via pkg-config.
 # Use `--features turbojpeg-vendor` to build from source via cmake.
 turbojpeg = { version = "1.4", default-features = false, features = ["pkg-config"] }
+# PNG encoding for report snapshots
+png = "0.18.1"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

@@ -4,11 +4,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-use opencv::{
-    core::{Mat, Vector},
-    imgcodecs::imencode,
-    prelude::*,
-};
+use opencv::{core::Mat, prelude::*};
 
 use crate::lib::draw::primitives::{draw_line_thick, draw_text, scalar_to_bgr};
 
@@ -128,10 +124,23 @@ pub fn generate_report(
     }
     drop(zones);
 
-    // Encode PNG
-    let mut png_buffer = Vector::<u8>::new();
-    let params = Vector::<i32>::new();
-    imencode(".png", &frame, &mut png_buffer, &params)?;
+    // Encode PNG (BGR → RGB, then png crate)
+    let bgr = frame.data_bytes()?;
+    let mut rgb = vec![0u8; bgr.len()];
+    for i in (0..bgr.len()).step_by(3) {
+        rgb[i] = bgr[i + 2];
+        rgb[i + 1] = bgr[i + 1];
+        rgb[i + 2] = bgr[i];
+    }
+    let mut png_buffer = Vec::new();
+    {
+        let mut encoder =
+            png::Encoder::new(std::io::Cursor::new(&mut png_buffer), w as u32, h as u32);
+        encoder.set_color(png::ColorType::Rgb);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header()?;
+        writer.write_image_data(&rgb)?;
+    }
 
     // Create ZIP
     let png_filename = format!("{}_zones.png", video_stem);
@@ -154,7 +163,7 @@ pub fn generate_report(
     zip.write_all(od_csv.as_bytes())?;
 
     zip.start_file(&png_filename, options)?;
-    zip.write_all(&png_buffer.to_vec())?;
+    zip.write_all(&png_buffer)?;
 
     zip.finish()?;
 
