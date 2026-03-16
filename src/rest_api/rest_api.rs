@@ -63,8 +63,7 @@ pub async fn start_rest_api(
             .app_data(data.clone())
             .configure(services::init_routes(enable_mjpeg))
     })
-    .bind(&bind_address)
-    .unwrap_or_else(|_| panic!("Could not bind server to address: {}", &bind_address))
+    .bind(&bind_address)?
     .run()
     .await
 }

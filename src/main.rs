@@ -64,6 +64,7 @@ impl fmt::Display for AppVideoError {
 enum AppError {
     VideoError(AppVideoError),
     CaptureError(video_capture::CaptureError),
+    DataStorage(lib::data_storage::DataStorageError),
 }
 
 impl fmt::Display for AppError {
@@ -71,6 +72,7 @@ impl fmt::Display for AppError {
         match self {
             AppError::VideoError(e) => write!(f, "{}", e),
             AppError::CaptureError(e) => write!(f, "{}", e),
+            AppError::DataStorage(e) => write!(f, "Data storage error: {}", e),
         }
     }
 }
@@ -84,6 +86,12 @@ impl From<AppVideoError> for AppError {
 impl From<video_capture::CaptureError> for AppError {
     fn from(e: video_capture::CaptureError) -> Self {
         AppError::CaptureError(e)
+    }
+}
+
+impl From<lib::data_storage::DataStorageError> for AppError {
+    fn from(e: lib::data_storage::DataStorageError) -> Self {
+        AppError::DataStorage(e)
     }
 }
 
@@ -140,12 +148,7 @@ fn run(
             } else {
                 &net_classes_set
             });
-            match data_storage.write().unwrap().insert_zone(zone) {
-                Ok(_) => {}
-                Err(err) => {
-                    panic!("Can't insert zone due the error {:?}", err);
-                }
-            };
+            data_storage.write().unwrap().insert_zone(zone)?;
         }
     }
 
