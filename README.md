@@ -1,5 +1,7 @@
 # Rust toy utility for monitoring road traffic
 
+Road traffic monitoring utility written in pure Rust. **OpenCV is not required** - the project supports ONNX Runtime and TensorRT backends that work without any OpenCV dependency (even for drawing/grabbing/postprocess frames stuff). OpenCV DNN backend is also available as an optional (and currently default) feature for those who prefer it.
+
 ## Table of Contents
 - [Video showcase](#video-showcase)
 - [About](#about)
