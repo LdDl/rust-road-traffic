@@ -46,6 +46,8 @@ This project supports three inference backends via compile-time feature flags:
 
 **`ort-backend` and `tensorrt-backend` do NOT require OpenCV** on the system. Video capture uses ffmpeg/GStreamer subprocesses, drawing uses own primitives, image encoding uses [`turbojpeg`](https://github.com/libjpeg-turbo/libjpeg-turbo)/[`png`](https://github.com/image-rs/image-png) crates.
 
+**`ort-backend`** uses [ort](https://crates.io/crates/ort) 2.x crate which requires **CUDA 12.x** or higher for GPU acceleration. It will not work on systems with CUDA 10.x/11.x and so on.
+
 **`tensorrt-backend`** is designed for NVIDIA embedded platforms (e.g. Jetson Nano) and discrete NVIDIA GPUs with TensorRT installed.
 
 **Network input size:** For Darknet models (`.cfg` + `.weights`), `net_width`/`net_height` in TOML config are __ignored__ - the input size is read directly from the `[net]` section of the `.cfg` file. For TensorRT (`.engine`), input size is also auto-detected from the engine bindings. For ONNX models, `net_width`/`net_height` must be specified in the TOML config.
