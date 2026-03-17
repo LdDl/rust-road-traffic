@@ -20,10 +20,12 @@
 
 Vehicle detection/tracking and speed estimation via next instruments:
 1. Rust programming language - https://www.rust-lang.org/
-2. OpenCV bindings - https://github.com/twistedfall/opencv-rust#rust-opencv-bindings. I'm using OpenCV 4.7.0 + v0.66.0 for bindings
+2. Object detection - [od_opencv](https://github.com/LdDl/od_opencv) crate with three inference backends:
+   - OpenCV DNN (optional) - https://github.com/twistedfall/opencv-rust
+   - ONNX Runtime - https://onnxruntime.ai/
+   - TensorRT - https://developer.nvidia.com/tensorrt
 3. Linear algebra - https://github.com/dimforge/nalgebra
-4. Traditional YOLO v3 / v4 / v7 via OpenCV's DNN module - https://arxiv.org/abs/1804.02767 / https://arxiv.org/abs/2004.10934 / https://arxiv.org/abs/2207.02696
-5. YOLO v8 via ONNX + OpenCV's DNN module - https://github.com/ultralytics/ultralytics
+4. YOLO models: YOLOv3/v4/v7 (Darknet), YOLOv8/v9/v11 (Ultralytics) - https://github.com/ultralytics/ultralytics
 5. actix-web for web part - https://actix.rs/
 
 Notice:
@@ -150,7 +152,7 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
 1. You need installed Rust compiler obviously. Follow instruction of official site: https://www.rust-lang.org/tools/install
 
 2. **OpenCV** is only required for `opencv-backend` (the default). If you use `ort-backend` or `tensorrt-backend`, skip this step.
-    I'm using OpenCV 4.7.0. In case of need `opencv-backend` I'd highly recommend to use OpenCV with CUDA. Here is [Makefile](Makefile) adopted from [this one](https://github.com/hybridgroup/gocv/blob/release/Makefile) if you want build it from sources (it's targeted for Linux user obviously).
+    In case of need `opencv-backend` I'd highly recommend to use OpenCV >= 4.7.0 with CUDA. Here is [Makefile](Makefile) adopted from [this one](https://github.com/hybridgroup/gocv/blob/release/Makefile) if you want build it from sources (it's targeted for Linux user obviously).
     ```shell
     sudo make install_cuda
     ```
