@@ -50,7 +50,7 @@
     lane_direction = 0
     # left-bot, right-bot, right-top, left-top
     geometry = [[204, 542], [398, 558], [506, 325], [402, 318]]
-    geometry_wgs84 = [[-3.7058048784300297,40.39308821416677],[-3.7058296599552705,40.39306089952626],[-3.7059466895758533,40.393116604041296],[-3.705927467488266,40.39314855180666]]
+    geometry_wgs84 = [[-3.7059677, 40.39317], [-3.7060046, 40.39314], [-3.7058284, 40.393044], [-3.7058063, 40.393074]]
     color_rgb = [255, 0, 0]
     # Optional attribute.
     # By default road traffic flow in calculated as number of vehicles which has been registered by naive verification metric: if even single point were registered in lane - it is counted as +1.

@@ -650,6 +650,9 @@ fn run(
 
         /* Re-stream input video as MJPEG */
         if enable_mjpeg {
+            // Sleep for a while for debug
+            // thread::sleep(STDDuration::from_millis(100));
+
             let mut frame = received.frame.clone();
 
             for (_, v) in zones.iter() {
