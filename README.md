@@ -16,7 +16,7 @@ Road traffic monitoring utility written in pure Rust. **OpenCV is not required**
 
 ## Video showcase
 
-<video src='https://github.com/user-attachments/assets/49fcc355-c05f-4847-961f-13a4abb1b0a6' width="720px"></video>
+<video src='https://github.com/user-attachments/assets/9a988ef3-f849-4922-98b3-94b353cd0e3d' width="720px"></video>
 
 ## About
 
