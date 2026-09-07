@@ -23,6 +23,11 @@ pub struct AllZonesStats {
 /// Summary information for each detection zone
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ZoneStats {
+    /// Identifier of the zone, the same one `/api/polygons/geojson` reports.
+    /// Lane number and direction do not have to be unique, so this is what a
+    /// row can be joined on
+    #[schema(example = "dc8ef2b1-4b52-4b1c-9e6e-4e7c1a4f2f1a")]
+    pub id: String,
     /// Corresponding road lane number
     #[schema(example = 2)]
     pub lane_number: u16,
@@ -123,6 +128,7 @@ pub async fn all_zones_stats(data: web::Data<APIStorage>) -> Result<HttpResponse
     for (_, zone_guarded) in zones.iter() {
         let zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
         let mut stats = ZoneStats {
+            id: zone.get_id().to_string(),
             lane_number: zone.road_lane_num,
             lane_direction: zone.road_lane_direction,
             period_start: zone.statistics.period_start,
@@ -180,6 +186,9 @@ pub struct AllZonesRealtimeStatistics {
 /// Information about realtime occupancy for the specific detection zone
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ZoneRealtime {
+    /// Identifier of the zone, the same one `/api/polygons/geojson` reports
+    #[schema(example = "dc8ef2b1-4b52-4b1c-9e6e-4e7c1a4f2f1a")]
+    pub id: String,
     /// Corresponding road lane number
     #[schema(example = 2)]
     pub lane_number: u16,
@@ -225,6 +234,7 @@ pub async fn all_zones_occupancy(data: web::Data<APIStorage>) -> Result<HttpResp
     for (_, zone_guarded) in zones.iter() {
         let zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
         let stats = ZoneRealtime {
+            id: zone.get_id().to_string(),
             lane_number: zone.road_lane_num,
             lane_direction: zone.road_lane_direction,
             last_time: zone.current_statistics.last_time,

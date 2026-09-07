@@ -81,6 +81,7 @@ impl RedisConnection {
         for (_, v) in zones.iter() {
             let element = v.lock().expect("Mutex poisoned");
             let mut stats = ZoneStats {
+                id: element.get_id().to_string(),
                 lane_number: element.road_lane_num,
                 lane_direction: element.road_lane_direction,
                 period_start: element.statistics.period_start,
