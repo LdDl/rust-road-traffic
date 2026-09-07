@@ -37,6 +37,7 @@ use std::process;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration as STDDuration;
+use std::time::Instant;
 use std::time::SystemTime;
 
 fn get_sys_time_in_secs() -> u64 {
@@ -267,13 +268,15 @@ fn run(
         mpsc::SyncSender<ThreadedFrame>,
         mpsc::Receiver<ThreadedFrame>,
     ) = mpsc::sync_channel(0);
+    // @experimental
+    let skip_every_n_frame: u64 = 2;
+    let live_source = video_source.is_live();
     thread::spawn(move || {
-        let mut frames_counter: f32 = 0.0;
-        let mut total_seconds: f32 = 0.0;
-        let mut overall_seconds: f32 = 0.0;
+        let mut frame_idx: u64 = 0;
         let mut processed_frames: u32 = 0;
-        // @experimental
-        let skip_every_n_frame = 2;
+        // Start of the current statistics period, in frame timestamps
+        let mut period_start_ts: f64 = 0.0;
+        let clock = Instant::now();
         loop {
             let read_frame = match video_source.read_frame() {
                 Ok(Some(frame)) => frame,
@@ -287,22 +290,24 @@ fn run(
                 }
             };
 
-            frames_counter += 1.0;
-            let second_fraction = total_seconds + (frames_counter / fps);
-            if frames_counter >= fps {
-                total_seconds += 1.0;
-                overall_seconds += 1.0;
-                frames_counter = 0.0;
-            }
-            if frames_counter as i32 % skip_every_n_frame != 0 {
+            // Live sources are paced by the source itself, so the wall clock is the
+            // only thing that reflects frames dropped upstream. A file is decoded as
+            // fast as the detector drains the pipe, so only the frame index tells
+            // media time there
+            let timestamp: f64 = if live_source {
+                clock.elapsed().as_secs_f64()
+            } else {
+                frame_idx as f64 / fps as f64
+            };
+            frame_idx += 1;
+            if frame_idx % skip_every_n_frame != 0 {
                 continue;
             }
 
             /* Send frame and capture info */
             let frame = ThreadedFrame {
                 frame: read_frame,
-                overall_seconds: overall_seconds,
-                current_second: second_fraction,
+                timestamp,
             };
 
             match tx_capture.send(frame) {
@@ -322,12 +327,12 @@ fn run(
                 );
             }
 
-            if total_seconds >= next_reset {
+            if timestamp - period_start_ts >= next_reset as f64 {
                 println!(
                     "Reset timer due analytics. Current local time is: {}",
-                    second_fraction
+                    timestamp
                 );
-                total_seconds = 0.0;
+                period_start_ts = timestamp;
                 let mut ds_writer = ds_worker.write().expect("Bad DS");
                 if ds_writer.period_end == ds_writer.period_start {
                     // First iteration
@@ -371,7 +376,11 @@ fn run(
 
     let ds_tracker = data_storage.clone();
 
-    let tracker_dt = 1.0 / fps;
+    // Nominal interval between the frames the tracker actually sees: every N-th
+    // frame is processed, so the effective rate is fps / N, not fps
+    let nominal_dt: f64 = skip_every_n_frame as f64 / fps as f64;
+    // Timestamp of the last frame that reached the tracker
+    let mut prev_tracked_ts: Option<f64> = None;
 
     /* Performance stats (optional) */
     let perf_stats_interval = settings.detection.perf_stats_interval;
@@ -398,7 +407,7 @@ fn run(
         if report_mode && first_frame.is_none() {
             first_frame = Some(received.frame.clone());
         }
-        // println!("Received frame from capture thread: {}", received.current_second);
+        // println!("Received frame from capture thread: {}", received.timestamp);
         // Note: frame clone is deferred to only displaying
 
         /* Inference (preprocessing + forward pass + NMS) */
@@ -417,6 +426,17 @@ fn run(
         let inference_time = t_inference.elapsed();
 
         /* Postprocessing: create detection blobs */
+        // The Kalman filters are rebuilt for the real interval since the previous
+        // tracked frame rather than 1/fps: a slow detector, a decoder stall or
+        // frames dropped by the source all stretch it, and a filter built for the
+        // nominal step then predicts a whole stride short and loses the match.
+        // Clamped so that a long stall can't make it extrapolate for seconds
+        let dt: f64 = match prev_tracked_ts {
+            Some(prev) if received.timestamp > prev => {
+                (received.timestamp - prev).clamp(nominal_dt * 0.25, nominal_dt * 10.0)
+            }
+            _ => nominal_dt,
+        };
         let t_postprocess = Timer::start();
         let mut tmp_detections = process_yolo_detections(
             &nms_bboxes,
@@ -427,14 +447,14 @@ fn run(
             max_points_in_track,
             &net_classes,
             &target_classes,
-            tracker_dt,
+            dt as f32,
             kalman_filter,
         );
         let postprocess_time = t_postprocess.elapsed();
 
         /* Tracking: match detections to existing tracks */
         let t_tracking = Timer::start();
-        let relative_time = received.overall_seconds;
+        let relative_time = received.timestamp as f32;
         match tracker.match_objects(&mut tmp_detections, relative_time) {
             Ok(_) => {}
             Err(err) => {
@@ -442,6 +462,7 @@ fn run(
                 continue;
             }
         };
+        prev_tracked_ts = Some(received.timestamp);
         let tracking_time = t_tracking.elapsed();
 
         /* Record performance stats */

@@ -2,6 +2,8 @@ use crate::lib::cv::RawFrame;
 
 pub struct ThreadedFrame {
     pub frame: RawFrame,
-    pub overall_seconds: f32,
-    pub current_second: f32,
+    /// Seconds since capture start. Media time (frame index / fps) for files,
+    /// wall clock for live sources. f64 so that the interval between two frames
+    /// stays exact after days of uptime; f32 loses ~10 ms per step past ~1e5 s.
+    pub timestamp: f64,
 }
