@@ -80,6 +80,13 @@ impl SpatialInfo {
 
     // Same as update(), but calculations are done between first and last points
     // This approach helps to avoid situation when distance between two points is approx. 0
+    //
+    // TODO: `pixels_per_meter` is a single average over the zone skeleton, so a
+    // vehicle picked up or lost mid-zone gets a perspective-biased speed (near and
+    // far ends of a zone differ in scale). Project both points through the zone's
+    // perspective transform (`make_perspective_transform`, EPSG:3857) and take the
+    // distance in metres instead. Do this only once calibration (corner placement)
+    // is verified against a known-speed reference: that error dominates
     pub fn update_avg(
         &mut self,
         _time: f32,
