@@ -9,6 +9,7 @@ pub mod mjpeg_streaming;
 pub mod perf_stats;
 pub mod publisher;
 pub mod report;
+pub mod restart;
 pub mod spatial;
 pub mod tracker;
 pub mod utils;

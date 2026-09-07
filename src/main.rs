@@ -24,7 +24,7 @@ mod settings;
 use settings::AppSettings;
 
 mod video_capture;
-use video_capture::{ThreadedFrame, VideoSource, frame_channel};
+use video_capture::{ThreadedFrame, VideoSource, frame_channel, kill_capture_subprocesses};
 
 use lib::publisher::RedisConnection;
 
@@ -37,7 +37,6 @@ use std::iter::FromIterator;
 use std::process;
 use std::sync::mpsc;
 use std::thread;
-use std::time::Duration as STDDuration;
 use std::time::Instant;
 use std::time::SystemTime;
 use tracing::{error, info, warn};
@@ -175,11 +174,10 @@ fn run(
 
     info!(scope = logging::SCOPE_STARTUP, "Press Ctrl-C to stop");
     ctrlc::set_handler(move || {
-        info!(
-            scope = logging::SCOPE_STARTUP,
-            "Ctrl-C pressed, exiting in 2 seconds"
-        );
-        thread::sleep(STDDuration::from_secs(2));
+        info!(scope = logging::SCOPE_STARTUP, "Interrupted, shutting down");
+        // Exiting runs no destructors, so the capture subprocess is taken down
+        // here; this waits for it, which is what the blind sleep used to cover
+        kill_capture_subprocesses();
         process::exit(1);
     })
     .expect("Error setting `Ctrl-C` handler");
@@ -898,4 +896,7 @@ fn main() {
             error!(scope = logging::SCOPE_PROCESSING, error = %err, "Error in main thread");
         }
     };
+    // A restart takes the capture subprocess down, which ends the run above:
+    // stay alive until this process image is replaced
+    lib::restart::wait_while_restarting();
 }

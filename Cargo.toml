@@ -61,6 +61,11 @@ turbojpeg = { version = "1.4", default-features = false, features = ["pkg-config
 # PNG encoding for report snapshots
 png = "0.18.1"
 
+# Sending a specific signal to the capture subprocess, see `end_child`.
+# Already in the tree: ctrlc pulls the same crate
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.30", features = ["signal"] }
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 

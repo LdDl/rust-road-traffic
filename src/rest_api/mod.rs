@@ -1,6 +1,7 @@
 mod mjpeg_client;
 mod mjpeg_page;
 mod rest_api;
+mod restart;
 mod services;
 mod toml_mutations;
 mod zones_list;

@@ -3,7 +3,7 @@ use actix_web_static_files::ResourceFiles;
 include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 
 use crate::rest_api::{
-    mjpeg_client, mjpeg_page, toml_mutations, zones_list, zones_mutations, zones_stats,
+    mjpeg_client, mjpeg_page, restart, toml_mutations, zones_list, zones_mutations, zones_stats,
 };
 
 async fn say_ping() -> impl Responder {
@@ -53,7 +53,8 @@ pub fn init_routes(enable_mjpeg: bool) -> impl Fn(&mut web::ServiceConfig) {
                             web::post().to(zones_mutations::delete_zone),
                         )
                         .route("/replace_all", web::post().to(zones_mutations::replace_all))
-                        .route("/save_toml", web::get().to(toml_mutations::save_toml)),
+                        .route("/save_toml", web::get().to(toml_mutations::save_toml))
+                        .route("/restart", web::post().to(restart::restart)),
                 ),
         );
         cfg.service(ResourceFiles::new("/", generated));
@@ -75,11 +76,13 @@ use utoipa_rapidoc::RapiDoc;
         zones_mutations::delete_zone,
         zones_mutations::replace_all,
         toml_mutations::save_toml,
+        restart::restart,
     ),
     tags(
         (name = "Zones", description = "Main information about detection zones"),
         (name = "Statistics", description = "Aggregated and real-time statistics in the detections zones"),
         (name = "Zones mutations", description = "A way to mutate information about detection zones"),
+        (name = "Application", description = "Managing the running application"),
     ),
     components(
         // We need to import all possible schemas since `utopia` can't discover recursive schemas (yet?)
@@ -106,6 +109,7 @@ use utoipa_rapidoc::RapiDoc;
             crate::rest_api::zones_mutations::ZonesOverwriteAllResponse,
             crate::rest_api::zones_mutations::ErrorResponse,
             crate::rest_api::toml_mutations::UpdateTOMLResponse,
+            crate::rest_api::restart::RestartResponse,
             crate::rest_api::toml_mutations::ErrorResponse,
         ),
     )
