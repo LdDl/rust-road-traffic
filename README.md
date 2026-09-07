@@ -335,7 +335,22 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
         reset_data_milliseconds = 30000
     ```
 
-13. Logging
+13. Restarting
+
+    Some settings are only read at startup: the video source, the tracker, Redis publisher and the statistics refresher period. API `POST /api/mutations/restart` restarts the application to pick them up, without knowing what supervises it:
+
+    ```shell
+    curl -X POST http://localhost:42001/api/mutations/restart
+    # {"message":"restarting"}
+    ```
+
+    The process replaces its own image, keeping the same PID, so systemd sees no exit, a container whose entrypoint is this binary keeps running, and a plain terminal run comes back as well. Nothing is saved first: unsaved zones stay unsaved (save them with `/api/mutations/save_toml`), and a config edited over SSH is picked up exactly as written. The reply is sent before the restart happens, so wait for `/api/ping` to answer again.
+
+    The capture subprocess is shut down properly on the way out, and on `Ctrl-C` as well: it is sent `SIGINT`, which `gst-launch-1.0` answers by taking the pipeline down to NULL, and only killed if it does not go within two seconds. That matters on a Jetson CSI camera, where only the orderly teardown closes the Argus session — a session left open keeps the sensor busy for the next start.
+
+    Under systemd, add `KillMode=mixed` to the unit so that stopping the service signals this process alone and lets it shut its pipeline down; with the default `control-group` systemd signals `gst-launch-1.0` directly, which kills it with the pipeline still up.
+
+14. Logging
 
     Logs are NDJSON (one JSON object per line) on stdout and, by default, in `./logs/rust-road-traffic.log` next to the config file. Every line carries `level` (`INFO`, `WARN`, `ERROR`), `scope` (`startup`, `capture`, `processing`, `analytics`, `redis`, `rest_api`, `report`, `dataset`) and the message with its fields:
 

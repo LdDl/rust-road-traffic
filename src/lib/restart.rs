@@ -2,11 +2,31 @@
 use std::io;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use std::time::Duration;
 
 use tracing::{error, info};
 
 use crate::lib::logging;
 use crate::video_capture::kill_capture_subprocesses;
+
+/// Set while a restart is under way.
+///
+/// Taking the capture subprocess down makes the capture thread see the end of
+/// its stream, which is how the app normally finishes: without this the
+/// process would run to completion and exit in the moment between the two,
+/// and there would be nothing left to replace
+static RESTARTING: AtomicBool = AtomicBool::new(false);
+
+/// Blocks while a restart is under way, that is until `exec` replaces this
+/// process image or the restart gives up. Call it wherever the app would
+/// otherwise return from `main`
+pub fn wait_while_restarting() {
+    while RESTARTING.load(Ordering::SeqCst) {
+        thread::sleep(Duration::from_millis(20));
+    }
+}
 
 /// The executable and the arguments a restart runs, i.e. exactly what this
 /// process was started with
@@ -29,6 +49,7 @@ pub fn restart_process() -> io::Error {
         Ok(command) => command,
         Err(e) => return e,
     };
+    RESTARTING.store(true, Ordering::SeqCst);
     info!(
         scope = logging::SCOPE_STARTUP,
         executable = %exe.display(),
@@ -38,6 +59,7 @@ pub fn restart_process() -> io::Error {
     // Nothing below runs a destructor, so the capture subprocess has to go first
     kill_capture_subprocesses();
     let error = replace_process(&exe, &args);
+    RESTARTING.store(false, Ordering::SeqCst);
     error!(
         scope = logging::SCOPE_STARTUP,
         executable = %exe.display(),

@@ -1,6 +1,9 @@
 use crate::lib::logging;
 use std::io::Read;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, ChildStdout, Command, Stdio};
+use std::sync::Mutex;
+use std::thread;
+use std::time::{Duration, Instant};
 use tracing::info;
 
 use crate::lib::cv::RawFrame;
@@ -49,12 +52,101 @@ enum SourceKind {
     GStreamer,
 }
 
+/// The capture subprocesses started by this process.
+///
+/// A restart replaces the process image without running a single destructor,
+/// so an ffmpeg or gst-launch child would outlive it, still holding the camera
+/// and blocked writing into a pipe nobody reads. Keeping the `Child` here
+/// rather than in the `VideoSource` alone means any thread can end it properly:
+/// killing it from the outside would leave a zombie, since only the parent can
+/// reap a child, and after `exec` nobody is left to do it
+static CHILDREN: Mutex<Vec<Child>> = Mutex::new(Vec::new());
+
+/// Kills and reaps every capture subprocess. Call it before anything that ends
+/// the process without unwinding
+pub fn kill_capture_subprocesses() {
+    let children = match CHILDREN.lock() {
+        Ok(mut registry) => std::mem::take(&mut *registry),
+        Err(poisoned) => std::mem::take(&mut *poisoned.into_inner()),
+    };
+    for mut child in children {
+        end_child(&mut child);
+    }
+}
+
+fn register_child(child: Child) {
+    let mut registry = CHILDREN
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    registry.push(child);
+}
+
+/// Ends the subprocess with this pid, if it is still registered
+fn end_child_by_pid(pid: u32) {
+    let mut registry = CHILDREN
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(index) = registry.iter().position(|child| child.id() == pid) {
+        let mut child = registry.remove(index);
+        drop(registry);
+        end_child(&mut child);
+    }
+}
+
+/// How long a capture subprocess is given to shut itself down after the
+/// interrupt, before it is killed outright
+const GRACEFUL_EXIT: Duration = Duration::from_secs(2);
+const EXIT_POLL: Duration = Duration::from_millis(20);
+
+/// Interrupt, wait a little, kill if that was not enough, and always reap.
+///
+/// The interrupt is SIGINT rather than SIGTERM because that is what the two
+/// programs we spawn actually listen to: `gst-launch-1.0` answers SIGINT by
+/// taking the pipeline down to NULL and exits 0, while SIGTERM kills it
+/// outright (exit 143) with the pipeline still up; ffmpeg treats both the
+/// same. On a Jetson CSI camera the difference is the whole point: only the
+/// orderly teardown closes the Argus session, and a session left open keeps
+/// the sensor busy for whoever starts next.
+///
+/// Reaping matters just as much: a killed child that is never waited for stays
+/// a zombie, and after a restart there is no one left to collect it
+fn end_child(child: &mut Child) {
+    if interrupt(child.id()) {
+        let deadline = Instant::now() + GRACEFUL_EXIT;
+        while Instant::now() < deadline {
+            match child.try_wait() {
+                Ok(Some(_)) => return,
+                Ok(None) => thread::sleep(EXIT_POLL),
+                Err(_) => break,
+            }
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+#[cfg(unix)]
+fn interrupt(pid: u32) -> bool {
+    nix::sys::signal::kill(
+        nix::unistd::Pid::from_raw(pid as i32),
+        nix::sys::signal::Signal::SIGINT,
+    )
+    .is_ok()
+}
+
+#[cfg(not(unix))]
+fn interrupt(_pid: u32) -> bool {
+    false
+}
+
 /// Video capture via ffmpeg or gst-launch-1.0 subprocess.
 ///
 /// Supports file, RTSP, V4L2 camera, and GStreamer pipeline sources.
 /// Output pixel format: BGR24, row-major, no padding.
 pub struct VideoSource {
-    child: Child,
+    /// The subprocess itself lives in `CHILDREN`; this is its output pipe
+    stdout: ChildStdout,
+    child_pid: u32,
     width: u32,
     height: u32,
     fps: f32,
@@ -84,12 +176,19 @@ impl VideoSource {
             "Video probe"
         );
 
-        let child = spawn_subprocess(video_src, &kind, &info)?;
+        let mut child = spawn_subprocess(video_src, &kind, &info)?;
+        let child_pid = child.id();
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| CaptureError::ProcessError("subprocess stdout not available".into()))?;
+        register_child(child);
         let frame_size = info.width as usize * info.height as usize * 3;
         let live = is_live_source(video_src, &kind);
 
         Ok(Self {
-            child,
+            stdout,
+            child_pid,
             width: info.width,
             height: info.height,
             fps: info.fps,
@@ -102,14 +201,9 @@ impl VideoSource {
 
     /// Read the next frame. Returns `Ok(None)` on EOF.
     pub fn read_frame(&mut self) -> Result<Option<RawFrame>, CaptureError> {
-        let stdout =
-            self.child.stdout.as_mut().ok_or_else(|| {
-                CaptureError::ProcessError("subprocess stdout not available".into())
-            })?;
-
         let mut total_read = 0;
         while total_read < self.frame_size {
-            match stdout.read(&mut self.buf[total_read..self.frame_size]) {
+            match self.stdout.read(&mut self.buf[total_read..self.frame_size]) {
                 Ok(0) => return Ok(None), // EOF
                 Ok(n) => total_read += n,
                 Err(e) => return Err(CaptureError::Io(e)),
@@ -150,8 +244,7 @@ impl VideoSource {
 
 impl Drop for VideoSource {
     fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        end_child_by_pid(self.child_pid);
     }
 }
 
