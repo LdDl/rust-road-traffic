@@ -57,6 +57,10 @@ pub struct AppSettings {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InputSettings {
     pub video_src: String,
+    /// Run detection and tracking on every N-th decoded frame. Default is 2.
+    /// The tracker is told the real interval between the frames it sees, so this
+    /// only trades accuracy for CPU; it never changes what a second means
+    pub process_every_nth_frame: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -90,7 +94,12 @@ pub struct TrackingSettings {
     pub max_points_in_track: usize,
     // Either "centroid" or "bbox". Default is "centroid"
     pub kalman_filter: Option<String>,
-    // Maximum number of frames to keep tracking an object without new detections. Default is 60
+    // Maximum time in seconds to keep tracking an object without new detections. Default is 2.0.
+    // Takes precedence over `max_no_match`: a frame count changes meaning whenever the effective
+    // frame rate does (frame skipping, a throttled detector, a stalled stream), an occlusion does not
+    pub max_lost_seconds: Option<f32>,
+    // Maximum number of frames to keep tracking an object without new detections.
+    // Only used when `max_lost_seconds` is not set
     pub max_no_match: Option<usize>,
     // IoU threshold for matching detections to tracks. Default is 0.3
     pub iou_threshold: Option<f32>,

@@ -23,7 +23,7 @@ mod settings;
 use settings::AppSettings;
 
 mod video_capture;
-use video_capture::{ThreadedFrame, VideoSource};
+use video_capture::{ThreadedFrame, VideoSource, frame_channel};
 
 use lib::publisher::RedisConnection;
 
@@ -264,13 +264,11 @@ fn run(
     }
 
     /* Start capture loop */
-    let (tx_capture, rx_capture): (
-        mpsc::SyncSender<ThreadedFrame>,
-        mpsc::Receiver<ThreadedFrame>,
-    ) = mpsc::sync_channel(0);
-    // @experimental
-    let skip_every_n_frame: u64 = 2;
     let live_source = video_source.is_live();
+    // A file is consumed frame by frame; a live source hands over its newest
+    // frame and drops the ones a slow detector did not get to (see frame_channel)
+    let (tx_capture, rx_capture) = frame_channel(live_source);
+    let skip_every_n_frame: u64 = settings.input.process_every_nth_frame.unwrap_or(2).max(1) as u64;
     thread::spawn(move || {
         let mut frame_idx: u64 = 0;
         let mut processed_frames: u32 = 0;
@@ -310,13 +308,10 @@ fn run(
                 timestamp,
             };
 
-            match tx_capture.send(frame) {
-                Ok(_) => {}
-                Err(_err) => {
-                    // Closed channel?
-                    // println!("Error on send frame to detection thread: {}", _err)
-                }
-            };
+            if tx_capture.send(frame).is_err() {
+                // Detection thread is gone, nobody will take frames any more
+                break;
+            }
 
             processed_frames += 1;
             if report_mode && total_frames > 0.0 && processed_frames % 100 == 0 {
@@ -379,8 +374,25 @@ fn run(
     // Nominal interval between the frames the tracker actually sees: every N-th
     // frame is processed, so the effective rate is fps / N, not fps
     let nominal_dt: f64 = skip_every_n_frame as f64 / fps as f64;
+    // Longest interval the Kalman filters are asked to bridge. With time-based
+    // expiry there is no point predicting further than a track is allowed to
+    // live; with frame-based expiry fall back to a fixed multiple of the nominal step
+    let max_dt: f64 = match tracker.get_max_lost_seconds() {
+        Some(seconds) => (seconds as f64).max(nominal_dt),
+        None => nominal_dt * 10.0,
+    };
     // Timestamp of the last frame that reached the tracker
     let mut prev_tracked_ts: Option<f64> = None;
+    // Frames the capture thread dropped, as of the previous processed frame
+    let mut dropped_seen: u64 = 0;
+    println!(
+        "Frame timing: {} source, 1 of every {} frames processed, nominal dt {:.4} s, dt clamped to [{:.4}, {:.2}] s",
+        if live_source { "live" } else { "file" },
+        skip_every_n_frame,
+        nominal_dt,
+        nominal_dt * 0.25,
+        max_dt
+    );
 
     /* Performance stats (optional) */
     let perf_stats_interval = settings.detection.perf_stats_interval;
@@ -403,7 +415,7 @@ fn run(
 
     /* Can't create colors as const/static currently */
     let mut first_frame: Option<lib::cv::RawFrame> = None;
-    for received in rx_capture {
+    while let Some(received) = rx_capture.recv() {
         if report_mode && first_frame.is_none() {
             first_frame = Some(received.frame.clone());
         }
@@ -430,10 +442,12 @@ fn run(
         // tracked frame rather than 1/fps: a slow detector, a decoder stall or
         // frames dropped by the source all stretch it, and a filter built for the
         // nominal step then predicts a whole stride short and loses the match.
-        // Clamped so that a long stall can't make it extrapolate for seconds
+        // The lower bound guards against a zero step (Q has dt^4 in it), the
+        // upper one against extrapolating past the point where a track would
+        // have expired anyway
         let dt: f64 = match prev_tracked_ts {
             Some(prev) if received.timestamp > prev => {
-                (received.timestamp - prev).clamp(nominal_dt * 0.25, nominal_dt * 10.0)
+                (received.timestamp - prev).clamp(nominal_dt * 0.25, max_dt)
             }
             _ => nominal_dt,
         };
@@ -455,7 +469,7 @@ fn run(
         /* Tracking: match detections to existing tracks */
         let t_tracking = Timer::start();
         let relative_time = received.timestamp as f32;
-        match tracker.match_objects(&mut tmp_detections, relative_time) {
+        match tracker.match_objects(&mut tmp_detections, relative_time, dt as f32) {
             Ok(_) => {}
             Err(err) => {
                 println!("Can't match objects due the error: {:?}", err);
@@ -467,7 +481,14 @@ fn run(
 
         /* Record performance stats */
         if let Some(ref mut stats) = perf_stats {
-            stats.record(inference_time, postprocess_time, tracking_time);
+            let dropped_total = rx_capture.dropped();
+            stats.record(
+                inference_time,
+                postprocess_time,
+                tracking_time,
+                dropped_total - dropped_seen,
+            );
+            dropped_seen = dropped_total;
         }
 
         /* Dataset collection - save raw frame and annotations */
@@ -779,6 +800,7 @@ fn main() {
         &app_settings.tracking.typ.as_deref().unwrap_or("iou_naive"),
         kalman_filter,
         app_settings.tracking.max_no_match,
+        app_settings.tracking.max_lost_seconds,
         app_settings.tracking.iou_threshold,
     );
     println!("Tracker is:\n\t{}", tracker);

@@ -7,6 +7,11 @@
     # video_src = "0"
     # Gstreamer:
     # video_src = "v4l2src device=/dev/video0 ! video/x-raw, format=(string)YUY2, width=(int)2560, height=(int)960, framerate=(fraction)30/1 ! videoconvert ! video/x-raw, format=(string)BGR ! appsink"
+    # Run detection and tracking on every N-th decoded frame. Default is 2.
+    # The tracker is told the real interval between the frames it sees (media time for a file,
+    # wall clock for a live source), so this only trades accuracy for CPU. On a live source a
+    # detector that falls behind additionally skips whatever frames it did not get to.
+    process_every_nth_frame = 2
 
 [debug]
     enable = true
@@ -36,6 +41,11 @@
     # Kalman filter type: "centroid" (x/y/vx/vy) or "bbox" (full bbox tracking: x/y/w/h/vx/vy/vw/vh)
     # Default is "centroid". Use "bbox" for better tracking when object size/aspect ratio changes significantly.
     kalman_filter = "bbox"
+    # How long (seconds) to keep a track alive without new detections. Default is 2.0.
+    # Counted in real time, so it means the same thing on a file, a live stream, with frame
+    # skipping and with a throttled detector. Increase for OD matrix tracking between distant zones.
+    # The legacy `max_no_match` (frames) is only used when this is not set.
+    max_lost_seconds = 2.0
 
 [equipment_info]
     # Just field for future identification of application. Could be any string.

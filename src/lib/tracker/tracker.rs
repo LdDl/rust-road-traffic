@@ -16,6 +16,15 @@ pub trait TrackerEngineSimple {
         confidences: &[f32],
     ) -> Result<(), TrackerError>;
     fn get_objects(&self) -> &HashMap<Uuid, SimpleBlob>;
+    /// Rebuilds every live track for the real interval since the previous
+    /// processed frame. Must be called before `match_objects` on every frame,
+    /// including frames without detections, which carry no dt of their own
+    fn set_dt(&mut self, dt: f32);
+    /// Expire tracks by unmatched time instead of by frame count
+    fn set_max_lost_seconds(&mut self, seconds: f32);
+    fn get_max_lost_seconds(&self) -> Option<f32>;
+    /// Frame-count limit, in effect only while `get_max_lost_seconds` is `None`
+    fn get_max_no_match(&self) -> usize;
 }
 
 /// Trait for BlobBBox trackers
@@ -26,6 +35,15 @@ pub trait TrackerEngineBBox {
         confidences: &[f32],
     ) -> Result<(), TrackerError>;
     fn get_objects(&self) -> &HashMap<Uuid, BlobBBox>;
+    /// Rebuilds every live track for the real interval since the previous
+    /// processed frame. Must be called before `match_objects` on every frame,
+    /// including frames without detections, which carry no dt of their own
+    fn set_dt(&mut self, dt: f32);
+    /// Expire tracks by unmatched time instead of by frame count
+    fn set_max_lost_seconds(&mut self, seconds: f32);
+    fn get_max_lost_seconds(&self) -> Option<f32>;
+    /// Frame-count limit, in effect only while `get_max_lost_seconds` is `None`
+    fn get_max_no_match(&self) -> usize;
 }
 
 impl TrackerEngineSimple for IoUTracker<SimpleBlob> {
@@ -38,6 +56,18 @@ impl TrackerEngineSimple for IoUTracker<SimpleBlob> {
     }
     fn get_objects(&self) -> &HashMap<Uuid, SimpleBlob> {
         &self.objects
+    }
+    fn set_dt(&mut self, dt: f32) {
+        IoUTracker::set_dt(self, dt)
+    }
+    fn set_max_lost_seconds(&mut self, seconds: f32) {
+        IoUTracker::set_max_lost_seconds(self, seconds)
+    }
+    fn get_max_lost_seconds(&self) -> Option<f32> {
+        IoUTracker::get_max_lost_seconds(self)
+    }
+    fn get_max_no_match(&self) -> usize {
+        IoUTracker::get_max_no_match(self)
     }
 }
 
@@ -52,6 +82,18 @@ impl TrackerEngineSimple for ByteTracker<SimpleBlob> {
     fn get_objects(&self) -> &HashMap<Uuid, SimpleBlob> {
         &self.objects
     }
+    fn set_dt(&mut self, dt: f32) {
+        ByteTracker::set_dt(self, dt)
+    }
+    fn set_max_lost_seconds(&mut self, seconds: f32) {
+        ByteTracker::set_max_lost_seconds(self, seconds)
+    }
+    fn get_max_lost_seconds(&self) -> Option<f32> {
+        ByteTracker::get_max_lost_seconds(self)
+    }
+    fn get_max_no_match(&self) -> usize {
+        ByteTracker::get_max_disappeared(self)
+    }
 }
 
 impl TrackerEngineBBox for IoUTracker<BlobBBox> {
@@ -65,6 +107,18 @@ impl TrackerEngineBBox for IoUTracker<BlobBBox> {
     fn get_objects(&self) -> &HashMap<Uuid, BlobBBox> {
         &self.objects
     }
+    fn set_dt(&mut self, dt: f32) {
+        IoUTracker::set_dt(self, dt)
+    }
+    fn set_max_lost_seconds(&mut self, seconds: f32) {
+        IoUTracker::set_max_lost_seconds(self, seconds)
+    }
+    fn get_max_lost_seconds(&self) -> Option<f32> {
+        IoUTracker::get_max_lost_seconds(self)
+    }
+    fn get_max_no_match(&self) -> usize {
+        IoUTracker::get_max_no_match(self)
+    }
 }
 
 impl TrackerEngineBBox for ByteTracker<BlobBBox> {
@@ -77,6 +131,18 @@ impl TrackerEngineBBox for ByteTracker<BlobBBox> {
     }
     fn get_objects(&self) -> &HashMap<Uuid, BlobBBox> {
         &self.objects
+    }
+    fn set_dt(&mut self, dt: f32) {
+        ByteTracker::set_dt(self, dt)
+    }
+    fn set_max_lost_seconds(&mut self, seconds: f32) {
+        ByteTracker::set_max_lost_seconds(self, seconds)
+    }
+    fn get_max_lost_seconds(&self) -> Option<f32> {
+        ByteTracker::get_max_lost_seconds(self)
+    }
+    fn get_max_no_match(&self) -> usize {
+        ByteTracker::get_max_disappeared(self)
     }
 }
 
@@ -120,6 +186,7 @@ impl<T: TrackerEngineSimple> TrackerSimple<T> {
         &mut self,
         detections: &mut Detections,
         current_second: f32,
+        dt: f32,
     ) -> Result<(), TrackerError> {
         let blobs = match &mut detections.blobs {
             DetectionBlobs::Simple(b) => b,
@@ -130,6 +197,9 @@ impl<T: TrackerEngineSimple> TrackerSimple<T> {
             }
         };
 
+        // Existing tracks must move and age over the real interval even when this
+        // frame has no detections to carry it
+        self.engine.set_dt(dt);
         self.engine.match_objects(blobs, &detections.confidences)?;
 
         // Update extra information for each object
@@ -186,6 +256,7 @@ impl<T: TrackerEngineBBox> TrackerBBox<T> {
         &mut self,
         detections: &mut Detections,
         current_second: f32,
+        dt: f32,
     ) -> Result<(), TrackerError> {
         let blobs = match &mut detections.blobs {
             DetectionBlobs::BBox(b) => b,
@@ -196,6 +267,9 @@ impl<T: TrackerEngineBBox> TrackerBBox<T> {
             }
         };
 
+        // Existing tracks must move and age over the real interval even when this
+        // frame has no detections to carry it
+        self.engine.set_dt(dt);
         self.engine.match_objects(blobs, &detections.confidences)?;
 
         // Update extra information for each object
@@ -234,17 +308,33 @@ impl<T: TrackerEngineSimple + fmt::Display> fmt::Display for TrackerSimple<T> {
     }
 }
 
-/// Create tracker based on tracker type and Kalman filter type
+/// How long a track survives without detections unless configured otherwise.
+/// For a road camera occlusions are short, and a Kalman prediction 2 s ahead of
+/// a vehicle at highway speed is 50+ m off anyway
+pub const DEFAULT_MAX_LOST_SECONDS: f32 = 2.0;
+
+/// Create tracker based on tracker type and Kalman filter type.
+///
+/// Tracks expire by unmatched time (`max_lost_seconds`, default
+/// `DEFAULT_MAX_LOST_SECONDS`) unless only a frame count (`max_no_match`) was
+/// given: a frame count changes meaning whenever the effective frame rate does
+/// (frame skipping, a throttled detector, a stalled stream), an occlusion does not
 pub fn new_tracker_from_type(
     tracker_type: &str,
     kalman_filter: KalmanFilterType,
     max_no_match: Option<usize>,
+    max_lost_seconds: Option<f32>,
     iou_threshold: Option<f32>,
 ) -> Box<dyn TrackerTrait> {
+    let max_lost_seconds = match (max_lost_seconds, max_no_match) {
+        (Some(seconds), _) => Some(seconds),
+        (None, Some(_)) => None,
+        (None, None) => Some(DEFAULT_MAX_LOST_SECONDS),
+    };
     let max_no_match = max_no_match.unwrap_or(60);
     let iou_threshold = iou_threshold.unwrap_or(0.3);
 
-    match (tracker_type, kalman_filter) {
+    let mut tracker: Box<dyn TrackerTrait> = match (tracker_type, kalman_filter) {
         ("iou_naive", KalmanFilterType::BBox) => Box::new(
             TrackerBBox::<IoUTracker<BlobBBox>>::new_iou(max_no_match, iou_threshold),
         ),
@@ -291,16 +381,27 @@ pub fn new_tracker_from_type(
                 iou_threshold,
             ))
         }
+    };
+    if let Some(seconds) = max_lost_seconds {
+        tracker.set_max_lost_seconds(seconds);
     }
+    tracker
 }
 
 /// Common trait for all tracker types (both SimpleBlob and BlobBBox based)
 pub trait TrackerTrait {
+    /// Matches detections to tracks. `dt` is the real interval in seconds since
+    /// the previous processed frame; `current_second` is the frame timestamp
     fn match_objects(
         &mut self,
         detections: &mut Detections,
         current_second: f32,
+        dt: f32,
     ) -> Result<(), TrackerError>;
+    /// Expire tracks by unmatched time instead of by frame count
+    fn set_max_lost_seconds(&mut self, seconds: f32);
+    /// Time-based expiry limit, `None` while tracks expire by frame count
+    fn get_max_lost_seconds(&self) -> Option<f32>;
     fn get_objects_extra(&self) -> &HashMap<Uuid, ObjectExtra>;
     fn get_object_extra_mut(&mut self, object_id: &Uuid) -> Option<&mut ObjectExtra>;
     /// Returns tracked objects as TrackedBlob enum (works for both centroid and bbox tracking)
@@ -321,8 +422,17 @@ impl<T: TrackerEngineSimple> TrackerTrait for TrackerSimple<T> {
         &mut self,
         detections: &mut Detections,
         current_second: f32,
+        dt: f32,
     ) -> Result<(), TrackerError> {
-        self.match_objects(detections, current_second)
+        self.match_objects(detections, current_second, dt)
+    }
+
+    fn set_max_lost_seconds(&mut self, seconds: f32) {
+        self.engine.set_max_lost_seconds(seconds)
+    }
+
+    fn get_max_lost_seconds(&self) -> Option<f32> {
+        self.engine.get_max_lost_seconds()
     }
 
     fn get_objects_extra(&self) -> &HashMap<Uuid, ObjectExtra> {
@@ -374,8 +484,12 @@ impl<T: TrackerEngineSimple> TrackerTrait for TrackerSimple<T> {
             .last()
             .unwrap_or("unknown"); // Get last path segment
         format!(
-            "Centroid tracker (4D Kalman: x, y, vx, vy) with {} engine",
-            engine_name
+            "Centroid tracker (4D Kalman: x, y, vx, vy) with {} engine, tracks expire after {}",
+            engine_name,
+            expiry_description(
+                self.engine.get_max_lost_seconds(),
+                self.engine.get_max_no_match()
+            )
         )
     }
 }
@@ -385,8 +499,17 @@ impl<T: TrackerEngineBBox> TrackerTrait for TrackerBBox<T> {
         &mut self,
         detections: &mut Detections,
         current_second: f32,
+        dt: f32,
     ) -> Result<(), TrackerError> {
-        self.match_objects(detections, current_second)
+        self.match_objects(detections, current_second, dt)
+    }
+
+    fn set_max_lost_seconds(&mut self, seconds: f32) {
+        self.engine.set_max_lost_seconds(seconds)
+    }
+
+    fn get_max_lost_seconds(&self) -> Option<f32> {
+        self.engine.get_max_lost_seconds()
     }
 
     fn get_objects_extra(&self) -> &HashMap<Uuid, ObjectExtra> {
@@ -438,9 +561,21 @@ impl<T: TrackerEngineBBox> TrackerTrait for TrackerBBox<T> {
             .last()
             .unwrap_or("unknown"); // Get last path segment
         format!(
-            "BBox tracker (8D Kalman: x, y, w, h, vx, vy, vw, vh) with {} engine",
-            engine_name
+            "BBox tracker (8D Kalman: x, y, w, h, vx, vy, vw, vh) with {} engine, tracks expire after {}",
+            engine_name,
+            expiry_description(
+                self.engine.get_max_lost_seconds(),
+                self.engine.get_max_no_match()
+            )
         )
+    }
+}
+
+/// "2 s unmatched" or "60 frames unmatched", whichever rule is in effect
+fn expiry_description(max_lost_seconds: Option<f32>, max_no_match: usize) -> String {
+    match max_lost_seconds {
+        Some(seconds) => format!("{} s unmatched", seconds),
+        None => format!("{} frames unmatched", max_no_match),
     }
 }
 

@@ -256,16 +256,21 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
         # Kalman filter type: "centroid" or "bbox"
         # Default is "centroid"
         kalman_filter = "centroid"
-        # Maximum number of frames to keep tracking an object without new detections. Default is 60.
-        # Increase this value (e.g., 90-120) for better OD matrix results when objects need to traverse between distant zones.
-        max_no_match = 60
+        # How long (seconds) to keep a track alive without new detections. Default is 2.0.
+        # Counted in real time, so it means the same on a file, a live stream, with frame skipping
+        # and with a throttled detector. Increase (e.g. 3-4) for better OD matrix results when
+        # objects need to traverse between distant zones.
+        max_lost_seconds = 2.0
+        # Legacy frame-count limit, only used when `max_lost_seconds` is not set.
+        # max_no_match = 60
         # IoU threshold for matching detections to existing tracks. Default is 0.3.
         # Lower values (0.2-0.25) make matching stricter, higher values (0.4-0.5) make it more permissive.
         iou_threshold = 0.3
     ```
 
     **Configurable parameters:**
-    - `max_no_match` (default: 60): Maximum consecutive frames without detection before dropping a track. Increase for better OD matrix tracking across distant zones.
+    - `max_lost_seconds` (default: 2.0): How long a track survives without detections, in seconds of real time. Increase for better OD matrix tracking across distant zones.
+    - `max_no_match`: The same limit as a frame count; only used when `max_lost_seconds` is not set. A frame count changes meaning with the effective frame rate (frame skipping, a slow detector, a stalled stream), so prefer seconds.
     - `iou_threshold` (default: 0.3): IoU threshold for matching detections to tracks. Lower = stricter matching.
 
     **Fixed parameters for ByteTrack:**

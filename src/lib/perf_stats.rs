@@ -11,6 +11,8 @@ pub struct PerfStats {
     inference_total: Duration,
     postprocess_total: Duration,
     tracking_total: Duration,
+    /// Frames the capture thread replaced before the detector took them (live sources only)
+    dropped_total: u64,
 }
 
 impl PerfStats {
@@ -21,6 +23,7 @@ impl PerfStats {
             inference_total: Duration::ZERO,
             postprocess_total: Duration::ZERO,
             tracking_total: Duration::ZERO,
+            dropped_total: 0,
         }
     }
 
@@ -30,10 +33,18 @@ impl PerfStats {
     /// * `inference` - Time for neural_net.forward() (preprocessing + inference + NMS)
     /// * `postprocess` - Time for process_yolo_detections()
     /// * `tracking` - Time for tracker.match_objects()
-    pub fn record(&mut self, inference: Duration, postprocess: Duration, tracking: Duration) {
+    /// * `dropped` - Frames dropped by the capture thread since the previous processed frame
+    pub fn record(
+        &mut self,
+        inference: Duration,
+        postprocess: Duration,
+        tracking: Duration,
+        dropped: u64,
+    ) {
         self.inference_total += inference;
         self.postprocess_total += postprocess;
         self.tracking_total += tracking;
+        self.dropped_total += dropped;
         self.frame_count += 1;
 
         if self.frame_count >= self.interval {
@@ -57,13 +68,14 @@ impl PerfStats {
         };
 
         println!(
-            "[PerfStats] Last {} frames avg: inference={:.2}ms, postprocess={:.2}ms, tracking={:.2}ms | total={:.2}ms (~{:.1} FPS)",
+            "[PerfStats] Last {} frames avg: inference={:.2}ms, postprocess={:.2}ms, tracking={:.2}ms | total={:.2}ms (~{:.1} FPS) | dropped={}",
             self.frame_count,
             avg_inference,
             avg_postprocess,
             avg_tracking,
             avg_total,
-            estimated_fps
+            estimated_fps,
+            self.dropped_total
         );
 
         // Reset
@@ -71,6 +83,7 @@ impl PerfStats {
         self.inference_total = Duration::ZERO;
         self.postprocess_total = Duration::ZERO;
         self.tracking_total = Duration::ZERO;
+        self.dropped_total = 0;
     }
 }
 
