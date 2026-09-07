@@ -783,10 +783,24 @@ fn main() {
             "./data/conf.toml"
         }
     };
-    let app_settings = AppSettings::new(path_to_config).unwrap_or_else(|e| {
+    let mut app_settings = AppSettings::new(path_to_config).unwrap_or_else(|e| {
         eprintln!("Failed to load settings '{}': {}", path_to_config, e);
         std::process::exit(1);
     });
+    match app_settings.ensure_equipment_id(path_to_config) {
+        Ok(Some(id)) => println!(
+            "Equipment id was blank, generated '{}' and saved it to '{}'",
+            id, path_to_config
+        ),
+        Ok(None) => {}
+        Err(e) => {
+            eprintln!(
+                "Can't save generated equipment id to '{}': {}",
+                path_to_config, e
+            );
+            std::process::exit(1);
+        }
+    }
     println!("Settings are:\n\t{}", app_settings);
 
     let kalman_filter: KalmanFilterType = app_settings

@@ -46,6 +46,9 @@ pub struct AppSettings {
     pub debug: Option<DebugSettings>,
     pub detection: DetectionSettings,
     pub tracking: TrackingSettings,
+    /// Identifies the installation point in everything the app publishes.
+    /// Optional in the file: a blank one is generated and written back on start
+    #[serde(default)]
     pub equipment_info: EquipmentInfo,
     pub road_lanes: Option<Vec<RoadLanesSettings>>,
     pub worker: WorkerSettings,
@@ -107,7 +110,7 @@ pub struct TrackingSettings {
     pub iou_threshold: Option<f32>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct EquipmentInfo {
     pub id: String,
 }
@@ -565,6 +568,22 @@ impl AppSettings {
     /// that did not change are not touched at all. `[[road_lanes]]` is replaced
     /// as a whole: it is produced by the UI and carries no hand-written
     /// comments. A missing file is created from a plain dump
+    /// Gives the equipment a generated id when the file has none (or a blank
+    /// one) and writes it back at once, so it survives restarts. The id names
+    /// the installation point, not the board, so it is never derived from
+    /// hardware. Returns the generated id, `None` when the file already had one
+    pub fn ensure_equipment_id(
+        &mut self,
+        filename: &str,
+    ) -> Result<Option<String>, Box<dyn Error>> {
+        if !self.equipment_info.id.trim().is_empty() {
+            return Ok(None);
+        }
+        let id = uuid::Uuid::new_v4().to_string();
+        self.equipment_info.id = id.clone();
+        self.save(filename)?;
+        Ok(Some(id))
+    }
     pub fn save(&self, filename: &str) -> Result<(), Box<dyn Error>> {
         let dump = toml::to_string(self)?;
         let output = match fs::read_to_string(filename) {
@@ -812,5 +831,56 @@ mod tests {
         let reloaded = AppSettings::new(&fresh).unwrap();
         let _ = fs::remove_file(&fresh);
         assert_eq!(reloaded.equipment_info.id, "old-id");
+    }
+
+    #[test]
+    fn blank_equipment_id_is_generated_once_and_persisted() {
+        let file = TempConfig::new("blank_id");
+        let text = fs::read_to_string(&file.0)
+            .unwrap()
+            .replace("id = \"old-id\"", "id = \"  \"");
+        fs::write(&file.0, text).unwrap();
+        let mut settings = AppSettings::new(&file.0).unwrap();
+        let generated = settings
+            .ensure_equipment_id(&file.0)
+            .unwrap()
+            .expect("blank id must be generated");
+        assert!(uuid::Uuid::parse_str(&generated).is_ok());
+        assert_eq!(settings.equipment_info.id, generated);
+
+        let text = fs::read_to_string(&file.0).unwrap();
+        assert!(text.contains(&format!("id = \"{generated}\"")), "{text}");
+        assert!(
+            text.contains("# Generated once, identifies the installation point"),
+            "{text}"
+        );
+        // Second start keeps it
+        let mut reloaded = AppSettings::new(&file.0).unwrap();
+        assert_eq!(reloaded.ensure_equipment_id(&file.0).unwrap(), None);
+        assert_eq!(reloaded.equipment_info.id, generated);
+    }
+
+    #[test]
+    fn missing_equipment_section_is_created() {
+        let file = TempConfig::new("no_equipment");
+        let text = fs::read_to_string(&file.0).unwrap();
+        let start = text.find("[equipment_info]").unwrap();
+        let end = text.find("[[road_lanes]]").unwrap();
+        // Drop the whole section, including its comment
+        let text = format!(
+            "{}{}",
+            &text[..text[..start].rfind("\n\n").unwrap() + 2],
+            &text[end..]
+        );
+        fs::write(&file.0, &text).unwrap();
+        let mut settings = AppSettings::new(&file.0).unwrap();
+        assert!(settings.equipment_info.id.is_empty());
+        let generated = settings.ensure_equipment_id(&file.0).unwrap().unwrap();
+        let saved = fs::read_to_string(&file.0).unwrap();
+        assert!(saved.contains("[equipment_info]"), "{saved}");
+        assert_eq!(
+            AppSettings::new(&file.0).unwrap().equipment_info.id,
+            generated
+        );
     }
 }

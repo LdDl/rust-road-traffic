@@ -48,8 +48,9 @@
     max_lost_seconds = 2.0
 
 [equipment_info]
-    # Just field for future identification of application. Could be any string.
-    # I've used https://www.uuidgenerator.net/version4 for ID generation
+    # Identifies this installation point in everything the app publishes (stats, Redis).
+    # Could be any string. I've used https://www.uuidgenerator.net/version4 for ID generation.
+    # Any non-empty string. Leave it empty and a UUID is generated on first start and written back here.
     id = "1e23985f-1fa3-45d0-a365-2d8525a23ddd"
 
 # Define parameters for zones of intereset
