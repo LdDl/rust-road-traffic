@@ -108,11 +108,11 @@ impl VerboseSettings {
                 .parent()
                 .filter(|parent| !parent.as_os_str().is_empty())
                 .unwrap_or_else(|| std::path::Path::new("."));
-            Some(if folder.is_absolute() {
+            Some(tidy_path(if folder.is_absolute() {
                 folder.to_path_buf()
             } else {
                 base.join(folder)
-            })
+            }))
         };
         let max_file_size_mb = match self.max_file_size_mb {
             Some(mb) if mb > 0 => mb,
@@ -519,6 +519,82 @@ fn same_float(a: f64, b: f64) -> bool {
     (a - b).abs() <= f32::EPSILON as f64 * a.abs().max(1.0)
 }
 
+/// Drops the "." steps a joined path picks up, so that the path the app reports
+/// reads the way a person would write it. `..` is left alone: removing it would
+/// change which directory is meant whenever a symlink is involved
+fn tidy_path(path: std::path::PathBuf) -> std::path::PathBuf {
+    let tidy: std::path::PathBuf = path
+        .components()
+        .filter(|component| !matches!(component, std::path::Component::CurDir))
+        .collect();
+    if tidy.as_os_str().is_empty() {
+        std::path::PathBuf::from(".")
+    } else {
+        tidy
+    }
+}
+
+/// The settings key that holds the zones
+pub const ZONES_KEY: &str = "road_lanes";
+
+/// The only setting that takes effect without starting over. Everything else is
+/// read once, when the piece that uses it is built, so changing it is pending
+/// until a restart
+pub const LIVE_SETTINGS: [&str; 1] = ["verbose.level"];
+
+/// Whether a change of this setting is waiting for a restart to take effect
+pub fn needs_restart(path: &str) -> bool {
+    !LIVE_SETTINGS.contains(&path)
+}
+
+/// Dotted paths of the values that differ between the two, so that an answer
+/// can name what really changed rather than what was sent
+pub fn changed_paths(
+    before: &serde_json::Value,
+    after: &serde_json::Value,
+    prefix: &str,
+    out: &mut Vec<String>,
+) {
+    use serde_json::Value;
+    // A section absent from the file is null, and setting one key of it should
+    // read as that one key changing, not as the whole section appearing
+    let empty = Value::Object(serde_json::Map::new());
+    let before = match (before, after) {
+        (Value::Null, Value::Object(_)) => &empty,
+        (before, _) => before,
+    };
+    let after = match (before, after) {
+        (Value::Object(_), Value::Null) => &empty,
+        (_, after) => after,
+    };
+    match (before, after) {
+        (Value::Object(before), Value::Object(after)) => {
+            let mut keys: Vec<&String> = before.keys().chain(after.keys()).collect();
+            keys.sort();
+            keys.dedup();
+            for key in keys {
+                let path = if prefix.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{prefix}.{key}")
+                };
+                let null = Value::Null;
+                changed_paths(
+                    before.get(key).unwrap_or(&null),
+                    after.get(key).unwrap_or(&null),
+                    &path,
+                    out,
+                );
+            }
+        }
+        (before, after) => {
+            if before != after {
+                out.push(prefix.to_string());
+            }
+        }
+    }
+}
+
 impl From<&RoadLanesSettings> for Zone {
     fn from(setting: &RoadLanesSettings) -> Self {
         let geom = setting
@@ -591,33 +667,84 @@ impl AppSettings {
             app_settings.tracking.kalman_filter = Some("centroid".to_string());
         }
 
-        // Validate tracker type
-        if let Some(ref typ) = app_settings.tracking.typ {
-            match typ.as_str() {
-                "iou_naive" | "bytetrack" => {}
-                _ => {
-                    return Err(SettingsError::Validation(format!(
-                        "Invalid tracker type: '{}'. Supported: 'iou_naive', 'bytetrack'.",
-                        typ
-                    )));
-                }
-            }
-        }
-
-        // Validate kalman filter type
-        if let Some(ref kf) = app_settings.tracking.kalman_filter {
-            match kf.as_str() {
-                "centroid" | "bbox" => {}
-                _ => {
-                    return Err(SettingsError::Validation(format!(
-                        "Invalid kalman filter type: '{}'. Supported: 'centroid', 'bbox'.",
-                        kf
-                    )));
-                }
-            }
-        }
-
+        app_settings.validate()?;
         Ok(app_settings)
+    }
+    /// Dotted paths of the settings that differ from `other`, e.g.
+    /// `input.video_src`. Zones are left out: they are edited through their own
+    /// endpoints and take effect at once, so they never mean anything is pending
+    pub fn differences_from(&self, other: &AppSettings) -> Vec<String> {
+        let (before, after) = match (serde_json::to_value(other), serde_json::to_value(self)) {
+            (Ok(before), Ok(after)) => (before, after),
+            _ => return Vec::new(),
+        };
+        let mut changed = Vec::new();
+        changed_paths(&before, &after, "", &mut changed);
+        changed.retain(|path| path != ZONES_KEY && !path.starts_with(&format!("{ZONES_KEY}.")));
+        changed
+    }
+
+    /// Checks the values that would otherwise only fail much later, when the
+    /// piece that reads them is built. Runs both on load and on every change
+    /// made through the API, so a file and a request are held to the same rules
+    pub fn validate(&self) -> Result<(), SettingsError> {
+        fn one_of(name: &str, value: &str, allowed: &[&str]) -> Result<(), SettingsError> {
+            if allowed.contains(&value) {
+                return Ok(());
+            }
+            Err(SettingsError::Validation(format!(
+                "Invalid {name}: '{value}'. Supported: {}",
+                allowed.join(", ")
+            )))
+        }
+        fn in_range<T: PartialOrd + std::fmt::Display>(
+            name: &str,
+            value: T,
+            low: T,
+            high: T,
+        ) -> Result<(), SettingsError> {
+            if value >= low && value <= high {
+                return Ok(());
+            }
+            Err(SettingsError::Validation(format!(
+                "{name} must be between {low} and {high}, got {value}"
+            )))
+        }
+
+        if let Some(typ) = self.tracking.typ.as_deref() {
+            one_of("tracker type", typ, &["iou_naive", "bytetrack"])?;
+        }
+        if let Some(kalman_filter) = self.tracking.kalman_filter.as_deref() {
+            one_of("kalman filter type", kalman_filter, &["centroid", "bbox"])?;
+        }
+        if let Some(level) = self.verbose.as_ref().and_then(|v| v.level.as_deref()) {
+            one_of("verbose level", level, &logging::LEVELS)?;
+        }
+        if self.input.video_src.trim().is_empty() {
+            return Err(SettingsError::Validation(
+                "video_src must not be empty".to_string(),
+            ));
+        }
+        if let Some(nth) = self.input.process_every_nth_frame {
+            in_range("process_every_nth_frame", nth, 1, 1000)?;
+        }
+        in_range("conf_threshold", self.detection.conf_threshold, 0.0, 1.0)?;
+        in_range("nms_threshold", self.detection.nms_threshold, 0.0, 1.0)?;
+        if let Some(iou) = self.tracking.iou_threshold {
+            in_range("iou_threshold", iou, 0.0, 1.0)?;
+        }
+        if let Some(seconds) = self.tracking.max_lost_seconds {
+            in_range("max_lost_seconds", seconds, 0.001, 3600.0)?;
+        }
+        in_range(
+            "reset_data_milliseconds",
+            self.worker.reset_data_milliseconds,
+            1,
+            24 * 60 * 60 * 1000,
+        )?;
+        in_range("back_end_port", self.rest_api.back_end_port, 1, 65535)?;
+        in_range("redis port", self.redis_publisher.port, 1, 65535)?;
+        Ok(())
     }
     /// Writes the settings back to `filename` keeping the file's comments, key
     /// order and formatting: every value this struct carries is set in the
@@ -947,7 +1074,7 @@ mod tests {
         assert_eq!(cfg.level, "info");
         assert_eq!(
             cfg.logs_folder.as_deref(),
-            Some(std::path::Path::new("/etc/rrt/./logs"))
+            Some(std::path::Path::new("/etc/rrt/logs"))
         );
         assert_eq!(cfg.max_file_size_bytes, 10 * 1024 * 1024);
         assert_eq!(cfg.max_files, 2);
@@ -979,5 +1106,64 @@ mod tests {
         );
         assert_eq!(cfg.max_file_size_bytes, 5 * 1024 * 1024);
         assert_eq!(cfg.max_files, 2);
+
+        // A folder next to a config given without a directory stays relative
+        let cfg = VerboseSettings {
+            logs_folder: Some("./logs".to_string()),
+            ..Default::default()
+        }
+        .to_log_config("conf.toml");
+        assert_eq!(
+            cfg.logs_folder.as_deref(),
+            Some(std::path::Path::new("logs"))
+        );
+    }
+
+    #[test]
+    fn changed_paths_are_dotted_and_only_for_real_changes() {
+        let before: serde_json::Value =
+            serde_json::from_str(r#"{"input":{"video_src":"a.mp4","nth":2},"worker":{"ms":30}}"#)
+                .unwrap();
+        let after: serde_json::Value =
+            serde_json::from_str(r#"{"input":{"video_src":"b.mp4","nth":2},"worker":{"ms":60}}"#)
+                .unwrap();
+        let mut changed = Vec::new();
+        changed_paths(&before, &after, "", &mut changed);
+        assert_eq!(changed, ["input.video_src", "worker.ms"]);
+
+        let mut unchanged = Vec::new();
+        changed_paths(&before, &before, "", &mut unchanged);
+        assert!(unchanged.is_empty());
+    }
+
+    #[test]
+    fn a_section_appearing_reports_only_its_keys() {
+        // The section was not in the file at all
+        let before: serde_json::Value = serde_json::from_str(r#"{"verbose":null}"#).unwrap();
+        let after: serde_json::Value =
+            serde_json::from_str(r#"{"verbose":{"level":"debug"}}"#).unwrap();
+        let mut changed = Vec::new();
+        changed_paths(&before, &after, "", &mut changed);
+        assert_eq!(changed, ["verbose.level"]);
+    }
+
+    #[test]
+    fn differences_ignore_the_zones() {
+        let file = TempConfig::new("differences");
+        let running = AppSettings::new(&file.0).unwrap();
+        let mut saved = running.clone();
+        assert!(saved.differences_from(&running).is_empty());
+
+        saved.input.video_src = "rtsp://cam/stream".to_string();
+        saved.road_lanes = Some(Vec::new());
+        assert_eq!(saved.differences_from(&running), ["input.video_src"]);
+    }
+
+    #[test]
+    fn only_the_log_level_applies_live() {
+        assert!(!needs_restart("verbose.level"));
+        assert!(needs_restart("verbose.logs_folder"));
+        assert!(needs_restart("input.video_src"));
+        assert!(needs_restart("tracking.type"));
     }
 }

@@ -6,15 +6,23 @@ use tracing::info;
 
 use crate::lib::data_storage::ThreadedDataStorage;
 use crate::lib::mjpeg_streaming::Broadcaster;
+use crate::lib::status::RuntimeStatus;
 use crate::rest_api::services;
 use crate::settings::AppSettings;
 use std::sync::{Mutex, mpsc::Receiver};
 
 pub struct APIStorage {
     pub data_storage: ThreadedDataStorage,
-    pub app_settings: AppSettings,
+    /// Changed through `PUT /api/config`, so it is shared rather than owned:
+    /// the copy the detection loop started with stays as it was until a restart
+    pub app_settings: RwLock<AppSettings>,
+    /// The settings this run was started with. Comparing them with the ones
+    /// above is what tells a change apart from a change that has taken effect
+    pub running_settings: AppSettings,
     pub settings_filename: String,
     pub mjpeg_broadcaster: web::Data<Mutex<Broadcaster>>,
+    /// What the detection loop has learned about the run so far
+    pub status: Arc<RuntimeStatus>,
 }
 
 #[actix_web::main]
@@ -26,14 +34,17 @@ pub async fn start_rest_api(
     rx_frames_data: Receiver<Vec<u8>>,
     app_settings: AppSettings,
     settings_filename: &str,
+    status: Arc<RuntimeStatus>,
 ) -> std::io::Result<()> {
     let bind_address = format!("{}:{}", server_host, server_port);
     info!(scope = logging::SCOPE_REST_API, host = %server_host, port = server_port, "REST API starting");
     let storage = APIStorage {
         data_storage: data_storage,
-        app_settings: app_settings,
+        running_settings: app_settings.clone(),
+        app_settings: RwLock::new(app_settings),
         settings_filename: settings_filename.to_string(),
         mjpeg_broadcaster: web::Data::new(Mutex::new(Broadcaster::default())),
+        status: status,
     };
 
     /* Enable MJPEG streaming server if needed */

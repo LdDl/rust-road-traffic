@@ -17,6 +17,7 @@ use lib::detection::process_yolo_detections;
 use lib::draw;
 use lib::logging;
 use lib::perf_stats::{PerfStats, Timer};
+use lib::status::{DetectionStatus, InputStatus, RuntimeStatus};
 use lib::tracker::{SpatialInfo, TrackerTrait, new_tracker_from_type};
 use lib::zones::Zone;
 
@@ -220,11 +221,16 @@ fn run(
     };
 
     /* Start REST API if needed */
+    // The API answers before the video source is even open, so what the app
+    // knows about itself is shared rather than passed: the detection loop
+    // fills it in as it learns
+    let status = std::sync::Arc::new(RuntimeStatus::new());
     let overwrite_file = path_to_config.to_string();
     let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(0);
     if settings.rest_api.enable && !report_mode {
         let settings_clone = settings.clone();
         let ds_api = data_storage.clone();
+        let status_api = status.clone();
         thread::spawn(move || {
             match rest_api::start_rest_api(
                 settings_clone.rest_api.host.clone(),
@@ -234,6 +240,7 @@ fn run(
                 rx_mjpeg,
                 settings_clone,
                 &overwrite_file,
+                status_api,
             ) {
                 Ok(_) => {}
                 Err(err) => {
@@ -249,6 +256,15 @@ fn run(
     let height = video_source.height();
     let fps = video_source.fps();
     let total_frames = video_source.total_frames();
+    status.set_tracking(tracker.description());
+    status.set_detection(DetectionStatus {
+        backend: detector.backend().to_string(),
+        cuda_available: lib::utils::is_cuda_available(),
+        model: settings.detection.network_weights.clone(),
+        net_width: settings.detection.net_width,
+        net_height: settings.detection.net_height,
+        ..Default::default()
+    });
 
     // Initialize zone grid with frame dimensions
     {
@@ -275,6 +291,16 @@ fn run(
     // frame and drops the ones a slow detector did not get to (see frame_channel)
     let (tx_capture, rx_capture) = frame_channel(live_source);
     let skip_every_n_frame: u64 = settings.input.process_every_nth_frame.unwrap_or(2).max(1) as u64;
+    status.set_input(InputStatus {
+        video_src: settings.input.video_src.clone(),
+        kind: if live_source { "live" } else { "file" }.to_string(),
+        width: width as u32,
+        height: height as u32,
+        fps,
+        total_frames,
+        process_every_nth_frame: skip_every_n_frame,
+        ..Default::default()
+    });
     thread::spawn(move || {
         let mut frame_idx: u64 = 0;
         let mut processed_frames: u32 = 0;
@@ -490,8 +516,15 @@ fn run(
         let tracking_time = t_tracking.elapsed();
 
         /* Record performance stats */
+        let dropped_total = rx_capture.dropped();
+        status.frame_processed(
+            received.timestamp,
+            dropped_total,
+            inference_time.as_secs_f32() * 1000.0,
+            postprocess_time.as_secs_f32() * 1000.0,
+            tracking_time.as_secs_f32() * 1000.0,
+        );
         if let Some(ref mut stats) = perf_stats {
-            let dropped_total = rx_capture.dropped();
             stats.record(
                 inference_time,
                 postprocess_time,
@@ -845,10 +878,13 @@ fn main() {
             std::process::exit(1);
         }
     }
+    // The source is masked here and nowhere else: a log file outlives the
+    // process and gets copied into tickets and mailboxes, while the API returns
+    // the configuration as it is, since it has no authentication to hide behind
     info!(
         scope = logging::SCOPE_STARTUP,
         equipment_id = %app_settings.equipment_info.id,
-        video_src = %app_settings.input.video_src,
+        video_src = %lib::utils::mask_credentials(&app_settings.input.video_src),
         network_weights = %app_settings.detection.network_weights,
         tracker = app_settings.tracking.typ.as_deref().unwrap_or("iou_naive"),
         kalman_filter = app_settings.tracking.kalman_filter.as_deref().unwrap_or("centroid"),

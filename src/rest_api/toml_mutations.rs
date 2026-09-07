@@ -42,7 +42,11 @@ pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Erro
         .zones
         .read()
         .expect("Spatial data is poisoned [RWLock]");
-    let mut setting_cloned = data.app_settings.get_copy_no_roads();
+    let mut setting_cloned = data
+        .app_settings
+        .read()
+        .expect("Settings are poisoned [RwLock]")
+        .get_copy_no_roads();
     let road_lanes = setting_cloned.road_lanes.get_or_insert_with(Vec::new);
     for (_, zone_guarded) in zones.iter() {
         let zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");

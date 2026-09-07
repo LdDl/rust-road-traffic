@@ -65,6 +65,22 @@ pub enum Detector {
 }
 
 impl Detector {
+    /// Which inference backend this build ended up with
+    pub fn backend(&self) -> &'static str {
+        match self {
+            #[cfg(feature = "opencv-backend")]
+            Detector::OpenCV(_) => "opencv",
+            #[cfg(all(feature = "ort-backend", not(feature = "opencv-backend")))]
+            Detector::Ort(_) => "ort",
+            #[cfg(all(
+                feature = "tensorrt-backend",
+                not(feature = "opencv-backend"),
+                not(feature = "ort-backend")
+            ))]
+            Detector::TensorRT(_) => "tensorrt",
+        }
+    }
+
     #[cfg(feature = "opencv-backend")]
     pub fn new(
         weights: &str,

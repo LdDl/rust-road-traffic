@@ -1,14 +1,19 @@
 //! NDJSON logging to stdout and to a rotated file, configured by `[verbose]`
+use std::fmt::Debug;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{OnceLock, RwLock};
 
-use tracing::{info, warn};
+use serde::Serialize;
+use tracing::field::{Field, Visit};
+use tracing::{Event, Level, Subscriber, info, warn};
+use tracing_subscriber::layer::Context;
 use tracing_subscriber::{
     EnvFilter, Layer, Registry, fmt,
     layer::{Layered, SubscriberExt},
     reload,
     util::SubscriberInitExt,
 };
+use utoipa::ToSchema;
 
 pub const LOG_FILE_NAME: &str = "rust-road-traffic.log";
 
@@ -34,7 +39,74 @@ type FileLayer = Box<dyn Layer<Registry> + Send + Sync + 'static>;
 type WithFile = Layered<reload::Layer<Option<FileLayer>, Registry>, Registry>;
 
 static FILE_HANDLE: OnceLock<reload::Handle<Option<FileLayer>, Registry>> = OnceLock::new();
+static LAST_PROBLEM: RwLock<Option<LoggedProblem>> = RwLock::new(None);
 static FILTER_HANDLE: OnceLock<reload::Handle<EnvFilter, WithFile>> = OnceLock::new();
+
+/// The most recent warning or error, as it went into the log
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct LoggedProblem {
+    /// "WARN" or "ERROR"
+    pub level: String,
+    /// Which part of the app it came from, see the `SCOPE_*` constants
+    pub scope: Option<String>,
+    pub message: String,
+    /// When it happened, RFC 3339
+    pub at: String,
+}
+
+/// The last warning or error since the app started, if there was one.
+///
+/// Remembered by a log layer rather than by the code that reports the problem,
+/// so every message ever logged counts, including the ones added later
+pub fn last_problem() -> Option<LoggedProblem> {
+    LAST_PROBLEM.read().ok().and_then(|last| last.clone())
+}
+
+/// Keeps the last warning or error around for `GET /api/status`
+struct LastProblemLayer;
+
+impl<S: Subscriber> Layer<S> for LastProblemLayer {
+    fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
+        let level = *event.metadata().level();
+        if level != Level::WARN && level != Level::ERROR {
+            return;
+        }
+        let mut fields = ProblemFields::default();
+        event.record(&mut fields);
+        if let Ok(mut last) = LAST_PROBLEM.write() {
+            *last = Some(LoggedProblem {
+                level: level.to_string(),
+                scope: fields.scope,
+                message: fields.message,
+                at: chrono::Utc::now().to_rfc3339(),
+            });
+        }
+    }
+}
+
+/// Picks the message and the scope out of a log event, ignoring the rest
+#[derive(Default)]
+struct ProblemFields {
+    message: String,
+    scope: Option<String>,
+}
+
+impl Visit for ProblemFields {
+    fn record_str(&mut self, field: &Field, value: &str) {
+        match field.name() {
+            "message" => self.message = value.to_string(),
+            "scope" => self.scope = Some(value.to_string()),
+            _ => {}
+        }
+    }
+    fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
+        match field.name() {
+            "message" => self.message = format!("{value:?}"),
+            "scope" => self.scope = Some(format!("{value:?}")),
+            _ => {}
+        }
+    }
+}
 
 /// Resolved logging configuration, see `VerboseSettings`
 pub struct LogConfig {
@@ -64,6 +136,7 @@ pub fn init_logger() {
         .with(file_layer)
         .with(filter_layer)
         .with(json_layer().with_writer(std::io::stdout))
+        .with(LastProblemLayer)
         .init();
     let _ = FILE_HANDLE.set(file_handle);
     let _ = FILTER_HANDLE.set(filter_handle);
@@ -88,9 +161,12 @@ pub fn apply_config(config: &LogConfig) -> Option<tracing_appender::non_blocking
     let mut guard = None;
     let mut log_file = None;
     let mut folder_problem = None;
+    let mut dropped_files = Vec::new();
     if let Some(folder) = &config.logs_folder {
         match open_log_file(folder, config) {
             Ok(appender) => {
+                dropped_files =
+                    drop_extra_rotated_files(&folder.join(LOG_FILE_NAME), config.max_files);
                 let (writer, worker_guard) = tracing_appender::non_blocking(appender);
                 let layer: FileLayer = Box::new(json_layer().with_writer(writer));
                 match FILE_HANDLE.get().map(|handle| handle.reload(Some(layer))) {
@@ -122,6 +198,14 @@ pub fn apply_config(config: &LogConfig) -> Option<tracing_appender::non_blocking
             "Can't write log files there, logging to stdout only"
         );
     }
+    if !dropped_files.is_empty() {
+        info!(
+            scope = SCOPE_STARTUP,
+            files = ?dropped_files,
+            max_files = config.max_files,
+            "Removed rotated log files that the configured retention no longer keeps"
+        );
+    }
     info!(
         scope = SCOPE_STARTUP,
         level = config.level,
@@ -146,6 +230,39 @@ where
         .with_file(false)
         .with_line_number(false)
         .with_ansi(false)
+}
+
+/// Removes the rotated files that fall outside the retention now configured.
+///
+/// Rotation only ever touches the numbers it still keeps, so lowering
+/// `max_files` would otherwise leave `<name>.3`, `<name>.4` and the rest on
+/// disk for good: invisible to the log API and never cleaned up again
+fn drop_extra_rotated_files(base: &Path, max_files: usize) -> Vec<String> {
+    let (Some(folder), Some(name)) = (base.parent(), base.file_name().and_then(|n| n.to_str()))
+    else {
+        return Vec::new();
+    };
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return Vec::new();
+    };
+    let mut removed = Vec::new();
+    for entry in entries.flatten() {
+        let file_name = entry.file_name();
+        let Some(file_name) = file_name.to_str() else {
+            continue;
+        };
+        let Some(index) = file_name
+            .strip_prefix(&format!("{name}."))
+            .and_then(|index| index.parse::<usize>().ok())
+        else {
+            continue;
+        };
+        if index > max_files && std::fs::remove_file(entry.path()).is_ok() {
+            removed.push(file_name.to_string());
+        }
+    }
+    removed.sort();
+    removed
 }
 
 /// Makes sure the folder exists, is a directory and the log file in it can be
@@ -236,6 +353,36 @@ mod tests {
 
         let nowhere = PathBuf::from("/dev/null/logs");
         assert!(open_log_file(&nowhere, &config(None)).is_err());
+    }
+
+    #[test]
+    fn lowering_the_retention_removes_the_extra_files() {
+        let folder = std::env::temp_dir().join(format!("rrt_retention_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        std::fs::create_dir_all(&folder).unwrap();
+        let base = folder.join(LOG_FILE_NAME);
+        std::fs::write(&base, b"current").unwrap();
+        for index in 1..=5 {
+            std::fs::write(format!("{}.{index}", base.display()), b"old").unwrap();
+        }
+        // Anything else in the folder must be left alone
+        std::fs::write(folder.join("notes.txt"), b"keep me").unwrap();
+
+        let removed = drop_extra_rotated_files(&base, 2);
+        assert_eq!(
+            removed,
+            [
+                format!("{LOG_FILE_NAME}.3"),
+                format!("{LOG_FILE_NAME}.4"),
+                format!("{LOG_FILE_NAME}.5")
+            ]
+        );
+        assert!(base.is_file());
+        assert!(PathBuf::from(format!("{}.1", base.display())).is_file());
+        assert!(PathBuf::from(format!("{}.2", base.display())).is_file());
+        assert!(!PathBuf::from(format!("{}.3", base.display())).exists());
+        assert!(folder.join("notes.txt").is_file());
+        let _ = std::fs::remove_dir_all(&folder);
     }
 
     #[test]

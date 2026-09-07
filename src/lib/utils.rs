@@ -43,6 +43,35 @@ pub fn is_cuda_available() -> bool {
     Path::new("/dev/nvidia0").exists()
 }
 
+/// Hides the password in a source URL, so that an RTSP camera's credentials do
+/// not end up in the log or in an API answer: `rtsp://user:secret@host/stream`
+/// becomes `rtsp://user:***@host/stream`. Anything without credentials, a
+/// GStreamer pipeline included, is returned unchanged
+pub fn mask_credentials(source: &str) -> String {
+    let Some(scheme_end) = source.find("://") else {
+        return source.to_string();
+    };
+    let authority_start = scheme_end + 3;
+    let authority_end = source[authority_start..]
+        .find('/')
+        .map(|offset| authority_start + offset)
+        .unwrap_or(source.len());
+    let authority = &source[authority_start..authority_end];
+    let Some(at) = authority.rfind('@') else {
+        return source.to_string();
+    };
+    let credentials = &authority[..at];
+    let Some(colon) = credentials.find(':') else {
+        return source.to_string();
+    };
+    format!(
+        "{}{}:***{}",
+        &source[..authority_start],
+        &credentials[..colon],
+        &source[authority_start + at..]
+    )
+}
+
 /// Detected model file format.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModelFileFormat {
@@ -268,5 +297,24 @@ mod tests {
             "TensorRT engine"
         );
         assert_eq!(format!("{}", ModelFileFormat::Unknown), "Unknown");
+    }
+
+    #[test]
+    fn credentials_are_masked() {
+        assert_eq!(
+            mask_credentials("rtsp://cam:s3cret@10.0.0.5:554/stream"),
+            "rtsp://cam:***@10.0.0.5:554/stream"
+        );
+        // An @ in the path is not a credentials separator
+        assert_eq!(
+            mask_credentials("rtsp://10.0.0.5/live@main"),
+            "rtsp://10.0.0.5/live@main"
+        );
+        assert_eq!(mask_credentials("rtsp://host/stream"), "rtsp://host/stream");
+        assert_eq!(mask_credentials("./data/video.mp4"), "./data/video.mp4");
+        assert_eq!(
+            mask_credentials("v4l2src device=/dev/video0 ! appsink"),
+            "v4l2src device=/dev/video0 ! appsink"
+        );
     }
 }
