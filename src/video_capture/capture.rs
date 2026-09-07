@@ -149,7 +149,6 @@ impl Drop for VideoSource {
     }
 }
 
-
 fn detect_source_kind(src: &str) -> SourceKind {
     if src.starts_with("rtsp://") || src.starts_with("rtsps://") {
         SourceKind::Rtsp
