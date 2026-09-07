@@ -112,7 +112,7 @@ impl DataStorage {
         };
         Ok(())
     }
-    pub fn print_od_matrix(&self) -> Result<(), DataStorageError> {
+    pub fn log_od_matrix(&self) -> Result<(), DataStorageError> {
         let zones = Arc::clone(&self.zones);
         match zones.read() {
             Ok(zones_guard) => {
