@@ -57,6 +57,7 @@ pub struct VideoSource {
     height: u32,
     fps: f32,
     total_frames: f32,
+    live: bool,
     frame_size: usize,
     buf: Vec<u8>,
 }
@@ -79,6 +80,7 @@ impl VideoSource {
 
         let child = spawn_subprocess(video_src, &kind, &info)?;
         let frame_size = info.width as usize * info.height as usize * 3;
+        let live = is_live_source(video_src, &kind);
 
         Ok(Self {
             child,
@@ -86,6 +88,7 @@ impl VideoSource {
             height: info.height,
             fps: info.fps,
             total_frames: info.total_frames,
+            live,
             frame_size,
             buf: vec![0u8; frame_size],
         })
@@ -129,6 +132,14 @@ impl VideoSource {
     pub fn total_frames(&self) -> f32 {
         self.total_frames
     }
+
+    /// Whether frames arrive at the source's own pace (camera, RTSP, live GStreamer
+    /// pipeline) rather than as fast as the consumer drains the pipe (file).
+    /// Decides which clock frame timestamps come from: wall clock for live sources,
+    /// frame index / fps for files.
+    pub fn is_live(&self) -> bool {
+        self.live
+    }
 }
 
 impl Drop for VideoSource {
@@ -138,9 +149,6 @@ impl Drop for VideoSource {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
 
 fn detect_source_kind(src: &str) -> SourceKind {
     if src.starts_with("rtsp://") || src.starts_with("rtsps://") {
@@ -153,6 +161,21 @@ fn detect_source_kind(src: &str) -> SourceKind {
         SourceKind::Camera(src.to_string())
     } else {
         SourceKind::File
+    }
+}
+
+/// Live sources deliver frames in real time, so dropped frames show up as a longer
+/// wall-clock gap. A file is decoded by ffmpeg without `-re`, i.e. as fast as the
+/// detector reads it, so wall clock says nothing about media time there.
+/// A GStreamer pipeline is treated as live unless it reads from a file source.
+fn is_live_source(src: &str, kind: &SourceKind) -> bool {
+    match kind {
+        SourceKind::File => false,
+        SourceKind::GStreamer => {
+            let first_token = src.split_whitespace().next().unwrap_or("");
+            first_token != "filesrc" && first_token != "multifilesrc"
+        }
+        SourceKind::Rtsp | SourceKind::Camera(_) => true,
     }
 }
 
@@ -665,6 +688,28 @@ mod tests {
         assert!(matches!(
             detect_source_kind("./video!test.mp4"),
             SourceKind::File
+        ));
+    }
+
+    #[test]
+    fn live_source_detection() {
+        assert!(!is_live_source("/tmp/video.mp4", &SourceKind::File));
+        assert!(is_live_source("rtsp://cam/stream", &SourceKind::Rtsp));
+        assert!(is_live_source(
+            "/dev/video0",
+            &SourceKind::Camera("/dev/video0".into())
+        ));
+        assert!(is_live_source(
+            "v4l2src device=/dev/video0 ! videoconvert ! appsink",
+            &SourceKind::GStreamer
+        ));
+        assert!(!is_live_source(
+            "filesrc location=/tmp/v.mp4 ! decodebin ! videoconvert ! appsink",
+            &SourceKind::GStreamer
+        ));
+        assert!(!is_live_source(
+            "multifilesrc location=/tmp/%04d.png ! decodebin ! appsink",
+            &SourceKind::GStreamer
         ));
     }
 
