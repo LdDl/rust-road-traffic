@@ -75,6 +75,8 @@ pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Erro
         });
         drop(zone);
     }
+    // Zones live in a HashMap; a fixed order keeps the saved file stable
+    road_lanes.sort_by_key(|lane| (lane.lane_direction, lane.lane_number));
     drop(zones);
     drop(ds_guard);
     if setting_cloned.detection.target_classes.is_none() {
