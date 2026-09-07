@@ -4,7 +4,10 @@ use std::sync::OnceLock;
 
 use tracing::{info, warn};
 use tracing_subscriber::{
-    EnvFilter, Registry, fmt, layer::SubscriberExt, reload, util::SubscriberInitExt,
+    EnvFilter, Layer, Registry, fmt,
+    layer::{Layered, SubscriberExt},
+    reload,
+    util::SubscriberInitExt,
 };
 
 pub const LOG_FILE_NAME: &str = "rust-road-traffic.log";
@@ -25,7 +28,13 @@ pub const DEFAULT_LEVEL: &str = "info";
 pub const DEFAULT_MAX_FILE_SIZE_MB: u64 = 10;
 pub const DEFAULT_MAX_FILES: usize = 2;
 
-static RELOAD_HANDLE: OnceLock<reload::Handle<EnvFilter, Registry>> = OnceLock::new();
+/// The file writer is added after the config is read, so it sits behind a
+/// reload layer directly on the registry; the level filter is reloadable too
+type FileLayer = Box<dyn Layer<Registry> + Send + Sync + 'static>;
+type WithFile = Layered<reload::Layer<Option<FileLayer>, Registry>, Registry>;
+
+static FILE_HANDLE: OnceLock<reload::Handle<Option<FileLayer>, Registry>> = OnceLock::new();
+static FILTER_HANDLE: OnceLock<reload::Handle<EnvFilter, WithFile>> = OnceLock::new();
 
 /// Resolved logging configuration, see `VerboseSettings`
 pub struct LogConfig {
@@ -39,61 +48,62 @@ pub struct LogConfig {
     pub max_files: usize,
 }
 
-/// Sets up logging: NDJSON lines to stdout and, when a usable folder is
-/// configured, to `<logs_folder>/rust-road-traffic.log` rotated daily or at
-/// `max_file_size_bytes` with `max_files` old files kept. The level applies to
-/// this crate, dependencies log at warn and above; `RUST_LOG` overrides both.
-/// A folder that cannot be used never stops the app: it logs to stdout only
-/// and says so. The returned guard must live until the end of main: dropping
-/// it flushes the file writer
-#[must_use]
-pub fn init_logger(config: &LogConfig) -> Option<tracing_appender::non_blocking::WorkerGuard> {
+/// Starts logging before anything else happens: NDJSON lines to stdout at
+/// the default level (`RUST_LOG` overrides). The config is not known yet, so
+/// nothing is written to a file until `apply_config` adds it. Safe to call
+/// more than once, only the first call does anything
+pub fn init_logger() {
+    if FILTER_HANDLE.get().is_some() {
+        return;
+    }
+    let (file_layer, file_handle) = reload::Layer::new(None::<FileLayer>);
     let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(filter_directive(config.level)));
-    let (filter_layer, handle) = reload::Layer::new(filter);
-    let _ = RELOAD_HANDLE.set(handle);
+        .unwrap_or_else(|_| EnvFilter::new(filter_directive(DEFAULT_LEVEL)));
+    let (filter_layer, filter_handle) = reload::Layer::new(filter);
+    Registry::default()
+        .with(file_layer)
+        .with(filter_layer)
+        .with(json_layer().with_writer(std::io::stdout))
+        .init();
+    let _ = FILE_HANDLE.set(file_handle);
+    let _ = FILTER_HANDLE.set(filter_handle);
+}
+
+/// Applies the `[verbose]` section to the running logger: the level (unless
+/// `RUST_LOG` is set) and, when a usable folder is configured, the file
+/// `<logs_folder>/rust-road-traffic.log` rotated daily or at
+/// `max_file_size_bytes` with `max_files` old files kept. A folder that cannot
+/// be used never stops the app: logging stays on stdout and says so. The
+/// returned guard must live until the end of main: dropping it flushes the
+/// file writer
+#[must_use]
+pub fn apply_config(config: &LogConfig) -> Option<tracing_appender::non_blocking::WorkerGuard> {
+    init_logger();
+    if std::env::var_os("RUST_LOG").is_none() {
+        if let Some(handle) = FILTER_HANDLE.get() {
+            let _ = handle.reload(EnvFilter::new(filter_directive(config.level)));
+        }
+    }
 
     let mut guard = None;
-    let mut file_layer = None;
-    let mut folder_problem = None;
     let mut log_file = None;
+    let mut folder_problem = None;
     if let Some(folder) = &config.logs_folder {
         match open_log_file(folder, config) {
             Ok(appender) => {
                 let (writer, worker_guard) = tracing_appender::non_blocking(appender);
-                guard = Some(worker_guard);
-                log_file = Some(folder.join(LOG_FILE_NAME));
-                file_layer = Some(
-                    fmt::layer()
-                        .json()
-                        .with_target(false)
-                        .with_thread_ids(false)
-                        .with_thread_names(false)
-                        .with_file(false)
-                        .with_line_number(false)
-                        .with_ansi(false)
-                        .with_writer(writer),
-                );
+                let layer: FileLayer = Box::new(json_layer().with_writer(writer));
+                match FILE_HANDLE.get().map(|handle| handle.reload(Some(layer))) {
+                    Some(Ok(())) => {
+                        guard = Some(worker_guard);
+                        log_file = Some(folder.join(LOG_FILE_NAME));
+                    }
+                    _ => folder_problem = Some("can't attach the file writer".to_string()),
+                }
             }
             Err(problem) => folder_problem = Some(problem),
         }
     }
-
-    tracing_subscriber::registry()
-        .with(filter_layer)
-        .with(
-            fmt::layer()
-                .json()
-                .with_target(false)
-                .with_thread_ids(false)
-                .with_thread_names(false)
-                .with_file(false)
-                .with_line_number(false)
-                .with_ansi(false)
-                .with_writer(std::io::stdout),
-        )
-        .with(file_layer)
-        .init();
 
     if let Some(level) = &config.unknown_level {
         warn!(
@@ -104,14 +114,13 @@ pub fn init_logger(config: &LogConfig) -> Option<tracing_appender::non_blocking:
             LEVELS
         );
     }
-    match (&config.logs_folder, folder_problem) {
-        (Some(folder), Some(problem)) => warn!(
+    if let (Some(folder), Some(problem)) = (&config.logs_folder, folder_problem) {
+        warn!(
             scope = SCOPE_STARTUP,
             folder = %folder.display(),
             problem,
             "Can't write log files there, logging to stdout only"
-        ),
-        _ => {}
+        );
     }
     info!(
         scope = SCOPE_STARTUP,
@@ -122,6 +131,21 @@ pub fn init_logger(config: &LogConfig) -> Option<tracing_appender::non_blocking:
         "Logging initialized"
     );
     guard
+}
+
+/// One JSON object per line: timestamp, level and the fields, nothing else
+fn json_layer<S>() -> fmt::Layer<S, fmt::format::JsonFields, fmt::format::Format<fmt::format::Json>>
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    fmt::layer()
+        .json()
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_thread_names(false)
+        .with_file(false)
+        .with_line_number(false)
+        .with_ansi(false)
 }
 
 /// Makes sure the folder exists, is a directory and the log file in it can be
@@ -156,7 +180,7 @@ pub fn set_log_level(level: &str) -> bool {
     let Some(level) = normalize_level(level) else {
         return false;
     };
-    match RELOAD_HANDLE.get() {
+    match FILTER_HANDLE.get() {
         Some(handle) => handle
             .reload(EnvFilter::new(filter_directive(level)))
             .is_ok(),

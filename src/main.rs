@@ -795,33 +795,44 @@ fn run(
 }
 
 fn main() {
+    // Logging comes up first, on stdout only: the config that says where the
+    // file goes is not read yet. `apply_config` below adds the file and the level
+    logging::init_logger();
+    info!(
+        scope = logging::SCOPE_STARTUP,
+        version = env!("CARGO_PKG_VERSION"),
+        "Starting"
+    );
     let args: Vec<String> = env::args().collect();
     let path_to_config = match args.len() {
         2 => &args[1],
         _ => {
-            println!(
-                "Args should contain exactly one string: path to TOML configuration file. Setting to default './data/conf.toml'"
+            warn!(
+                scope = logging::SCOPE_STARTUP,
+                "Expected exactly one argument, the path to the TOML config; using './data/conf.toml'"
             );
             "./data/conf.toml"
         }
     };
     let mut app_settings = AppSettings::new(path_to_config).unwrap_or_else(|e| {
-        eprintln!("Failed to load settings '{}': {}", path_to_config, e);
+        error!(
+            scope = logging::SCOPE_STARTUP,
+            config = path_to_config,
+            error = %e,
+            "Failed to load settings"
+        );
         std::process::exit(1);
     });
-    // Logging is configured by the settings, so everything before this point
-    // can only go to stderr
     let log_config = app_settings
         .verbose
         .clone()
         .unwrap_or_default()
         .to_log_config(path_to_config);
-    let _log_guard = logging::init_logger(&log_config);
+    let _log_guard = logging::apply_config(&log_config);
     info!(
         scope = logging::SCOPE_STARTUP,
         config = path_to_config,
-        version = env!("CARGO_PKG_VERSION"),
-        "Starting"
+        "Settings file read"
     );
     match app_settings.ensure_equipment_id(path_to_config) {
         Ok(Some(id)) => info!(
