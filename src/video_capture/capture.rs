@@ -1,5 +1,7 @@
+use crate::lib::logging;
 use std::io::Read;
 use std::process::{Child, Command, Stdio};
+use tracing::info;
 
 use crate::lib::cv::RawFrame;
 
@@ -73,9 +75,13 @@ impl VideoSource {
         let kind = detect_source_kind(video_src);
         let info = probe_video(video_src, &kind)?;
 
-        println!(
-            "Video probe: {{Width: {}px | Height: {}px | FPS: {} | Total frames: {}}}",
-            info.width, info.height, info.fps, info.total_frames
+        info!(
+            scope = logging::SCOPE_CAPTURE,
+            width = info.width,
+            height = info.height,
+            fps = info.fps,
+            total_frames = info.total_frames,
+            "Video probe"
         );
 
         let child = spawn_subprocess(video_src, &kind, &info)?;

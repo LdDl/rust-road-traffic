@@ -1,6 +1,8 @@
+use crate::lib::logging;
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, http, web};
 use std::sync::{Arc, RwLock};
+use tracing::info;
 
 use crate::lib::data_storage::ThreadedDataStorage;
 use crate::lib::mjpeg_streaming::Broadcaster;
@@ -26,10 +28,7 @@ pub async fn start_rest_api(
     settings_filename: &str,
 ) -> std::io::Result<()> {
     let bind_address = format!("{}:{}", server_host, server_port);
-    println!(
-        "REST API is starting on host:port {}:{}",
-        server_host, server_port
-    );
+    info!(scope = logging::SCOPE_REST_API, host = %server_host, port = server_port, "REST API starting");
     let storage = APIStorage {
         data_storage: data_storage,
         app_settings: app_settings,

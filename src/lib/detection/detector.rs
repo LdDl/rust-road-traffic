@@ -1,5 +1,7 @@
+use crate::lib::logging;
 use std::fmt;
 use std::io;
+use tracing::info;
 
 use crate::lib::cv::RawFrame;
 use crate::lib::cv::Rect as RectCV;
@@ -70,14 +72,7 @@ impl Detector {
         network_cfg: Option<&str>,
     ) -> Result<Self, DetectorError> {
         let cuda_available = utils::is_cuda_available();
-        println!(
-            "CUDA is {}",
-            if cuda_available {
-                "'available'"
-            } else {
-                "'not available'"
-            }
-        );
+        info!(scope = logging::SCOPE_STARTUP, cuda_available, "CUDA probe");
 
         let dnn_backend = if cuda_available {
             DnnBackend::Cuda
@@ -89,13 +84,16 @@ impl Detector {
         } else {
             DnnTarget::Cpu
         };
-        println!(
-            "Using OpenCV DNN backend with {:?}/{:?}",
-            dnn_backend, dnn_target
+        info!(
+            scope = logging::SCOPE_STARTUP,
+            backend = "opencv",
+            dnn_backend = ?dnn_backend,
+            dnn_target = ?dnn_target,
+            "Inference backend"
         );
 
         let format = utils::detect_model_format(weights)?;
-        println!("Detected model format: {}", format);
+        info!(scope = logging::SCOPE_STARTUP, format = %format, weights, "Detected model format");
 
         let model: Box<dyn ModelTrait> = match format {
             utils::ModelFileFormat::DarknetWeights => {
@@ -106,9 +104,12 @@ impl Detector {
                     ))
                 })?;
                 let cfg_net_size = utils::parse_darknet_cfg_net_size(cfg)?;
-                println!(
-                    "OpenCV Darknet network input size: {}x{} (from {})",
-                    cfg_net_size.0, cfg_net_size.1, cfg
+                info!(
+                    scope = logging::SCOPE_STARTUP,
+                    width = cfg_net_size.0,
+                    height = cfg_net_size.1,
+                    source = cfg,
+                    "Network input size"
                 );
                 Model::darknet(cfg, weights, cfg_net_size, dnn_backend, dnn_target)
                     .map(|m| Box::new(m) as Box<dyn ModelTrait>)
@@ -126,9 +127,12 @@ impl Detector {
                         weights
                     ))
                 })?;
-                println!(
-                    "OpenCV ONNX network input size: {}x{}",
-                    net_size.0, net_size.1
+                info!(
+                    scope = logging::SCOPE_STARTUP,
+                    width = net_size.0,
+                    height = net_size.1,
+                    source = "config",
+                    "Network input size"
                 );
                 Model::opencv(weights, net_size, dnn_backend, dnn_target)
                     .map(|m| Box::new(m) as Box<dyn ModelTrait>)
@@ -156,28 +160,32 @@ impl Detector {
         _network_cfg: Option<&str>,
     ) -> Result<Self, DetectorError> {
         let cuda_available = utils::is_cuda_available();
-        println!(
-            "CUDA is {}",
-            if cuda_available {
-                "'available'"
-            } else {
-                "'not available'"
-            }
-        );
+        info!(scope = logging::SCOPE_STARTUP, cuda_available, "CUDA probe");
 
         #[cfg(feature = "ort-cuda")]
         let backend_name = if cuda_available { "CUDA" } else { "CPU" };
         #[cfg(not(feature = "ort-cuda"))]
         let backend_name = "CPU";
 
-        println!("Using ORT backend ({})", backend_name);
+        info!(
+            scope = logging::SCOPE_STARTUP,
+            backend = "ort",
+            device = backend_name,
+            "Inference backend"
+        );
         let net_size = net_size.ok_or_else(|| {
             DetectorError::Config(format!(
                 "ONNX model '{}' requires net_width/net_height in config.",
                 weights
             ))
         })?;
-        println!("ORT ONNX network input size: {}x{}", net_size.0, net_size.1);
+        info!(
+            scope = logging::SCOPE_STARTUP,
+            width = net_size.0,
+            height = net_size.1,
+            source = "config",
+            "Network input size"
+        );
 
         let net_size_u32 = (net_size.0 as u32, net_size.1 as u32);
 
@@ -191,9 +199,9 @@ impl Detector {
         #[cfg(not(feature = "ort-cuda"))]
         let model_result = Model::ort(weights, net_size_u32);
 
-        model_result
-            .map(Detector::Ort)
-            .map_err(|e| DetectorError::ModelLoad(format!("Can't load ORT model '{}': {:?}", weights, e)))
+        model_result.map(Detector::Ort).map_err(|e| {
+            DetectorError::ModelLoad(format!("Can't load ORT model '{}': {:?}", weights, e))
+        })
     }
 
     #[cfg(all(
@@ -206,14 +214,21 @@ impl Detector {
         _net_size: Option<(i32, i32)>,
         _network_cfg: Option<&str>,
     ) -> Result<Self, DetectorError> {
-        println!("Using TensorRT backend");
+        info!(
+            scope = logging::SCOPE_STARTUP,
+            backend = "tensorrt",
+            "Inference backend"
+        );
         let model = Model::tensorrt(weights).map_err(|e| {
             DetectorError::ModelLoad(format!("Can't load TensorRT model '{}': {:?}", weights, e))
         })?;
         let (w, h) = model.input_size();
-        println!(
-            "TensorRT network input size: {}x{} (from engine)",
-            w, h
+        info!(
+            scope = logging::SCOPE_STARTUP,
+            width = w,
+            height = h,
+            source = "engine",
+            "Network input size"
         );
         Ok(Detector::TensorRT(model))
     }

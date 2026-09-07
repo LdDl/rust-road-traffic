@@ -13,8 +13,18 @@
     # detector that falls behind additionally skips whatever frames it did not get to.
     process_every_nth_frame = 2
 
-[debug]
-    enable = true
+# Logging is always on; this section only sets how much and where. Every key is optional.
+[verbose]
+    # "info" (default): regular, warning and error lines. "debug" adds per-frame detail.
+    # The RUST_LOG environment variable overrides it.
+    level = "info"
+    # Folder for the log file (NDJSON, one JSON object per line). Logs always go to stdout as well.
+    # A relative path is taken from this config file's folder. Empty string = stdout only.
+    logs_folder = "./logs"
+    # The file rotates daily or when it reaches this size (MB); this many old files are kept.
+    # Defaults are 10 MB and 2 files: the target is usually an SBC with an SD card.
+    max_file_size_mb = 10
+    max_files = 2
 
 [detection]
     # Weights file: .weights (Darknet), .onnx (ONNX), .engine/.trt (TensorRT)

@@ -43,7 +43,7 @@ impl From<toml::de::Error> for SettingsError {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppSettings {
     pub input: InputSettings,
-    pub debug: Option<DebugSettings>,
+    pub verbose: Option<VerboseSettings>,
     pub detection: DetectionSettings,
     pub tracking: TrackingSettings,
     /// Identifies the installation point in everything the app publishes.
@@ -67,9 +67,69 @@ pub struct InputSettings {
     pub process_every_nth_frame: Option<u32>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct DebugSettings {
-    pub enable: bool,
+/// `[verbose]`: logging is always on, this only sets how much and where.
+/// The whole section and every key are optional
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct VerboseSettings {
+    /// "info" (default) or "debug". `RUST_LOG` overrides it
+    pub level: Option<String>,
+    /// Folder for the NDJSON log file, default "./logs" next to the config file.
+    /// Empty string = stdout only. Logs always go to stdout as well
+    pub logs_folder: Option<String>,
+    /// The file rotates daily or at this size, default 10
+    pub max_file_size_mb: Option<u64>,
+    /// Old files kept after rotation, default 2
+    pub max_files: Option<usize>,
+}
+
+impl VerboseSettings {
+    /// Turns the section into what the logger needs, with nonsense replaced by
+    /// defaults: a relative folder is taken from the config file's folder, not
+    /// from the working directory, so a service started from anywhere logs to
+    /// the same place
+    pub fn to_log_config(&self, config_path: &str) -> logging::LogConfig {
+        let (level, unknown_level) = match self.level.as_deref() {
+            None => (logging::DEFAULT_LEVEL, None),
+            Some(level) => match logging::normalize_level(level) {
+                Some(level) => (level, None),
+                None => (logging::DEFAULT_LEVEL, Some(level.to_string())),
+            },
+        };
+        let folder = self
+            .logs_folder
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("./logs");
+        let logs_folder = if folder.is_empty() {
+            None
+        } else {
+            let folder = std::path::Path::new(folder);
+            let base = std::path::Path::new(config_path)
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or_else(|| std::path::Path::new("."));
+            Some(if folder.is_absolute() {
+                folder.to_path_buf()
+            } else {
+                base.join(folder)
+            })
+        };
+        let max_file_size_mb = match self.max_file_size_mb {
+            Some(mb) if mb > 0 => mb,
+            _ => logging::DEFAULT_MAX_FILE_SIZE_MB,
+        };
+        let max_files = match self.max_files {
+            Some(n) if n > 0 => n,
+            _ => logging::DEFAULT_MAX_FILES,
+        };
+        logging::LogConfig {
+            level,
+            unknown_level,
+            logs_folder,
+            max_file_size_bytes: max_file_size_mb * 1024 * 1024,
+            max_files,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -221,6 +281,7 @@ pub struct ReportSettings {
 }
 
 use crate::lib::cv::Scalar;
+use crate::lib::logging;
 use crate::lib::spatial::Point2f;
 use crate::lib::spatial::epsg::lonlat_to_meters;
 use crate::lib::zones::Zone;
@@ -556,10 +617,6 @@ impl AppSettings {
             }
         }
 
-        if app_settings.debug.is_none() {
-            app_settings.debug = Some(DebugSettings { enable: false });
-        }
-
         Ok(app_settings)
     }
     /// Writes the settings back to `filename` keeping the file's comments, key
@@ -614,7 +671,7 @@ impl AppSettings {
     pub fn get_copy_no_roads(&self) -> AppSettings {
         AppSettings {
             input: self.input.clone(),
-            debug: self.debug.clone(),
+            verbose: self.verbose.clone(),
             detection: self.detection.clone(),
             tracking: self.tracking.clone(),
             equipment_info: self.equipment_info.clone(),
@@ -882,5 +939,45 @@ mod tests {
             AppSettings::new(&file.0).unwrap().equipment_info.id,
             generated
         );
+    }
+
+    #[test]
+    fn verbose_defaults_and_nonsense() {
+        let cfg = VerboseSettings::default().to_log_config("/etc/rrt/conf.toml");
+        assert_eq!(cfg.level, "info");
+        assert_eq!(
+            cfg.logs_folder.as_deref(),
+            Some(std::path::Path::new("/etc/rrt/./logs"))
+        );
+        assert_eq!(cfg.max_file_size_bytes, 10 * 1024 * 1024);
+        assert_eq!(cfg.max_files, 2);
+
+        let cfg = VerboseSettings {
+            level: Some("Verbose".to_string()),
+            logs_folder: Some("   ".to_string()),
+            max_file_size_mb: Some(0),
+            max_files: Some(0),
+        }
+        .to_log_config("conf.toml");
+        assert_eq!(cfg.level, "info");
+        assert_eq!(cfg.unknown_level.as_deref(), Some("Verbose"));
+        assert_eq!(cfg.logs_folder, None);
+        assert_eq!(cfg.max_file_size_bytes, 10 * 1024 * 1024);
+        assert_eq!(cfg.max_files, 2);
+
+        let cfg = VerboseSettings {
+            level: Some("DEBUG".to_string()),
+            logs_folder: Some("/var/log/rrt".to_string()),
+            max_file_size_mb: Some(5),
+            max_files: Some(2),
+        }
+        .to_log_config("conf.toml");
+        assert_eq!(cfg.level, "debug");
+        assert_eq!(
+            cfg.logs_folder.as_deref(),
+            Some(std::path::Path::new("/var/log/rrt"))
+        );
+        assert_eq!(cfg.max_file_size_bytes, 5 * 1024 * 1024);
+        assert_eq!(cfg.max_files, 2);
     }
 }

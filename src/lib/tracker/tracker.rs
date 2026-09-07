@@ -1,7 +1,9 @@
+use crate::lib::logging;
 use mot_rs::mot::{BlobBBox, ByteTracker, IoUTracker, SimpleBlob, TrackerError};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::fmt;
+use tracing::warn;
 use uuid::Uuid;
 
 use super::object_extra::ObjectExtra;
@@ -362,9 +364,9 @@ pub fn new_tracker_from_type(
             ))
         }
         (_, KalmanFilterType::BBox) => {
-            println!(
-                "Unknown tracker type '{}', falling back to iou_naive",
-                tracker_type
+            warn!(
+                scope = logging::SCOPE_STARTUP,
+                tracker_type, "Unknown tracker type, falling back to iou_naive"
             );
             Box::new(TrackerBBox::<IoUTracker<BlobBBox>>::new_iou(
                 max_no_match,
@@ -372,9 +374,9 @@ pub fn new_tracker_from_type(
             ))
         }
         _ => {
-            println!(
-                "Unknown tracker type '{}', falling back to iou_naive",
-                tracker_type
+            warn!(
+                scope = logging::SCOPE_STARTUP,
+                tracker_type, "Unknown tracker type, falling back to iou_naive"
             );
             Box::new(TrackerSimple::<IoUTracker<SimpleBlob>>::new_iou(
                 max_no_match,

@@ -1,5 +1,7 @@
 use crate::lib::cv::{RawFrame, Rect as RectCV};
+use crate::lib::logging;
 use crate::lib::mjpeg_streaming::JpegEncoder;
+use tracing::info;
 
 use std::collections::HashMap;
 use std::fs;
@@ -51,13 +53,13 @@ impl DatasetCollector {
             .map(|(i, name)| (name.clone(), i))
             .collect();
 
-        println!(
-            "[DatasetCollector] Initialized with output_dir: {}",
-            settings.output_dir
-        );
-        println!(
-            "[DatasetCollector] min_track_age: {}, max_captures_per_track: {}, capture_interval: {}",
-            settings.min_track_age, settings.max_captures_per_track, settings.capture_interval
+        info!(
+            scope = logging::SCOPE_DATASET,
+            output_dir = %settings.output_dir,
+            min_track_age = settings.min_track_age,
+            max_captures_per_track = settings.max_captures_per_track,
+            capture_interval = settings.capture_interval,
+            "DatasetCollector initialized"
         );
 
         Ok(Self {
@@ -118,11 +120,12 @@ impl DatasetCollector {
 
         // Debug: log every 100 frames
         if self.frame_counter % 100 == 0 {
-            println!(
-                "[DatasetCollector] Frame {}: {} detections, {} tracked objects",
-                self.frame_counter,
-                bboxes.len(),
-                self.track_states.len()
+            info!(
+                scope = logging::SCOPE_DATASET,
+                frame = self.frame_counter,
+                detections = bboxes.len(),
+                tracked = self.track_states.len(),
+                "DatasetCollector frame"
             );
         }
 
@@ -188,12 +191,13 @@ impl DatasetCollector {
 
         // Debug: log skip reasons every 100 frames
         if self.frame_counter % 100 == 0 && !bboxes.is_empty() {
-            println!(
-                "[DatasetCollector] Skipped: {} young, {} edge. Mature: {}, Triggers: {}",
+            info!(
+                scope = logging::SCOPE_DATASET,
                 skipped_young,
                 skipped_edge,
-                mature_objects.len(),
-                trigger_track_ids.len()
+                mature = mature_objects.len(),
+                triggers = trigger_track_ids.len(),
+                "DatasetCollector filter"
             );
         }
 
@@ -247,12 +251,13 @@ impl DatasetCollector {
             let mut file = fs::File::create(&label_path)?;
             file.write_all(annotations.as_bytes())?;
 
-            println!(
-                "[DatasetCollector] SAVED: {} with {} objects (triggered by {}) -> {}",
-                filename_base,
-                mature_objects.len(),
-                trigger_track_ids.len(),
-                image_path
+            info!(
+                scope = logging::SCOPE_DATASET,
+                file = %filename_base,
+                objects = mature_objects.len(),
+                triggers = trigger_track_ids.len(),
+                path = %image_path,
+                "DatasetCollector saved a frame"
             );
         }
 

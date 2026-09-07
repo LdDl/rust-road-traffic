@@ -15,6 +15,7 @@ use lib::detection::Detector;
 use lib::detection::KalmanFilterType;
 use lib::detection::process_yolo_detections;
 use lib::draw;
+use lib::logging;
 use lib::perf_stats::{PerfStats, Timer};
 use lib::tracker::{SpatialInfo, TrackerTrait, new_tracker_from_type};
 use lib::zones::Zone;
@@ -39,6 +40,7 @@ use std::thread;
 use std::time::Duration as STDDuration;
 use std::time::Instant;
 use std::time::SystemTime;
+use tracing::{error, info, warn};
 
 fn get_sys_time_in_secs() -> u64 {
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
@@ -101,16 +103,13 @@ fn run(
     path_to_config: &str,
     tracker: &mut dyn TrackerTrait,
     detector: &mut Detector,
-    verbose: bool,
 ) -> Result<(), AppError> {
-    println!("Verbose is '{}'", verbose);
-    println!("REST API is '{}'", settings.rest_api.enable);
-    println!("Redis publisher is '{}'", settings.redis_publisher.enable);
-
     let report_mode = settings.is_report_mode();
     if report_mode && !std::path::Path::new(&settings.input.video_src).is_file() {
-        println!(
-            "Report mode is not available for RTSP streams or cameras. Only video files are supported."
+        error!(
+            scope = logging::SCOPE_STARTUP,
+            video_src = %settings.input.video_src,
+            "Report mode is not available for RTSP streams or cameras, only video files are supported"
         );
         return Ok(());
     }
@@ -123,13 +122,18 @@ fn run(
         None => (false, 80),
     };
 
-    println!("MJPEG is '{}' (quality: {})", enable_mjpeg, mjpeg_quality);
-    if report_mode {
-        println!("Report mode is enabled");
-    }
+    info!(
+        scope = logging::SCOPE_STARTUP,
+        rest_api = settings.rest_api.enable,
+        redis_publisher = settings.redis_publisher.enable,
+        mjpeg = enable_mjpeg,
+        mjpeg_quality,
+        report_mode,
+        "Run configuration"
+    );
 
     /* Preprocess spatial data */
-    let data_storage = new_datastorage(settings.equipment_info.id.clone(), verbose);
+    let data_storage = new_datastorage(settings.equipment_info.id.clone());
     let target_classes = HashSet::from_iter(
         settings
             .detection
@@ -159,10 +163,7 @@ fn run(
             match DatasetCollector::new(dc_settings.clone(), &net_classes) {
                 Ok(collector) => Some(collector),
                 Err(err) => {
-                    println!(
-                        "[WARNING] Can't initialize DatasetCollector: {}. Feature disabled.",
-                        err
-                    );
+                    warn!(scope = logging::SCOPE_DATASET, error = %err, "Can't initialize DatasetCollector, feature disabled");
                     None
                 }
             }
@@ -172,9 +173,12 @@ fn run(
 
     // let data_storage_threaded = data_storage.clone();
 
-    println!("Press `Ctrl-C` to stop main programm");
+    info!(scope = logging::SCOPE_STARTUP, "Press Ctrl-C to stop");
     ctrlc::set_handler(move || {
-        println!("Ctrl+C has been pressed! Exit in 2 seconds");
+        info!(
+            scope = logging::SCOPE_STARTUP,
+            "Ctrl-C pressed, exiting in 2 seconds"
+        );
         thread::sleep(STDDuration::from_secs(2));
         process::exit(1);
     })
@@ -235,7 +239,7 @@ fn run(
             ) {
                 Ok(_) => {}
                 Err(err) => {
-                    println!("Can't start API due the error: {:?}", err)
+                    error!(scope = logging::SCOPE_REST_API, error = ?err, "Can't start REST API")
                 }
             }
         });
@@ -254,12 +258,16 @@ fn run(
             .read()
             .expect("DataStorage is poisoned [RWLock]");
         match ds_guard.initialize_zone_grid(width, height) {
-            Ok(_) => println!(
-                "Zone grid initialized: {}x{} with 32px cells",
-                (width / 32.0).ceil() as u32,
-                (height / 32.0).ceil() as u32
+            Ok(_) => info!(
+                scope = logging::SCOPE_STARTUP,
+                columns = (width / 32.0).ceil() as u32,
+                rows = (height / 32.0).ceil() as u32,
+                cell_px = 32,
+                "Zone grid initialized"
             ),
-            Err(e) => println!("Warning: Failed to initialize zone grid: {}", e),
+            Err(e) => {
+                warn!(scope = logging::SCOPE_STARTUP, error = %e, "Failed to initialize zone grid")
+            }
         }
     }
 
@@ -279,11 +287,11 @@ fn run(
             let read_frame = match video_source.read_frame() {
                 Ok(Some(frame)) => frame,
                 Ok(None) => {
-                    println!("End of video stream");
+                    info!(scope = logging::SCOPE_CAPTURE, "End of video stream");
                     break;
                 }
                 Err(e) => {
-                    println!("Can't read next frame: {}", e);
+                    error!(scope = logging::SCOPE_CAPTURE, error = %e, "Can't read next frame");
                     break;
                 }
             };
@@ -316,16 +324,19 @@ fn run(
             processed_frames += 1;
             if report_mode && total_frames > 0.0 && processed_frames % 100 == 0 {
                 let progress = (processed_frames as f32 / total_frames) * 100.0;
-                println!(
-                    "[Report] Progress: {}/{} frames ({:.1}%)",
-                    processed_frames, total_frames as u32, progress
+                info!(
+                    scope = logging::SCOPE_REPORT,
+                    processed = processed_frames,
+                    total = total_frames as u32,
+                    percent = format_args!("{:.1}", progress),
+                    "Report progress"
                 );
             }
 
             if timestamp - period_start_ts >= next_reset as f64 {
-                println!(
-                    "Reset timer due analytics. Current local time is: {}",
-                    timestamp
+                info!(
+                    scope = logging::SCOPE_ANALYTICS,
+                    timestamp, "Analytics period reset"
                 );
                 period_start_ts = timestamp;
                 let mut ds_writer = ds_worker.write().expect("Bad DS");
@@ -346,7 +357,7 @@ fn run(
                         drop(ds_writer)
                     }
                     Err(err) => {
-                        println!("Can't update statistics due the error: {}", err);
+                        error!(scope = logging::SCOPE_ANALYTICS, error = %err, "Can't update statistics");
                     }
                 }
                 if redis_enabled {
@@ -385,13 +396,14 @@ fn run(
     let mut prev_tracked_ts: Option<f64> = None;
     // Frames the capture thread dropped, as of the previous processed frame
     let mut dropped_seen: u64 = 0;
-    println!(
-        "Frame timing: {} source, 1 of every {} frames processed, nominal dt {:.4} s, dt clamped to [{:.4}, {:.2}] s",
-        if live_source { "live" } else { "file" },
-        skip_every_n_frame,
+    info!(
+        scope = logging::SCOPE_CAPTURE,
+        source = if live_source { "live" } else { "file" },
+        process_every_nth_frame = skip_every_n_frame,
         nominal_dt,
-        nominal_dt * 0.25,
-        max_dt
+        dt_min = nominal_dt * 0.25,
+        dt_max = max_dt,
+        "Frame timing"
     );
 
     /* Performance stats (optional) */
@@ -424,17 +436,17 @@ fn run(
 
         /* Inference (preprocessing + forward pass + NMS) */
         let t_inference = Timer::start();
-        let (nms_bboxes, nms_classes_ids, nms_confidences) =
-            match detector.detect_frame(&received.frame, conf_threshold, nms_threshold) {
-                Ok((a, b, c)) => (a, b, c),
-                Err(err) => {
-                    println!(
-                        "Can't process input of neural network due the error {:?}",
-                        err
-                    );
-                    continue;
-                }
-            };
+        let (nms_bboxes, nms_classes_ids, nms_confidences) = match detector.detect_frame(
+            &received.frame,
+            conf_threshold,
+            nms_threshold,
+        ) {
+            Ok((a, b, c)) => (a, b, c),
+            Err(err) => {
+                error!(scope = logging::SCOPE_PROCESSING, error = ?err, "Can't run the detector on the frame");
+                continue;
+            }
+        };
         let inference_time = t_inference.elapsed();
 
         /* Postprocessing: create detection blobs */
@@ -472,7 +484,7 @@ fn run(
         match tracker.match_objects(&mut tmp_detections, relative_time, dt as f32) {
             Ok(_) => {}
             Err(err) => {
-                println!("Can't match objects due the error: {:?}", err);
+                error!(scope = logging::SCOPE_PROCESSING, error = ?err, "Can't match objects");
                 continue;
             }
         };
@@ -530,7 +542,7 @@ fn run(
                 &dc_track_ids,
                 &dc_track_ages,
             ) {
-                println!("[DatasetCollector] Error processing frame: {}", err);
+                warn!(scope = logging::SCOPE_DATASET, error = %err, "DatasetCollector can't process the frame");
             }
         }
 
@@ -716,13 +728,13 @@ fn run(
                 Ok(jpeg_buf) => {
                     match tx_mjpeg.send(jpeg_buf) {
                         Ok(_) => {}
-                        Err(_err) => {
-                            println!("Error on send frame to MJPEG thread: {}", _err)
+                        Err(err) => {
+                            warn!(scope = logging::SCOPE_REST_API, error = %err, "Can't send the frame to the MJPEG thread")
                         }
                     };
                 }
                 Err(e) => {
-                    println!("JPEG encode failed: {}", e);
+                    error!(scope = logging::SCOPE_REST_API, error = %e, "JPEG encode failed");
                 }
             }
         } else {
@@ -734,7 +746,10 @@ fn run(
     }
 
     if report_mode {
-        println!("Video processing complete. Generating report...");
+        info!(
+            scope = logging::SCOPE_REPORT,
+            "Video processing complete, generating report"
+        );
         let report_settings = settings.report.as_ref().unwrap();
         {
             let mut ds_writer = data_storage
@@ -744,7 +759,7 @@ fn run(
             match ds_writer.update_statistics() {
                 Ok(_) => {}
                 Err(err) => {
-                    println!("Can't compute final statistics due the error: {}", err);
+                    error!(scope = logging::SCOPE_REPORT, error = %err, "Can't compute final statistics");
                 }
             }
         }
@@ -759,12 +774,19 @@ fn run(
                     &report_settings.output_path,
                     frame,
                 ) {
-                    Ok(zip_path) => println!("Report saved to: {}", zip_path),
-                    Err(err) => println!("Can't generate report due the error: {}", err),
+                    Ok(zip_path) => {
+                        info!(scope = logging::SCOPE_REPORT, path = %zip_path, "Report saved")
+                    }
+                    Err(err) => {
+                        error!(scope = logging::SCOPE_REPORT, error = %err, "Can't generate report")
+                    }
                 }
             }
             None => {
-                println!("Can't generate report: no frames were captured from video");
+                error!(
+                    scope = logging::SCOPE_REPORT,
+                    "Can't generate report: no frames were captured from video"
+                );
             }
         }
     }
@@ -773,35 +795,69 @@ fn run(
 }
 
 fn main() {
+    // Logging comes up first, on stdout only: the config that says where the
+    // file goes is not read yet. `apply_config` below adds the file and the level
+    logging::init_logger();
+    info!(
+        scope = logging::SCOPE_STARTUP,
+        version = env!("CARGO_PKG_VERSION"),
+        "Starting"
+    );
     let args: Vec<String> = env::args().collect();
     let path_to_config = match args.len() {
         2 => &args[1],
         _ => {
-            println!(
-                "Args should contain exactly one string: path to TOML configuration file. Setting to default './data/conf.toml'"
+            warn!(
+                scope = logging::SCOPE_STARTUP,
+                "Expected exactly one argument, the path to the TOML config; using './data/conf.toml'"
             );
             "./data/conf.toml"
         }
     };
     let mut app_settings = AppSettings::new(path_to_config).unwrap_or_else(|e| {
-        eprintln!("Failed to load settings '{}': {}", path_to_config, e);
+        error!(
+            scope = logging::SCOPE_STARTUP,
+            config = path_to_config,
+            error = %e,
+            "Failed to load settings"
+        );
         std::process::exit(1);
     });
+    let log_config = app_settings
+        .verbose
+        .clone()
+        .unwrap_or_default()
+        .to_log_config(path_to_config);
+    let _log_guard = logging::apply_config(&log_config);
+    info!(
+        scope = logging::SCOPE_STARTUP,
+        config = path_to_config,
+        "Settings file read"
+    );
     match app_settings.ensure_equipment_id(path_to_config) {
-        Ok(Some(id)) => println!(
-            "Equipment id was blank, generated '{}' and saved it to '{}'",
-            id, path_to_config
+        Ok(Some(id)) => info!(
+            scope = logging::SCOPE_STARTUP,
+            equipment_id = %id,
+            config = path_to_config,
+            "Equipment id was blank, generated one and saved it"
         ),
         Ok(None) => {}
         Err(e) => {
-            eprintln!(
-                "Can't save generated equipment id to '{}': {}",
-                path_to_config, e
-            );
+            error!(scope = logging::SCOPE_STARTUP, error = %e, config = path_to_config, "Can't save the generated equipment id");
             std::process::exit(1);
         }
     }
-    println!("Settings are:\n\t{}", app_settings);
+    info!(
+        scope = logging::SCOPE_STARTUP,
+        equipment_id = %app_settings.equipment_info.id,
+        video_src = %app_settings.input.video_src,
+        network_weights = %app_settings.detection.network_weights,
+        tracker = app_settings.tracking.typ.as_deref().unwrap_or("iou_naive"),
+        kalman_filter = app_settings.tracking.kalman_filter.as_deref().unwrap_or("centroid"),
+        reset_data_milliseconds = app_settings.worker.reset_data_milliseconds,
+        rest_api = format_args!("{}:{}", app_settings.rest_api.host, app_settings.rest_api.back_end_port),
+        "Settings loaded"
+    );
 
     let kalman_filter: KalmanFilterType = app_settings
         .tracking
@@ -817,7 +873,7 @@ fn main() {
         app_settings.tracking.max_lost_seconds,
         app_settings.tracking.iou_threshold,
     );
-    println!("Tracker is:\n\t{}", tracker);
+    info!(scope = logging::SCOPE_STARTUP, tracker = %tracker, "Tracker initialized");
 
     let net_size = match (
         app_settings.detection.net_width,
@@ -832,25 +888,14 @@ fn main() {
         app_settings.detection.network_cfg.as_deref(),
     )
     .unwrap_or_else(|e| {
-        eprintln!("Failed to create detector: {}", e);
+        error!(scope = logging::SCOPE_STARTUP, error = %e, "Failed to create detector");
         std::process::exit(1);
     });
 
-    let verbose = match &app_settings.debug {
-        Some(x) => x.enable,
-        None => false,
-    };
-
-    match run(
-        &app_settings,
-        path_to_config,
-        &mut *tracker,
-        &mut detector,
-        verbose,
-    ) {
+    match run(&app_settings, path_to_config, &mut *tracker, &mut detector) {
         Ok(_) => {}
-        Err(_err) => {
-            println!("Error in main thread: {}", _err);
+        Err(err) => {
+            error!(scope = logging::SCOPE_PROCESSING, error = %err, "Error in main thread");
         }
     };
 }

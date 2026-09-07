@@ -1,4 +1,6 @@
+use crate::lib::logging;
 use std::time::{Duration, Instant};
+use tracing::info;
 
 /// Performance statistics for detection pipeline.
 /// Accumulates timing data and prints averages every N frames.
@@ -67,15 +69,16 @@ impl PerfStats {
             0.0
         };
 
-        println!(
-            "[PerfStats] Last {} frames avg: inference={:.2}ms, postprocess={:.2}ms, tracking={:.2}ms | total={:.2}ms (~{:.1} FPS) | dropped={}",
-            self.frame_count,
-            avg_inference,
-            avg_postprocess,
-            avg_tracking,
-            avg_total,
-            estimated_fps,
-            self.dropped_total
+        info!(
+            scope = logging::SCOPE_PROCESSING,
+            frames = self.frame_count,
+            inference_ms = format_args!("{:.2}", avg_inference),
+            postprocess_ms = format_args!("{:.2}", avg_postprocess),
+            tracking_ms = format_args!("{:.2}", avg_tracking),
+            total_ms = format_args!("{:.2}", avg_total),
+            fps = format_args!("{:.1}", estimated_fps),
+            dropped = self.dropped_total,
+            "PerfStats"
         );
 
         // Reset

@@ -28,3 +28,4 @@ data/sample_960_540.mp4
 data/conf_test.toml
 collected_dataset/
 benchmarking.prof
+logs/
