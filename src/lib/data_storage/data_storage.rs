@@ -1,4 +1,6 @@
+use crate::lib::logging;
 use std::collections::HashMap;
+use tracing::{error, info};
 
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
@@ -36,11 +38,10 @@ pub struct DataStorage {
     pub period_start: DateTime<Utc>,
     pub period_end: DateTime<Utc>,
     pub id: String,
-    pub verbose: bool,
 }
 
 impl DataStorage {
-    pub fn new_with_id(_id: String, _verbose: bool) -> Self {
+    pub fn new_with_id(_id: String) -> Self {
         return DataStorage {
             zones: Arc::new(RwLock::new(HashMap::<String, Mutex<Zone>>::new())),
             zone_grid: Arc::new(RwLock::new(ZoneGrid::uninitialized())),
@@ -48,7 +49,6 @@ impl DataStorage {
             period_start: TimeZone::with_ymd_and_hms(&Utc, 1970, 1, 1, 0, 0, 0).unwrap(),
             period_end: TimeZone::with_ymd_and_hms(&Utc, 1970, 1, 1, 0, 0, 0).unwrap(),
             id: _id,
-            verbose: _verbose,
         };
     }
 
@@ -153,63 +153,31 @@ impl DataStorage {
                     }
                     drop(zone);
                 }
-                // Print the OD matrix in a nice table format
-                println!("\n=== Origin-Destination Matrix ===");
-                println!("Equipment ID: {}", self.id);
-                println!("Period: {} to {}", self.period_start, self.period_end);
-                if zone_keys.is_empty() {
-                    println!("No zones configured.");
-                    return Ok(());
-                }
-                // Print header
-                print!("{:>12}", "FROM \\ TO");
-                for to_key in &zone_keys {
-                    print!("{:>12}", to_key);
-                }
-                println!();
-                // Print separator
-                print!("{:>12}", "----------");
-                for _ in &zone_keys {
-                    print!("{:>12}", "----------");
-                }
-                println!();
-                // Print matrix rows
-                for from_key in &zone_keys {
-                    print!("{:>12}", from_key);
-                    if let Some(from_matrix) = od_matrix.get(from_key) {
-                        for to_key in &zone_keys {
-                            let count = from_matrix.get(to_key).unwrap_or(&0);
-                            print!("{:>12}", count);
-                        }
-                    }
-                    println!();
-                }
-                // Print summary statistics
                 let total_movements: u32 =
                     od_matrix.values().flat_map(|inner| inner.values()).sum();
-                println!("\n=== Summary ===");
-                println!("Total movements: {}", total_movements);
-                // Print top flows
-                let mut flows: Vec<(String, String, u32)> = Vec::new();
+                info!(
+                    scope = logging::SCOPE_ANALYTICS,
+                    equipment_id = %self.id,
+                    period_start = %self.period_start,
+                    period_end = %self.period_end,
+                    zones = zone_keys.len(),
+                    total_movements,
+                    "OD matrix updated"
+                );
                 for (from_key, from_matrix) in &od_matrix {
                     for (to_key, count) in from_matrix {
                         if *count > 0 {
-                            flows.push((from_key.clone(), to_key.clone(), *count));
+                            info!(
+                                scope = logging::SCOPE_ANALYTICS,
+                                from = %from_key,
+                                to = %to_key,
+                                count,
+                                u_turn = from_key == to_key,
+                                "OD flow"
+                            );
                         }
                     }
                 }
-                if !flows.is_empty() {
-                    flows.sort_by(|a, b| b.2.cmp(&a.2)); // Sort by count descending
-                    println!("\nTop flows:");
-                    for (from, to, count) in flows.iter().take(5) {
-                        if from == to {
-                            println!("  {} → {} (U-turns): {} vehicles", from, to, count);
-                        } else {
-                            println!("  {} → {}: {} vehicles", from, to, count);
-                        }
-                    }
-                }
-                println!("=== End OD Matrix ===\n");
             }
             Err(_) => {
                 return Err(DataStorageError::Poison);
@@ -221,15 +189,16 @@ impl DataStorage {
 
 pub type ThreadedDataStorage = Arc<RwLock<DataStorage>>;
 
-pub fn new_datastorage(_id: String, _verbose: bool) -> ThreadedDataStorage {
-    let data_storage = DataStorage::new_with_id(_id, _verbose);
+pub fn new_datastorage(_id: String) -> ThreadedDataStorage {
+    let data_storage = DataStorage::new_with_id(_id);
     Arc::new(RwLock::new(data_storage))
 }
 
-pub fn start_analytics_thread(ds: ThreadedDataStorage, millis: u64, verbose: bool) {
-    if verbose {
-        println!("Analytics data would be refreshed every {} ms", millis);
-    }
+pub fn start_analytics_thread(ds: ThreadedDataStorage, millis: u64) {
+    info!(
+        scope = logging::SCOPE_ANALYTICS,
+        millis, "Analytics refresh thread started"
+    );
 
     thread::spawn(move || {
         let millis_i64 = millis as i64;
@@ -243,16 +212,22 @@ pub fn start_analytics_thread(ds: ThreadedDataStorage, millis: u64, verbose: boo
                     mutex.period_end = last_tm + chrono::Duration::milliseconds(millis_i64);
                     match mutex.update_statistics() {
                         Ok(_) => {
-                            println!("Statistics updated: {}", last_tm);
+                            info!(scope = logging::SCOPE_ANALYTICS, since = %last_tm, "Statistics updated");
                         }
                         Err(_) => {
-                            println!("Can't update statistics due PoisonErr [1]");
+                            error!(
+                                scope = logging::SCOPE_ANALYTICS,
+                                "Can't update statistics: data storage is poisoned"
+                            );
                         }
                     }
                     last_tm = Utc::now();
                 }
                 Err(_) => {
-                    println!("Can't update statistics due PoisonErr [2]");
+                    error!(
+                        scope = logging::SCOPE_ANALYTICS,
+                        "Can't update statistics: data storage lock is poisoned"
+                    );
                 }
             }
             thread::sleep(std::time::Duration::from_millis(millis));

@@ -335,6 +335,29 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
         reset_data_milliseconds = 30000
     ```
 
+13. Logging
+
+    Logs are NDJSON (one JSON object per line) on stdout and, by default, in `./logs/rust-road-traffic.log` next to the config file. Every line carries `level` (`INFO`, `WARN`, `ERROR`), `scope` (`startup`, `capture`, `processing`, `analytics`, `redis`, `rest_api`, `report`, `dataset`) and the message with its fields:
+
+    ```json
+    {"timestamp":"2026-09-07T16:56:01.362275Z","level":"INFO","fields":{"message":"Frame timing","scope":"capture","source":"file","process_every_nth_frame":2,"nominal_dt":0.0667,"dt_min":0.0167,"dt_max":2.0}}
+    ```
+
+    The `[verbose]` section (optional, every key optional) only sets how much and where:
+
+    ```toml
+    [verbose]
+        # "info" (default): regular, warning and error lines. "debug" adds per-frame detail.
+        level = "info"
+        # Relative to the config file's folder. Empty string = stdout only.
+        logs_folder = "./logs"
+        # Rotate daily or at this size (MB); keep this many old files (defaults: 10 MB, 2 files).
+        max_file_size_mb = 10
+        max_files = 2
+    ```
+
+    The `RUST_LOG` environment variable overrides `level`. A folder that can't be written to never stops the app: it logs to stdout only and says why.
+
 ## Virtual lines
 
 This utility supports vehicle counting via two approaches:

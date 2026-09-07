@@ -1,8 +1,10 @@
+use crate::lib::logging;
 use crate::rest_api::APIStorage;
 use crate::settings::RoadLanesSettings;
 use crate::settings::VirtualLineSettings;
 use actix_web::{Error, HttpResponse, web};
 use serde::Serialize;
+use tracing::info;
 use utoipa::ToSchema;
 
 /// Error response
@@ -31,7 +33,7 @@ pub struct UpdateTOMLResponse<'a> {
     )
 )]
 pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Error> {
-    println!("Saving TOML configuration");
+    info!(scope = logging::SCOPE_REST_API, file = %data.settings_filename, "Saving TOML configuration");
     let ds_guard = data
         .data_storage
         .read()

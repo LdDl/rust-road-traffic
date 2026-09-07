@@ -21,8 +21,9 @@ pub const SCOPE_DATASET: &str = "dataset";
 /// Verbosity thresholds: "info" shows error, warn and info lines, "debug" adds debug
 pub const LEVELS: [&str; 2] = ["info", "debug"];
 pub const DEFAULT_LEVEL: &str = "info";
-pub const DEFAULT_MAX_FILE_SIZE_MB: u64 = 50;
-pub const DEFAULT_MAX_FILES: usize = 9;
+/// Small on purpose: the target is an SBC with an SD card
+pub const DEFAULT_MAX_FILE_SIZE_MB: u64 = 10;
+pub const DEFAULT_MAX_FILES: usize = 2;
 
 static RELOAD_HANDLE: OnceLock<reload::Handle<EnvFilter, Registry>> = OnceLock::new();
 

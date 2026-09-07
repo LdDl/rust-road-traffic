@@ -4,6 +4,7 @@ pub mod data_storage;
 pub mod dataset_collector;
 pub mod detection;
 pub mod draw;
+pub mod logging;
 pub mod mjpeg_streaming;
 pub mod perf_stats;
 pub mod publisher;

@@ -1,8 +1,10 @@
+use crate::lib::logging;
 use crate::lib::zones::{VirtualLine, VirtualLineDirection, Zone};
 use crate::rest_api::APIStorage;
 use actix_web::{Error, HttpResponse, http::StatusCode, web};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use tracing::info;
 use utoipa::ToSchema;
 
 /// Error response
@@ -114,7 +116,11 @@ pub async fn update_zone(
 
     match _update_zone.lane_number {
         Some(val) => {
-            println!("lane_number: {}", val);
+            info!(
+                scope = logging::SCOPE_REST_API,
+                lane_number = val,
+                "Zone lane number updated"
+            );
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             zone.set_road_lane_num(val);
             drop(zone)

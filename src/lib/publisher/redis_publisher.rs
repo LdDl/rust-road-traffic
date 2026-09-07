@@ -1,5 +1,6 @@
 extern crate redis;
 
+use crate::lib::logging;
 use crate::lib::publisher::RedisMessage;
 use crate::rest_api::zones_stats::{AllZonesStats, VehicleTypeParameters, ZoneStats};
 use crate::{lib::data_storage::ThreadedDataStorage, rest_api::zones_stats::TrafficFlowInfo};
@@ -7,6 +8,7 @@ use redis::{Client, Commands};
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
+use tracing::{error, info};
 
 pub struct RedisConnection {
     pub channel_name: String,
@@ -50,7 +52,7 @@ impl RedisConnection {
         self.channel_name = _channel_name.clone();
     }
     pub fn publish(&self, msg: &dyn RedisMessage) -> Result<(), Box<dyn Error>> {
-        println!("Trying to send data...");
+        info!(scope = logging::SCOPE_REDIS, channel = %self.channel_name, "Publishing to Redis");
         let mut redis_conn = match self.client.get_connection() {
             Ok(_conn) => _conn,
             Err(_err) => {
@@ -59,7 +61,7 @@ impl RedisConnection {
         };
         let msg_string = msg.prepare_string()?;
         let _: usize = redis_conn.publish(self.channel_name.to_owned(), msg_string)?;
-        println!("...Success");
+        info!(scope = logging::SCOPE_REDIS, channel = %self.channel_name, "Published to Redis");
         Ok(())
     }
     pub fn push_statistics(&self) {
@@ -110,8 +112,8 @@ impl RedisConnection {
         drop(zones);
         drop(ds_guard);
         match self.publish(&prepared_message) {
-            Err(_err) => {
-                println!("Errors while sending data to Redis: {}", _err);
+            Err(err) => {
+                error!(scope = logging::SCOPE_REDIS, error = %err, "Can't publish statistics to Redis");
             }
             Ok(_) => {}
         };
