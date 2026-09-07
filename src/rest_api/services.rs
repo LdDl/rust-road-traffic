@@ -6,6 +6,16 @@ use crate::rest_api::{
     mjpeg_client, mjpeg_page, restart, toml_mutations, zones_list, zones_mutations, zones_stats,
 };
 
+#[utoipa::path(
+    get,
+    tag = "Application",
+    path = "/api/ping",
+    responses(
+        (status = 200, description = "The application is up", body = String, example = json!("pong"))
+    )
+)]
+/// Answers `pong` as long as the REST API is serving. Used to tell when the
+/// application is back after a restart
 async fn say_ping() -> impl Responder {
     HttpResponse::Ok().body("pong")
 }
@@ -77,6 +87,7 @@ use utoipa_rapidoc::RapiDoc;
         zones_mutations::replace_all,
         toml_mutations::save_toml,
         restart::restart,
+        say_ping,
     ),
     tags(
         (name = "Zones", description = "Main information about detection zones"),
