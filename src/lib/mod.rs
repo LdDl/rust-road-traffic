@@ -11,6 +11,7 @@ pub mod publisher;
 pub mod report;
 pub mod restart;
 pub mod spatial;
+pub mod status;
 pub mod tracker;
 pub mod utils;
 pub mod zones;

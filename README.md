@@ -335,7 +335,37 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
         reset_data_milliseconds = 30000
     ```
 
-13. Restarting
+13. Status
+
+    `GET /api/status` answers the questions that would otherwise need an SSH session: which source is being read and whether frames are getting through, what the inference runs on, how objects are tracked, where statistics are published, where the log goes, and what went wrong last.
+
+    ```shell
+    curl http://localhost:42001/api/status
+    ```
+
+    ```json
+    {
+      "equipment_id": "1e23985f-1fa3-45d0-a365-2d8525a23ddd",
+      "version": "0.3.1",
+      "uptime_seconds": 42,
+      "input": {"video_src": "rtsp://...", "kind": "live", "width": 1280, "height": 720, "fps": 30.0,
+                "process_every_nth_frame": 2, "frames_processed": 542, "frames_dropped": 0,
+                "processing_fps": 14.9, "last_frame_at": 36.1},
+      "detection": {"backend": "ort", "cuda_available": true, "model": "./data/model.onnx",
+                    "net_width": 416, "net_height": 256, "inference_ms": 7.4,
+                    "postprocess_ms": 0.01, "tracking_ms": 0.01},
+      "tracking": {"description": "BBox tracker (8D Kalman: ...) with ByteTracker engine, tracks expire after 2 s unmatched"},
+      "redis": {"enabled": false, "host": "localhost", "port": 6379, "channel": "DETECTORS_STATISTICS"},
+      "logging": {"level": "info", "file": "./logs/rust-road-traffic.log"},
+      "last_problem": null
+    }
+    ```
+
+    `processing_fps` is measured over the last second, so it shows what the detector keeps up with rather than what the source promises; `frames_dropped` counts the frames a busy detector never got to, and is always 0 for a video file. `last_problem` is the most recent warning or error as it went into the log, with its `scope`, or `null` if there was none.
+
+    `restart_required` and `pending_changes` compare the saved configuration with the one this run started with, so a change made through `PUT /api/config` stays visible until it is actually applied — the answer to the `PUT` is gone as soon as the page reloads, this is not.
+
+14. Restarting
 
     Some settings are only read at startup: the video source, the tracker, Redis publisher and the statistics refresher period. API `POST /api/mutations/restart` restarts the application to pick them up, without knowing what supervises it:
 
@@ -350,7 +380,7 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
 
     Under systemd, add `KillMode=mixed` to the unit so that stopping the service signals this process alone and lets it shut its pipeline down; with the default `control-group` systemd signals `gst-launch-1.0` directly, which kills it with the pipeline still up.
 
-14. Logging
+15. Logging
 
     Logs are NDJSON (one JSON object per line) on stdout and, by default, in `./logs/rust-road-traffic.log` next to the config file. Every line carries `level` (`INFO`, `WARN`, `ERROR`), `scope` (`startup`, `capture`, `processing`, `analytics`, `redis`, `rest_api`, `report`, `dataset`) and the message with its fields:
 
@@ -372,6 +402,39 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
     ```
 
     The `RUST_LOG` environment variable overrides `level`. A folder that can't be written to never stops the app: it logs to stdout only and says why.
+
+    The same lines are readable over the API, which is what the file is for: it is rotated, kept on disk and survives a restart, which is exactly when one wants to see what came before.
+
+    ```shell
+    curl "http://localhost:42001/api/logs?limit=50&level=warn&scope=capture"
+    ```
+
+    `limit` is 200 by default and 5000 at most, `level` is the lowest severity to include, `scope` matches one of the scopes above. Entries come oldest first, and rotated files are read as well when the current one is not enough.
+
+16. Configuration over the API
+
+    `GET /api/config` returns the settings as the file has them, without the zones (they have their own endpoints) and without the Redis password, which shows up as `password_set` instead.
+
+    `PUT /api/config` changes them. Only the keys present in the request are touched, the file is written at once, and the answer says what really changed and whether a restart is due:
+
+    ```shell
+    curl -X PUT -H 'Content-Type: application/json' \
+        -d '{"input": {"video_src": "rtsp://cam/stream"}, "verbose": {"level": "debug"}}' \
+        http://localhost:42001/api/config
+    # {"message":"ok","restart_required":true,"changed":["input.video_src","verbose.level"]}
+    ```
+
+    Almost everything is read once, when the piece that uses it is built, so changing it needs `POST /api/mutations/restart`. The log level is the exception: it applies immediately, and a request that only changes it answers `restart_required: false`. What is still waiting for a restart is also reported by `GET /api/status`, as `restart_required` and `pending_changes`. Values are validated the same way as when the file is loaded, and a request that would not make sense is rejected with 400 and left unsaved.
+
+    Redis can be tried before it is saved:
+
+    ```shell
+    curl -X POST -H 'Content-Type: application/json' -d '{"host": "10.0.0.2", "port": 6379}' \
+        http://localhost:42001/api/redis/check
+    # {"ok":false,"took_ms":1,"target":"10.0.0.2:6379/0","error":"Connection refused (os error 111)"}
+    ```
+
+    Anything left out of the request is taken from the current configuration, so an empty body checks what the app is set up to use.
 
 ## Virtual lines
 
