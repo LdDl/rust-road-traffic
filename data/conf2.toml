@@ -107,6 +107,10 @@
     enable = false
     host = "localhost"
     port = 6379
+    # ACL user (Redis 6+, Valkey). Leave it out or empty to authenticate as the default user,
+    # which is the one `requirepass` sets up.
+    # username = "stats"
+    # Any characters are fine here, including @ / % and :
     password = ""
     db_index = 0
     channel_name = "DETECTORS_STATISTICS"
