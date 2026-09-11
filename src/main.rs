@@ -270,11 +270,7 @@ fn run(
     let total_frames = video_source.total_frames();
     status.set_tracking(tracker.description());
     status.set_detection(DetectionStatus {
-        backend: detector.backend().to_string(),
         cuda_available: lib::utils::is_cuda_available(),
-        model: settings.detection.network_weights.clone(),
-        net_width: settings.detection.net_width,
-        net_height: settings.detection.net_height,
         ..Default::default()
     });
 

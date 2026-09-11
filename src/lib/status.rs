@@ -31,16 +31,15 @@ pub struct InputStatus {
     pub last_frame_at: Option<f64>,
 }
 
-/// Inference backend and model
+/// How detection is running. Deliberately says nothing about which model it is,
+/// what shape it has or what runs it: that belongs to how the device was built.
+/// Everything here is observed while the app works, so there is nothing to set:
+/// the configuration API has no counterpart for any of it
 #[derive(Debug, Clone, Default, Serialize, ToSchema)]
 pub struct DetectionStatus {
-    /// "opencv", "ort" or "tensorrt"
-    pub backend: String,
-    /// Whether a CUDA device was found at startup
+    /// Whether a CUDA device was found when the app started. Observed, not
+    /// configured: there is no setting that turns it on
     pub cuda_available: bool,
-    pub model: String,
-    pub net_width: Option<i32>,
-    pub net_height: Option<i32>,
     /// How long the last frame took, in milliseconds
     pub inference_ms: Option<f32>,
     pub postprocess_ms: Option<f32>,

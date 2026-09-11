@@ -541,10 +541,16 @@ fn tidy_path(path: std::path::PathBuf) -> std::path::PathBuf {
 /// The settings key that holds the zones
 pub const ZONES_KEY: &str = "road_lanes";
 
-/// The only setting that takes effect without starting over. Everything else is
-/// read once, when the piece that uses it is built, so changing it is pending
+/// The trackers this build can run, in the order they are offered
+pub const TRACKER_TYPES: [&str; 2] = ["iou_naive", "bytetrack"];
+/// The Kalman filters a tracker can be given
+pub const KALMAN_FILTERS: [&str; 2] = ["centroid", "bbox"];
+
+/// The settings that take effect at once. Everything else is read when the
+/// piece that uses it is built - the capture thread, the tracker, the Redis
+/// connection, the statistics worker, the log file - so changing it is pending
 /// until a restart
-pub const LIVE_SETTINGS: [&str; 1] = ["verbose.level"];
+pub const LIVE_SETTINGS: [&str; 2] = ["verbose.level", "equipment_info.id"];
 
 /// Whether a change of this setting is waiting for a restart to take effect
 pub fn needs_restart(path: &str) -> bool {
@@ -716,10 +722,10 @@ impl AppSettings {
         }
 
         if let Some(typ) = self.tracking.typ.as_deref() {
-            one_of("tracker type", typ, &["iou_naive", "bytetrack"])?;
+            one_of("tracker type", typ, &TRACKER_TYPES)?;
         }
         if let Some(kalman_filter) = self.tracking.kalman_filter.as_deref() {
-            one_of("kalman filter type", kalman_filter, &["centroid", "bbox"])?;
+            one_of("kalman filter type", kalman_filter, &KALMAN_FILTERS)?;
         }
         if let Some(level) = self.verbose.as_ref().and_then(|v| v.level.as_deref()) {
             one_of("verbose level", level, &logging::LEVELS)?;

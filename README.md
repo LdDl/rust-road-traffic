@@ -363,7 +363,7 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
 
     `processing_fps` is measured over the last second, so it shows what the detector keeps up with rather than what the source promises; `frames_dropped` counts the frames a busy detector never got to, and is always 0 for a video file. `last_problem` is the most recent warning or error as it went into the log, with its `scope`, or `null` if there was none.
 
-    `restart_required` and `pending_changes` compare the saved configuration with the one this run started with, so a change made through `PUT /api/config` stays visible until it is actually applied — the answer to the `PUT` is gone as soon as the page reloads, this is not.
+    `restart_required` and `pending_changes` compare the saved configuration with the one this run started with, so a change made through `PUT /api/config` stays visible until it is actually applied - the answer to the `PUT` is gone as soon as the page reloads, this is not.
 
 14. Restarting
 
@@ -376,7 +376,7 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
 
     The process replaces its own image, keeping the same PID, so systemd sees no exit, a container whose entrypoint is this binary keeps running, and a plain terminal run comes back as well. Nothing is saved first: unsaved zones stay unsaved (save them with `/api/mutations/save_toml`), and a config edited over SSH is picked up exactly as written. The reply is sent before the restart happens, so wait for `/api/ping` to answer again.
 
-    The capture subprocess is shut down properly on the way out, and on `Ctrl-C` as well: it is sent `SIGINT`, which `gst-launch-1.0` answers by taking the pipeline down to NULL, and only killed if it does not go within two seconds. That matters on a Jetson CSI camera, where only the orderly teardown closes the Argus session — a session left open keeps the sensor busy for the next start.
+    The capture subprocess is shut down properly on the way out, and on `Ctrl-C` as well: it is sent `SIGINT`, which `gst-launch-1.0` answers by taking the pipeline down to NULL, and only killed if it does not go within two seconds. That matters on a Jetson CSI camera, where only the orderly teardown closes the Argus session - a session left open keeps the sensor busy for the next start.
 
     Under systemd, add `KillMode=mixed` to the unit so that stopping the service signals this process alone and lets it shut its pipeline down; with the default `control-group` systemd signals `gst-launch-1.0` directly, which kills it with the pipeline still up.
 

@@ -1,12 +1,13 @@
 use crate::lib::logging;
 use actix_cors::Cors;
-use actix_web::{App, HttpServer, http, web};
+use actix_web::{App, HttpResponse, HttpServer, http, web};
 use std::sync::{Arc, RwLock};
 use tracing::info;
 
 use crate::lib::data_storage::ThreadedDataStorage;
 use crate::lib::mjpeg_streaming::Broadcaster;
 use crate::lib::status::RuntimeStatus;
+use crate::rest_api::config::ErrorResponse;
 use crate::rest_api::services;
 use crate::settings::AppSettings;
 use std::sync::{Mutex, mpsc::Receiver};
@@ -68,9 +69,23 @@ pub async fn start_rest_api(
             .expose_headers(vec![http::header::CONTENT_LENGTH])
             .supports_credentials()
             .max_age(5600);
+        // A request body that does not parse is answered in the same shape as
+        // every other refusal, instead of actix's plain-text default. Serde
+        // says exactly what is wrong ("unknown field `x`, expected one of ...")
+        // and that is worth handing to the caller as it is
+        let json_errors = web::JsonConfig::default().error_handler(|err, _| {
+            actix_web::error::InternalError::from_response(
+                "",
+                HttpResponse::BadRequest().json(ErrorResponse {
+                    error_text: err.to_string(),
+                }),
+            )
+            .into()
+        });
         App::new()
             .wrap(cors)
             .app_data(data.clone())
+            .app_data(json_errors)
             .configure(services::init_routes(enable_mjpeg))
     })
     .bind(&bind_address)?

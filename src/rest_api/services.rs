@@ -49,6 +49,10 @@ pub fn init_routes(enable_mjpeg: bool) -> impl Fn(&mut web::ServiceConfig) {
                     web::scope("/redis").route("/check", web::post().to(redis_check::check_redis)),
                 )
                 .service(
+                    web::scope("/tracking")
+                        .route("/types", web::get().to(config::tracking_options)),
+                )
+                .service(
                     web::scope("/polygons")
                         .route("/geojson", web::get().to(zones_list::all_zones_list)),
                 )
@@ -102,6 +106,7 @@ use utoipa_rapidoc::RapiDoc;
         logs::logs,
         config::get_config,
         config::update_config,
+        config::tracking_options,
         redis_check::check_redis,
         say_ping,
     ),
@@ -145,6 +150,9 @@ use utoipa_rapidoc::RapiDoc;
             crate::rest_api::logs::LogEntry,
             crate::rest_api::config::UpdateConfigResponse,
             crate::rest_api::config::ErrorResponse,
+            crate::rest_api::config::ConfigView,
+            crate::rest_api::config::ConfigPatch,
+            crate::rest_api::config::TrackingOptions,
             crate::rest_api::redis_check::RedisCheckRequest,
             crate::rest_api::redis_check::RedisCheckResponse,
             crate::lib::status::InputStatus,

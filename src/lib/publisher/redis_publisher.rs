@@ -15,7 +15,7 @@ use tracing::{error, info};
 /// Built as a struct rather than formatted into a `redis://user:pass@host/db`
 /// URL, because the crate percent-decodes whatever it finds in a URL: a
 /// password holding `@`, `/` or `%` is then read as part of the host or the
-/// path. Measured against Valkey 8.1 — `p@ss/w0rd` makes the parser take `ss`
+/// path. Measured against Valkey 8.1 - `p@ss/w0rd` makes the parser take `ss`
 /// for the host and give up with "Invalid database number"
 pub fn connection_info(
     host: &str,
