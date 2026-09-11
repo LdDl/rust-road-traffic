@@ -363,7 +363,7 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
 
     `processing_fps` is measured over the last second, so it shows what the detector keeps up with rather than what the source promises; `frames_dropped` counts the frames a busy detector never got to, and is always 0 for a video file. `last_problem` is the most recent warning or error as it went into the log, with its `scope`, or `null` if there was none.
 
-    `restart_required` and `pending_changes` compare the saved configuration with the one this run started with, so a change made through `PUT /api/config` stays visible until it is actually applied - the answer to the `PUT` is gone as soon as the page reloads, this is not.
+    `save_required` / `unsaved_changes` and `restart_required` / `pending_changes` say what is still to be saved and what waits for a restart: the same block every changing request answers with (see *Configuration over the API*). Unlike the answer to a request, it survives a page reload.
 
 14. Restarting
 
@@ -374,7 +374,7 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
     # {"message":"restarting"}
     ```
 
-    The process replaces its own image, keeping the same PID, so systemd sees no exit, a container whose entrypoint is this binary keeps running, and a plain terminal run comes back as well. Nothing is saved first: unsaved zones stay unsaved (save them with `/api/mutations/save_toml`), and a config edited over SSH is picked up exactly as written. The reply is sent before the restart happens, so wait for `/api/ping` to answer again.
+    The process replaces its own image, keeping the same PID, so systemd sees no exit, a container whose entrypoint is this binary keeps running, and a plain terminal run comes back as well. Nothing is saved first: unsaved zones and settings are lost, so call `/api/mutations/save_toml` before restarting, and a config edited over SSH is picked up exactly as written. The reply is sent before the restart happens, so wait for `/api/ping` to answer again.
 
     The capture subprocess is shut down properly on the way out, and on `Ctrl-C` as well: it is sent `SIGINT`, which `gst-launch-1.0` answers by taking the pipeline down to NULL, and only killed if it does not go within two seconds. That matters on a Jetson CSI camera, where only the orderly teardown closes the Argus session - a session left open keeps the sensor busy for the next start.
 
@@ -413,18 +413,25 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
 
 16. Configuration over the API
 
-    `GET /api/config` returns the settings as the file has them, without the zones (they have their own endpoints) and without the Redis password, which shows up as `password_set` instead.
+    `GET /api/config` returns the settings held in memory, the ones `PUT` changes, for the sections an operator may touch: `input`, `tracking`, `equipment_info`, `worker`, `redis_publisher` and `verbose`. Zones have their own endpoints; detection and the REST server itself are not part of it. `GET /api/tracking/types` lists the values `tracking.type` and `tracking.kalman_filter` accept.
 
-    `PUT /api/config` changes them. Only the keys present in the request are touched, the file is written at once, and the answer says what really changed and whether a restart is due:
+    `PUT /api/config` changes the settings **in memory only**. Only the keys present in the request are touched, and a key the app has no setting for is refused by name:
 
     ```shell
     curl -X PUT -H 'Content-Type: application/json' \
         -d '{"input": {"video_src": "rtsp://cam/stream"}, "verbose": {"level": "debug"}}' \
         http://localhost:42001/api/config
-    # {"message":"ok","restart_required":true,"changed":["input.video_src","verbose.level"]}
+    # {"message":"ok","changed":["input.video_src","verbose.level"],
+    #  "save_required":true,"unsaved_changes":["input.video_src","verbose.level"],
+    #  "restart_required":true,"pending_changes":["input.video_src"]}
     ```
 
-    Almost everything is read once, when the piece that uses it is built, so changing it needs `POST /api/mutations/restart`. The log level is the exception: it applies immediately, and a request that only changes it answers `restart_required: false`. What is still waiting for a restart is also reported by `GET /api/status`, as `restart_required` and `pending_changes`. Values are validated the same way as when the file is loaded, and a request that would not make sense is rejected with 400 and left unsaved.
+    Nothing reaches the file until `GET /api/mutations/save_toml`, the only thing that writes it: the settings from memory together with the zones the running process uses. A restart reads the file, so the order is always save, then restart. Every request that changes something, settings or zones, answers with the same four fields describing everything left to do rather than only its own part, and `GET /api/status` carries them too:
+
+    - `save_required` / `unsaved_changes` — memory differs from the file (`road_lanes` stands for the zones);
+    - `restart_required` / `pending_changes` — some change takes effect only after `POST /api/mutations/restart`.
+
+    The log level, the equipment id and the zones apply at once and need saving only to survive a restart. Everything else is read when the piece that uses it is built, and waits for a restart. Values are validated the same way as when the file is loaded, and a request that would not make sense is rejected with 400.
 
     Redis can be tried before it is saved:
 
