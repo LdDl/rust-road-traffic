@@ -8,7 +8,7 @@ use crate::lib::data_storage::ThreadedDataStorage;
 use crate::lib::mjpeg_streaming::Broadcaster;
 use crate::lib::status::RuntimeStatus;
 use crate::rest_api::config::ErrorResponse;
-use crate::rest_api::services;
+use crate::rest_api::{change_state, services};
 use crate::settings::AppSettings;
 use std::sync::{Mutex, mpsc::Receiver};
 
@@ -20,6 +20,10 @@ pub struct APIStorage {
     /// The settings this run was started with. Comparing them with the ones
     /// above is what tells a change apart from a change that has taken effect
     pub running_settings: AppSettings,
+    /// What the configuration file holds, as of the last `save_toml`: the
+    /// only thing that writes it. Comparing with it is what tells a saved
+    /// change apart from one that would be lost by a restart
+    pub saved_settings: RwLock<AppSettings>,
     pub settings_filename: String,
     pub mjpeg_broadcaster: web::Data<Mutex<Broadcaster>>,
     /// What the detection loop has learned about the run so far
@@ -39,9 +43,15 @@ pub async fn start_rest_api(
 ) -> std::io::Result<()> {
     let bind_address = format!("{}:{}", server_host, server_port);
     info!(scope = logging::SCOPE_REST_API, host = %server_host, port = server_port, "REST API starting");
+    // The zones are read back from the running process rather than taken from
+    // the file as written, so that they compare in the same form later on: a
+    // legacy "lrtb" in the file is "inbound" once loaded
+    let mut saved_settings = app_settings.clone();
+    saved_settings.road_lanes = Some(change_state::live_road_lanes(&data_storage));
     let storage = APIStorage {
         data_storage: data_storage,
         running_settings: app_settings.clone(),
+        saved_settings: RwLock::new(saved_settings),
         app_settings: RwLock::new(app_settings),
         settings_filename: settings_filename.to_string(),
         mjpeg_broadcaster: web::Data::new(Mutex::new(Broadcaster::default())),

@@ -1,7 +1,6 @@
 use crate::lib::logging;
 use crate::rest_api::APIStorage;
-use crate::settings::RoadLanesSettings;
-use crate::settings::VirtualLineSettings;
+use crate::rest_api::change_state::{ChangeState, live_road_lanes};
 use actix_web::{Error, HttpResponse, web};
 use serde::Serialize;
 use tracing::info;
@@ -21,6 +20,8 @@ pub struct UpdateTOMLResponse<'a> {
     /// Message
     #[schema(example = "ok")]
     pub message: &'a str,
+    #[serde(flatten)]
+    pub state: ChangeState,
 }
 
 #[utoipa::path(
@@ -28,75 +29,38 @@ pub struct UpdateTOMLResponse<'a> {
     tag = "Configuration file mutations",
     path = "/api/mutations/save_toml",
     responses(
-        (status = 201, description = "All zones has been overwritten", body = UpdateTOMLResponse),
+        (status = 200, description = "Settings and zones are in the file; the answer says whether a restart is due", body = UpdateTOMLResponse),
         (status = 500, description = "Internal error", body = ErrorResponse)
     )
 )]
+/// The one thing that writes the configuration file: the settings as they
+/// are held in memory, with the zones the running process uses. Everything
+/// else only changes memory, and a restart reads the file, so this is what
+/// makes a change survive one
 pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Error> {
     info!(scope = logging::SCOPE_REST_API, file = %data.settings_filename, "Saving TOML configuration");
-    let ds_guard = data
-        .data_storage
-        .read()
-        .expect("DataStorage is poisoned [RWLock]");
-    let zones = ds_guard
-        .zones
-        .read()
-        .expect("Spatial data is poisoned [RWLock]");
-    let mut setting_cloned = data
+    // Held for the whole write, so that a settings change arriving meanwhile
+    // waits for the file instead of being made on a copy about to be replaced
+    let mut settings = data
         .app_settings
-        .read()
-        .expect("Settings are poisoned [RwLock]")
-        .get_copy_no_roads();
-    let road_lanes = setting_cloned.road_lanes.get_or_insert_with(Vec::new);
-    for (_, zone_guarded) in zones.iter() {
-        let zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
-        road_lanes.push(RoadLanesSettings {
-            color_rgb: [
-                zone.color[2] as i16,
-                zone.color[1] as i16,
-                zone.color[0] as i16,
-            ], // BGR -> RGB
-            geometry: zone
-                .get_pixel_coordinates()
-                .iter()
-                .map(|pt| [pt.x as i32, pt.y as i32])
-                .collect(),
-            geometry_wgs84: zone
-                .get_spatial_coordinates_epsg4326()
-                .iter()
-                .map(|pt| [pt.x, pt.y])
-                .collect(),
-            lane_direction: zone.road_lane_direction,
-            lane_number: zone.road_lane_num,
-            virtual_line: match &zone.get_virtual_line() {
-                Some(vl) => {
-                    Some(VirtualLineSettings {
-                        geometry: vl.line,
-                        color_rgb: [vl.color[0] as i16, vl.color[1] as i16, vl.color[2] as i16], // BGR -> RGB
-                        direction: vl.direction.to_string(),
-                    })
-                }
-                None => None,
-            },
-        });
-        drop(zone);
+        .write()
+        .expect("Settings are poisoned [RwLock]");
+    let zones = live_road_lanes(&data.data_storage);
+    let mut to_save = settings.clone();
+    to_save.road_lanes = Some(zones.clone());
+    if let Err(err) = to_save.save(&data.settings_filename) {
+        return Ok(HttpResponse::InternalServerError().json(ErrorResponse {
+            error_text: format!("Can't save TOML due the error: {}", err),
+        }));
     }
-    // Zones live in a HashMap; a fixed order keeps the saved file stable
-    road_lanes.sort_by_key(|lane| (lane.lane_direction, lane.lane_number));
-    drop(zones);
-    drop(ds_guard);
-    if setting_cloned.detection.target_classes.is_none() {
-        // If option is empty, set one
-        setting_cloned.detection.target_classes =
-            Some(setting_cloned.detection.net_classes.clone());
-    }
-    match setting_cloned.save(&data.settings_filename) {
-        Ok(_) => {}
-        Err(_err) => {
-            return Ok(HttpResponse::InternalServerError().json(ErrorResponse {
-                error_text: format!("Can't save TOML due the error: {}", _err),
-            }));
-        }
-    };
-    return Ok(HttpResponse::Ok().json(UpdateTOMLResponse { message: "ok" }));
+    settings.road_lanes = Some(zones);
+    *data
+        .saved_settings
+        .write()
+        .expect("Saved settings are poisoned [RwLock]") = to_save;
+    drop(settings);
+    Ok(HttpResponse::Ok().json(UpdateTOMLResponse {
+        message: "ok",
+        state: ChangeState::of(&data),
+    }))
 }

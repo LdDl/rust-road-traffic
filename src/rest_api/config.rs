@@ -13,7 +13,8 @@ use utoipa::ToSchema;
 
 use crate::lib::logging;
 use crate::rest_api::APIStorage;
-use crate::settings::{AppSettings, KALMAN_FILTERS, TRACKER_TYPES, needs_restart};
+use crate::rest_api::change_state::ChangeState;
+use crate::settings::{AppSettings, KALMAN_FILTERS, TRACKER_TYPES};
 
 /// Error response
 #[derive(Debug, Serialize, ToSchema)]
@@ -28,12 +29,13 @@ pub struct ErrorResponse {
 pub struct UpdateConfigResponse {
     #[schema(example = "ok")]
     pub message: &'static str,
-    /// Whether the application has to be restarted for the change to take
-    /// effect: `POST /api/mutations/restart`
-    pub restart_required: bool,
-    /// Dotted paths of the settings that actually changed
+    /// Dotted paths of the settings this request actually changed
     #[schema(example = json!(["input.video_src"]))]
     pub changed: Vec<String>,
+    /// Everything left unsaved or waiting for a restart, not only this
+    /// request's part
+    #[serde(flatten)]
+    pub state: ChangeState,
 }
 
 /// The configuration as it is saved
@@ -427,15 +429,14 @@ pub async fn get_config(data: web::Data<APIStorage>) -> Result<HttpResponse, Err
     path = "/api/config",
     request_body = ConfigPatch,
     responses(
-        (status = 200, description = "Saved to the configuration file", body = UpdateConfigResponse),
-        (status = 400, description = "The request asks for something the app would not accept", body = ErrorResponse),
-        (status = 500, description = "Can't write the configuration file", body = ErrorResponse)
+        (status = 200, description = "Changed in memory; `save_toml` writes it", body = UpdateConfigResponse),
+        (status = 400, description = "The request asks for something the app would not accept", body = ErrorResponse)
     )
 )]
-/// Changes settings and writes them to the configuration file at once, so that
-/// the change survives the restart it usually needs. Only the keys present in
-/// the request are touched; the answer says which ones actually changed and
-/// whether a restart is due
+/// Changes the settings held in memory. Nothing is written here:
+/// `GET /api/mutations/save_toml` is the one thing that writes the file, and a
+/// restart reads the file. Only the keys present in the request are touched;
+/// the answer names what this request changed and what is left to do overall
 pub async fn update_config(
     data: web::Data<APIStorage>,
     patch: web::Json<ConfigPatch>,
@@ -448,20 +449,16 @@ pub async fn update_config(
     let mut updated = settings.clone();
     let changed = patch.into_inner().apply(&mut updated);
     if changed.is_empty() {
+        drop(settings);
         return Ok(HttpResponse::Ok().json(UpdateConfigResponse {
             message: "ok",
-            restart_required: false,
             changed,
+            state: ChangeState::of(&data),
         }));
     }
     if let Err(err) = updated.validate() {
         return Ok(HttpResponse::BadRequest().json(ErrorResponse {
             error_text: err.to_string(),
-        }));
-    }
-    if let Err(err) = updated.save(&data.settings_filename) {
-        return Ok(HttpResponse::InternalServerError().json(ErrorResponse {
-            error_text: format!("Can't save the configuration file: {}", err),
         }));
     }
     *settings = updated;
@@ -480,24 +477,23 @@ pub async fn update_config(
             .expect("DataStorage is poisoned [RWLock]")
             .id = settings.equipment_info.id.clone();
     }
-    let restart_required = changed.iter().any(|path| needs_restart(path));
     info!(
         scope = logging::SCOPE_REST_API,
         changed = ?changed,
-        restart_required,
-        file = %data.settings_filename,
-        "Configuration updated"
+        "Configuration changed in memory, not saved yet"
     );
+    drop(settings);
     Ok(HttpResponse::Ok().json(UpdateConfigResponse {
         message: "ok",
-        restart_required,
         changed,
+        state: ChangeState::of(&data),
     }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::settings::needs_restart;
 
     fn patch(text: &str) -> Result<ConfigPatch, serde_json::Error> {
         serde_json::from_str(text)

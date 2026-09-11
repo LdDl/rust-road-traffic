@@ -1,3 +1,4 @@
+mod change_state;
 mod config;
 mod logs;
 mod mjpeg_client;

@@ -1,6 +1,7 @@
 use crate::lib::logging;
 use crate::lib::zones::{VirtualLine, VirtualLineDirection, Zone};
 use crate::rest_api::APIStorage;
+use crate::rest_api::change_state::ChangeState;
 use actix_web::{Error, HttpResponse, http::StatusCode, web};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -47,6 +48,8 @@ pub struct ZoneUpdateResponse<'a> {
     /// Message
     #[schema(example = "ok")]
     pub message: &'a str,
+    #[serde(flatten)]
+    pub state: ChangeState,
 }
 
 #[utoipa::path(
@@ -162,8 +165,12 @@ pub async fn update_zone(
     if _update_zone.pixel_points.is_some() {
         let _ = ds_guard.rebuild_zone_grid();
     }
+    drop(ds_guard);
 
-    return Ok(HttpResponse::Ok().json(ZoneUpdateResponse { message: "ok" }));
+    return Ok(HttpResponse::Ok().json(ZoneUpdateResponse {
+        message: "ok",
+        state: ChangeState::of(&data),
+    }));
 }
 
 /// The body of the request to delete the zone
@@ -180,6 +187,8 @@ pub struct ZoneDeleteResponse<'a> {
     /// Message
     #[schema(example = "ok")]
     pub message: &'a str,
+    #[serde(flatten)]
+    pub state: ChangeState,
 }
 
 #[utoipa::path(
@@ -216,7 +225,11 @@ pub async fn delete_zone(
     // Rebuild zone grid after deletion
     let _ = ds_guard.rebuild_zone_grid();
     drop(ds_guard);
-    return Ok(HttpResponse::NoContent().json(ZoneDeleteResponse { message: "ok" }));
+    // 200 rather than 204: the answer carries what is left unsaved
+    return Ok(HttpResponse::Ok().json(ZoneDeleteResponse {
+        message: "ok",
+        state: ChangeState::of(&data),
+    }));
 }
 
 /// The body of the request to create new zone
@@ -264,6 +277,8 @@ pub struct ZoneCreateResponse {
     /// Zone identifier
     #[schema(example = "fad8a040-5979-47e9-9ebf-3a571f677f49")]
     pub zone_id: String,
+    #[serde(flatten)]
+    pub state: ChangeState,
 }
 
 #[utoipa::path(
@@ -355,7 +370,10 @@ pub async fn create_zone(
     let _ = ds_guard.rebuild_zone_grid();
     drop(ds_guard);
 
-    return Ok(HttpResponse::Created().json(ZoneCreateResponse { zone_id: new_id }));
+    return Ok(HttpResponse::Created().json(ZoneCreateResponse {
+        zone_id: new_id,
+        state: ChangeState::of(&data),
+    }));
 }
 
 /// The body of the request to overwrite all zones
@@ -373,6 +391,8 @@ pub struct ZonesOverwriteAllResponse {
     /// List of new zones identifiers
     #[schema(example = json!(["fad8a040-5979-47e9-9ebf-3a571f677f49", "dcd66eeb-545c-4f81-99f6-e94229f8008a"]))]
     pub zones_ids: Vec<String>,
+    #[serde(flatten)]
+    pub state: ChangeState,
 }
 
 #[utoipa::path(
@@ -509,8 +529,10 @@ pub async fn replace_all(
 
     // Rebuild zone grid once after all changes
     let _ = ds_guard.rebuild_zone_grid();
+    drop(ds_guard);
 
     return Ok(HttpResponse::Created().json(ZonesOverwriteAllResponse {
         zones_ids: response,
+        state: ChangeState::of(&data),
     }));
 }

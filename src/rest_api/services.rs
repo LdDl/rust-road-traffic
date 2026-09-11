@@ -153,6 +153,7 @@ use utoipa_rapidoc::RapiDoc;
             crate::rest_api::config::ConfigView,
             crate::rest_api::config::ConfigPatch,
             crate::rest_api::config::TrackingOptions,
+            crate::rest_api::change_state::ChangeState,
             crate::rest_api::redis_check::RedisCheckRequest,
             crate::rest_api::redis_check::RedisCheckResponse,
             crate::lib::status::InputStatus,

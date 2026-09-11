@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 use crate::lib::logging::{self, LoggedProblem};
 use crate::lib::status::{DetectionStatus, InputStatus, TrackingStatus};
 use crate::rest_api::APIStorage;
-use crate::settings::needs_restart;
+use crate::rest_api::change_state::ChangeState;
 
 /// Where the statistics are published, without the password
 #[derive(Debug, Serialize, ToSchema)]
@@ -41,12 +41,10 @@ pub struct StatusResponse {
     pub logging: LoggingStatus,
     /// The last warning or error since start, `null` if there was none
     pub last_problem: Option<LoggedProblem>,
-    /// Whether the saved configuration differs from the one this run started
-    /// with, i.e. whether `POST /api/mutations/restart` is due
-    pub restart_required: bool,
-    /// Dotted paths of the saved settings that are waiting for that restart
-    #[schema(example = json!(["input.video_src"]))]
-    pub pending_changes: Vec<String>,
+    /// What is unsaved and what waits for a restart, the same block every
+    /// changing request answers with
+    #[serde(flatten)]
+    pub changes: ChangeState,
 }
 
 #[utoipa::path(
@@ -62,15 +60,14 @@ pub struct StatusResponse {
 /// publishes and logs, and what went wrong last. Meant to answer the questions
 /// that would otherwise need an SSH session
 pub async fn status(data: web::Data<APIStorage>) -> Result<HttpResponse, Error> {
+    // Taken before the settings below: it locks them itself
+    let changes = ChangeState::of(&data);
     let settings = data
         .app_settings
         .read()
         .expect("Settings are poisoned [RwLock]");
     let verbose = settings.verbose.clone().unwrap_or_default();
     let log_config = verbose.to_log_config(&data.settings_filename);
-    // A setting that applies live is not pending, but it is still a difference
-    // worth naming, so both are reported
-    let pending_changes = settings.differences_from(&data.running_settings);
     Ok(HttpResponse::Ok().json(StatusResponse {
         equipment_id: settings.equipment_info.id.clone(),
         version: env!("CARGO_PKG_VERSION").to_string(),
@@ -91,7 +88,6 @@ pub async fn status(data: web::Data<APIStorage>) -> Result<HttpResponse, Error> 
                 .map(|folder| folder.join(logging::LOG_FILE_NAME).display().to_string()),
         },
         last_problem: logging::last_problem(),
-        restart_required: pending_changes.iter().any(|path| needs_restart(path)),
-        pending_changes,
+        changes,
     }))
 }
