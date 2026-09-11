@@ -178,10 +178,19 @@ pub struct TrackingPatch {
     #[serde(rename = "type")]
     pub typ: Option<String>,
     pub kalman_filter: Option<String>,
-    pub max_lost_seconds: Option<f32>,
-    pub max_no_match: Option<usize>,
+    /// `null` clears it, and `max_no_match` takes over
+    #[serde(default, deserialize_with = "nullable")]
+    #[schema(value_type = Option<f32>)]
+    pub max_lost_seconds: Option<Option<f32>>,
+    /// `null` clears it
+    #[serde(default, deserialize_with = "nullable")]
+    #[schema(value_type = Option<usize>)]
+    pub max_no_match: Option<Option<usize>>,
     pub max_points_in_track: Option<usize>,
-    pub iou_threshold: Option<f32>,
+    /// `null` puts the default back
+    #[serde(default, deserialize_with = "nullable")]
+    #[schema(value_type = Option<f32>)]
+    pub iou_threshold: Option<Option<f32>>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -202,7 +211,10 @@ pub struct RedisPatch {
     pub enable: Option<bool>,
     pub host: Option<String>,
     pub port: Option<i32>,
-    pub username: Option<String>,
+    /// `null` goes back to the default user
+    #[serde(default, deserialize_with = "nullable")]
+    #[schema(value_type = Option<String>)]
+    pub username: Option<Option<String>>,
     pub db_index: Option<i32>,
     pub channel_name: Option<String>,
     pub password: Option<String>,
@@ -210,11 +222,31 @@ pub struct RedisPatch {
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
+/// Every key here may be sent as `null` to put the default back
 pub struct VerbosePatch {
-    pub level: Option<String>,
-    pub logs_folder: Option<String>,
-    pub max_file_size_mb: Option<u64>,
-    pub max_files: Option<usize>,
+    #[serde(default, deserialize_with = "nullable")]
+    #[schema(value_type = Option<String>)]
+    pub level: Option<Option<String>>,
+    #[serde(default, deserialize_with = "nullable")]
+    #[schema(value_type = Option<String>)]
+    pub logs_folder: Option<Option<String>>,
+    #[serde(default, deserialize_with = "nullable")]
+    #[schema(value_type = Option<u64>)]
+    pub max_file_size_mb: Option<Option<u64>>,
+    #[serde(default, deserialize_with = "nullable")]
+    #[schema(value_type = Option<usize>)]
+    pub max_files: Option<Option<usize>>,
+}
+
+/// Tells a key sent as `null` from a key not sent at all: the first clears a
+/// setting that may be unset, the second leaves it alone. A plain `Option`
+/// folds both into `None`, and a value once set could then never be cleared
+fn nullable<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
 }
 
 /// Sets a value and names the path, but only when it really differs: the
@@ -261,13 +293,13 @@ impl ConfigPatch {
             );
             set(
                 &mut settings.tracking.max_lost_seconds,
-                tracking.max_lost_seconds.map(Some),
+                tracking.max_lost_seconds,
                 "tracking.max_lost_seconds",
                 &mut changed,
             );
             set(
                 &mut settings.tracking.max_no_match,
-                tracking.max_no_match.map(Some),
+                tracking.max_no_match,
                 "tracking.max_no_match",
                 &mut changed,
             );
@@ -279,7 +311,7 @@ impl ConfigPatch {
             );
             set(
                 &mut settings.tracking.iou_threshold,
-                tracking.iou_threshold.map(Some),
+                tracking.iou_threshold,
                 "tracking.iou_threshold",
                 &mut changed,
             );
@@ -322,7 +354,7 @@ impl ConfigPatch {
             );
             set(
                 &mut current.username,
-                redis.username.map(Some),
+                redis.username,
                 "redis_publisher.username",
                 &mut changed,
             );
@@ -349,25 +381,25 @@ impl ConfigPatch {
             let current = settings.verbose.get_or_insert_with(Default::default);
             set(
                 &mut current.level,
-                verbose.level.map(Some),
+                verbose.level,
                 "verbose.level",
                 &mut changed,
             );
             set(
                 &mut current.logs_folder,
-                verbose.logs_folder.map(Some),
+                verbose.logs_folder,
                 "verbose.logs_folder",
                 &mut changed,
             );
             set(
                 &mut current.max_file_size_mb,
-                verbose.max_file_size_mb.map(Some),
+                verbose.max_file_size_mb,
                 "verbose.max_file_size_mb",
                 &mut changed,
             );
             set(
                 &mut current.max_files,
-                verbose.max_files.map(Some),
+                verbose.max_files,
                 "verbose.max_files",
                 &mut changed,
             );
@@ -465,9 +497,13 @@ pub async fn update_config(
 
     // Whatever can be applied right away, is: the rest waits for a restart
     if changed.iter().any(|path| path == "verbose.level") {
-        if let Some(level) = settings.verbose.as_ref().and_then(|v| v.level.as_deref()) {
-            logging::set_log_level(level);
-        }
+        // Cleared means the default, which has to be put back just the same
+        let level = settings
+            .verbose
+            .as_ref()
+            .and_then(|v| v.level.as_deref())
+            .unwrap_or(logging::DEFAULT_LEVEL);
+        logging::set_log_level(level);
     }
     if changed.iter().any(|path| path == "equipment_info.id") {
         // Read when statistics are handed out rather than kept anywhere else,
@@ -632,5 +668,42 @@ mod tests {
         }
         assert!(!needs_restart("verbose.level"));
         assert!(!needs_restart("equipment_info.id"));
+    }
+
+    #[test]
+    fn null_clears_a_setting_and_a_missing_key_leaves_it_alone() {
+        let mut s = settings("nullable");
+        s.tracking.max_lost_seconds = Some(2.0);
+        s.redis_publisher.username = Some("stats".to_string());
+
+        // Not sent: untouched
+        let changed = patch(r#"{"tracking":{"max_points_in_track":50}}"#)
+            .unwrap()
+            .apply(&mut s);
+        assert_eq!(changed, ["tracking.max_points_in_track"]);
+        assert_eq!(s.tracking.max_lost_seconds, Some(2.0));
+
+        // Switching from seconds to frames needs the seconds gone
+        let changed = patch(r#"{"tracking":{"max_lost_seconds":null,"max_no_match":60}}"#)
+            .unwrap()
+            .apply(&mut s);
+        assert_eq!(
+            changed,
+            ["tracking.max_lost_seconds", "tracking.max_no_match"]
+        );
+        assert_eq!(s.tracking.max_lost_seconds, None);
+        assert_eq!(s.tracking.max_no_match, Some(60));
+
+        let changed = patch(r#"{"redis_publisher":{"username":null}}"#)
+            .unwrap()
+            .apply(&mut s);
+        assert_eq!(changed, ["redis_publisher.username"]);
+        assert_eq!(s.redis_publisher.username, None);
+
+        // Clearing what is already clear changes nothing
+        let changed = patch(r#"{"redis_publisher":{"username":null}}"#)
+            .unwrap()
+            .apply(&mut s);
+        assert!(changed.is_empty());
     }
 }

@@ -428,6 +428,45 @@ fn merge_value(existing: &mut Table, key: &str, mut value: Value) {
     }
 }
 
+/// Removes from each section the keys the settings now leave unset.
+///
+/// TOML has no null, so an unset value is simply absent from the dump, and
+/// merging the dump only ever adds and replaces. Without this, a setting
+/// cleared through the API would stay in the file and come back on the next
+/// start. Only keys the settings know about and hold as unset are removed:
+/// top-level sections and anything the settings have never heard of are left
+/// alone
+fn drop_cleared_keys(document: &mut Table, values: &serde_json::Value) {
+    fn remove_nulls(table: &mut Table, values: &serde_json::Value) {
+        let Some(values) = values.as_object() else {
+            return;
+        };
+        for (key, value) in values {
+            match value {
+                serde_json::Value::Null => {
+                    table.remove(key);
+                }
+                serde_json::Value::Object(_) => {
+                    if let Some(Item::Table(nested)) = table.get_mut(key) {
+                        remove_nulls(nested, value);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let Some(sections) = values.as_object() else {
+        return;
+    };
+    for (section, value) in sections {
+        if let (Some(Item::Table(table)), serde_json::Value::Object(_)) =
+            (document.get_mut(section), value)
+        {
+            remove_nulls(table, value);
+        }
+    }
+}
+
 /// Largest table position in the document, 0 when there are no tables
 fn max_position(table: &Table) -> isize {
     table
@@ -798,6 +837,7 @@ impl AppSettings {
                     None,
                     false,
                 );
+                drop_cleared_keys(document.as_table_mut(), &serde_json::to_value(self)?);
                 document.to_string()
             }
             Err(_) => dump,
@@ -1175,5 +1215,27 @@ mod tests {
         assert!(needs_restart("verbose.logs_folder"));
         assert!(needs_restart("input.video_src"));
         assert!(needs_restart("tracking.type"));
+    }
+
+    #[test]
+    fn a_setting_cleared_in_memory_is_removed_from_the_file() {
+        let file = TempConfig::new("cleared");
+        let mut settings = AppSettings::new(&file.0).unwrap();
+        assert_eq!(settings.tracking.max_lost_seconds, Some(2.0));
+        settings.tracking.max_lost_seconds = None;
+        settings.tracking.max_no_match = Some(60);
+        settings.save(&file.0).unwrap();
+
+        let text = fs::read_to_string(&file.0).unwrap();
+        assert!(!text.contains("max_lost_seconds"), "{text}");
+        assert!(text.contains("max_no_match = 60"), "{text}");
+        // Comments of the section are kept
+        assert!(
+            text.contains("# Either \"bytetrack\" or \"iou_naive\""),
+            "{text}"
+        );
+        let reloaded = AppSettings::new(&file.0).unwrap();
+        assert_eq!(reloaded.tracking.max_lost_seconds, None);
+        assert_eq!(reloaded.tracking.max_no_match, Some(60));
     }
 }

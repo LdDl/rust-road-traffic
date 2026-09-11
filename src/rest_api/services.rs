@@ -166,6 +166,7 @@ use utoipa_rapidoc::RapiDoc;
             crate::rest_api::config::VerbosePatch,
             crate::rest_api::config::TrackingOptions,
             crate::rest_api::change_state::ChangeState,
+            crate::rest_api::restart::RestartRefused,
             crate::rest_api::redis_check::RedisCheckRequest,
             crate::rest_api::redis_check::RedisCheckResponse,
             crate::lib::status::InputStatus,

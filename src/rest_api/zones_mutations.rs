@@ -197,7 +197,7 @@ pub struct ZoneDeleteResponse<'a> {
     path = "/api/mutations/zones/delete",
     request_body = ZoneDeleteRequest,
     responses(
-        (status = 204, description = "Zone has been deleted", body = ZoneDeleteResponse),
+        (status = 200, description = "Zone has been deleted", body = ZoneDeleteResponse),
         (status = 500, description = "Internal error", body = ErrorResponse)
     )
 )]

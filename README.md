@@ -374,7 +374,7 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
     # {"message":"restarting"}
     ```
 
-    The process replaces its own image, keeping the same PID, so systemd sees no exit, a container whose entrypoint is this binary keeps running, and a plain terminal run comes back as well. Nothing is saved first: unsaved zones and settings are lost, so call `/api/mutations/save_toml` before restarting, and a config edited over SSH is picked up exactly as written. The reply is sent before the restart happens, so wait for `/api/ping` to answer again.
+    The process replaces its own image, keeping the same PID, so systemd sees no exit, a container whose entrypoint is this binary keeps running, and a plain terminal run comes back as well. Nothing is saved first, and a restart reads the file, so while anything is unsaved - settings, zones, even the ones that took effect at once - the request is refused with `409` and the same `unsaved_changes` block every changing request answers with; `?force=true` restarts anyway and drops what is unsaved. A config edited over SSH is picked up exactly as written. The reply is sent before the restart happens, so wait for `/api/ping` to answer again.
 
     The capture subprocess is shut down properly on the way out, and on `Ctrl-C` as well: it is sent `SIGINT`, which `gst-launch-1.0` answers by taking the pipeline down to NULL, and only killed if it does not go within two seconds. That matters on a Jetson CSI camera, where only the orderly teardown closes the Argus session - a session left open keeps the sensor busy for the next start.
 
@@ -428,10 +428,10 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
 
     Nothing reaches the file until `GET /api/mutations/save_toml`, the only thing that writes it: the settings from memory together with the zones the running process uses. A restart reads the file, so the order is always save, then restart. Every request that changes something, settings or zones, answers with the same four fields describing everything left to do rather than only its own part, and `GET /api/status` carries them too:
 
-    - `save_required` / `unsaved_changes` — memory differs from the file (`road_lanes` stands for the zones);
-    - `restart_required` / `pending_changes` — some change takes effect only after `POST /api/mutations/restart`.
+    - `save_required` / `unsaved_changes` - memory differs from the file (`road_lanes` stands for the zones);
+    - `restart_required` / `pending_changes` - some change takes effect only after `POST /api/mutations/restart`.
 
-    The log level, the equipment id and the zones apply at once and need saving only to survive a restart. Everything else is read when the piece that uses it is built, and waits for a restart. Values are validated the same way as when the file is loaded, and a request that would not make sense is rejected with 400.
+    The log level, the equipment id and the zones apply at once and need saving only to survive a restart. Everything else is read when the piece that uses it is built, and waits for a restart. Values are validated the same way as when the file is loaded, and a request that would not make sense is rejected with 400. A key sent as `null` clears a setting that may be unset - `tracking.max_lost_seconds`, `max_no_match`, `iou_threshold`, `redis_publisher.username` and everything in `verbose` - and it is removed from the file on the next save; a key left out is not touched.
 
     Redis can be tried before it is saved:
 
