@@ -202,20 +202,32 @@ fn run(
             let redis_password = settings.redis_publisher.password.to_owned();
             let redis_db_index = settings.redis_publisher.db_index;
             let redis_channel = settings.redis_publisher.channel_name.to_owned();
-            let mut redis_conn = match redis_password.chars().count() {
-                0 => RedisConnection::new(redis_host, redis_port, redis_db_index, redis_worker),
-                _ => RedisConnection::new_with_password(
-                    redis_host,
-                    redis_port,
-                    redis_db_index,
-                    redis_password,
-                    redis_worker,
-                ),
-            };
-            if redis_channel.chars().count() != 0 {
-                redis_conn.set_channel(redis_channel);
+            let redis_username = settings.redis_publisher.username.to_owned();
+            match RedisConnection::new(
+                &redis_host,
+                redis_port,
+                redis_db_index,
+                redis_username.as_deref(),
+                &redis_password,
+                redis_worker,
+            ) {
+                Ok(mut redis_conn) => {
+                    if redis_channel.chars().count() != 0 {
+                        redis_conn.set_channel(redis_channel);
+                    }
+                    Some(redis_conn)
+                }
+                Err(err) => {
+                    error!(
+                        scope = logging::SCOPE_REDIS,
+                        host = %redis_host,
+                        port = redis_port,
+                        error = %err,
+                        "Can't set up the Redis publisher, statistics will not be published"
+                    );
+                    None
+                }
             }
-            Some(redis_conn)
         }
         false => None,
     };

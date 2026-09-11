@@ -4,11 +4,40 @@ use crate::lib::logging;
 use crate::lib::publisher::RedisMessage;
 use crate::rest_api::zones_stats::{AllZonesStats, VehicleTypeParameters, ZoneStats};
 use crate::{lib::data_storage::ThreadedDataStorage, rest_api::zones_stats::TrafficFlowInfo};
-use redis::{Client, Commands};
+use redis::{Client, Commands, ConnectionAddr, ConnectionInfo, RedisConnectionInfo};
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 use tracing::{error, info};
+
+/// How to reach the configured Redis or Valkey server.
+///
+/// Built as a struct rather than formatted into a `redis://user:pass@host/db`
+/// URL, because the crate percent-decodes whatever it finds in a URL: a
+/// password holding `@`, `/` or `%` is then read as part of the host or the
+/// path. Measured against Valkey 8.1 — `p@ss/w0rd` makes the parser take `ss`
+/// for the host and give up with "Invalid database number"
+pub fn connection_info(
+    host: &str,
+    port: i32,
+    db_index: i32,
+    username: Option<&str>,
+    password: &str,
+) -> ConnectionInfo {
+    let some_if_set = |value: &str| match value.is_empty() {
+        true => None,
+        false => Some(value.to_string()),
+    };
+    ConnectionInfo {
+        addr: ConnectionAddr::Tcp(host.to_string(), port.max(0) as u16),
+        redis: RedisConnectionInfo {
+            db: db_index as i64,
+            username: username.and_then(some_if_set),
+            password: some_if_set(password),
+            ..Default::default()
+        },
+    }
+}
 
 pub struct RedisConnection {
     pub channel_name: String,
@@ -17,36 +46,23 @@ pub struct RedisConnection {
 }
 
 impl RedisConnection {
+    /// Nothing is dialled here: the client only holds the details, so this
+    /// fails on a hostname that cannot be read at all, not on a server that is
+    /// down
     pub fn new(
-        host: String,
+        host: &str,
         port: i32,
         db_index: i32,
+        username: Option<&str>,
+        password: &str,
         data_storage: ThreadedDataStorage,
-    ) -> RedisConnection {
-        let client = Client::open(format!("redis://{}:{}/{}", host, port, db_index)).unwrap();
-        return RedisConnection {
+    ) -> Result<RedisConnection, Box<dyn Error>> {
+        let client = Client::open(connection_info(host, port, db_index, username, password))?;
+        Ok(RedisConnection {
             channel_name: "DETECTORS_STATISTICS".to_string(),
             client: Arc::new(client),
             data_storage,
-        };
-    }
-    pub fn new_with_password(
-        host: String,
-        port: i32,
-        db_index: i32,
-        password: String,
-        data_storage: ThreadedDataStorage,
-    ) -> RedisConnection {
-        let client = Client::open(format!(
-            "redis://:{}@{}:{}/{}",
-            password, host, port, db_index
-        ))
-        .unwrap();
-        return RedisConnection {
-            channel_name: "DETECTORS_STATISTICS".to_string(),
-            client: Arc::new(client),
-            data_storage,
-        };
+        })
     }
     pub fn set_channel(&mut self, _channel_name: String) {
         self.channel_name = _channel_name.clone();

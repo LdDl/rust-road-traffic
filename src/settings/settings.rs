@@ -213,6 +213,10 @@ pub struct RedisPublisherSettings {
     pub enable: bool,
     pub host: String,
     pub port: i32,
+    /// ACL user, for a server that has them (Redis 6+, Valkey). Leave it out to
+    /// authenticate as the default user, which is what `requirepass` sets up
+    #[serde(default)]
+    pub username: Option<String>,
     pub password: String,
     pub db_index: i32,
     pub channel_name: String,

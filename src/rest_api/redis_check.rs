@@ -2,6 +2,8 @@ use std::time::{Duration, Instant};
 
 use actix_web::{Error, HttpResponse, web};
 use redis::Client;
+
+use crate::lib::publisher::connection_info;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
@@ -20,6 +22,9 @@ pub struct RedisCheckRequest {
     pub host: Option<String>,
     pub port: Option<i32>,
     pub db_index: Option<i32>,
+    /// ACL user, for a server that has them. Leave it out to use the one from
+    /// the configuration
+    pub username: Option<String>,
     /// Leave it out to use the password already in the configuration
     pub password: Option<String>,
 }
@@ -54,7 +59,7 @@ pub async fn check_redis(
     request: Option<web::Json<RedisCheckRequest>>,
 ) -> Result<HttpResponse, Error> {
     let request = request.map(web::Json::into_inner).unwrap_or_default();
-    let (host, port, db_index, password) = {
+    let (host, port, db_index, username, password) = {
         let settings = data
             .app_settings
             .read()
@@ -64,20 +69,17 @@ pub async fn check_redis(
             request.host.unwrap_or_else(|| redis.host.clone()),
             request.port.unwrap_or(redis.port),
             request.db_index.unwrap_or(redis.db_index),
+            request.username.or_else(|| redis.username.clone()),
             request.password.unwrap_or_else(|| redis.password.clone()),
         )
     };
     let target = format!("{host}:{port}/{db_index}");
 
-    let url = if password.is_empty() {
-        format!("redis://{host}:{port}/{db_index}")
-    } else {
-        format!("redis://:{password}@{host}:{port}/{db_index}")
-    };
+    let details = connection_info(&host, port, db_index, username.as_deref(), &password);
     // Connecting blocks, and the worker thread has other requests to serve
     let outcome = web::block(move || {
         let started = Instant::now();
-        let result = Client::open(url)
+        let result = Client::open(details)
             .and_then(|client| client.get_connection_with_timeout(CONNECT_TIMEOUT))
             .and_then(|mut connection| redis::cmd("PING").query::<String>(&mut connection));
         (result, started.elapsed())
