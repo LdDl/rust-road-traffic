@@ -2,12 +2,12 @@ use crate::lib::logging;
 use actix_cors::Cors;
 use actix_web::{App, HttpResponse, HttpServer, http, web};
 use std::sync::{Arc, RwLock};
-use tracing::info;
+use tracing::{error, info};
 
 use crate::lib::data_storage::ThreadedDataStorage;
 use crate::lib::mjpeg_streaming::Broadcaster;
 use crate::lib::status::RuntimeStatus;
-use crate::rest_api::config::ErrorResponse;
+use crate::rest_api::errors::ErrorResponse;
 use crate::rest_api::{change_state, services};
 use crate::settings::AppSettings;
 use std::sync::{Mutex, mpsc::Receiver};
@@ -81,16 +81,18 @@ pub async fn start_rest_api(
             .allowed_methods(vec!["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
             .expose_headers(vec![http::header::CONTENT_LENGTH])
             .max_age(5600);
-        // A request body that does not parse is answered in the same shape as
-        // every other refusal, instead of actix's plain-text default. Serde
-        // says exactly what is wrong ("unknown field `x`, expected one of ...")
-        // and that is worth handing to the caller as it is
+        // What exactly went wrong goes to the log, where the detail is useful;
+        // the caller is told that the body was not taken and nothing about how
+        // this app is built. The settings it does take are in /api/docs
         let json_errors = web::JsonConfig::default().error_handler(|err, _| {
+            error!(
+                scope = logging::SCOPE_REST_API,
+                error = %err,
+                "Rejected a request body"
+            );
             actix_web::error::InternalError::from_response(
                 "",
-                HttpResponse::BadRequest().json(ErrorResponse {
-                    error_text: err.to_string(),
-                }),
+                HttpResponse::BadRequest().json(ErrorResponse::text("invalid json")),
             )
             .into()
         });

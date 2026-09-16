@@ -140,7 +140,6 @@ use utoipa_rapidoc::RapiDoc;
             crate::rest_api::zones_mutations::ZoneDeleteResponse,
             crate::rest_api::zones_mutations::ZonesOverwriteAllRequest,
             crate::rest_api::zones_mutations::ZonesOverwriteAllResponse,
-            crate::rest_api::zones_mutations::ErrorResponse,
             crate::rest_api::toml_mutations::UpdateTOMLResponse,
             crate::rest_api::restart::RestartResponse,
             crate::rest_api::status::StatusResponse,
@@ -149,7 +148,6 @@ use utoipa_rapidoc::RapiDoc;
             crate::rest_api::logs::LogsResponse,
             crate::rest_api::logs::LogEntry,
             crate::rest_api::config::UpdateConfigResponse,
-            crate::rest_api::config::ErrorResponse,
             crate::rest_api::config::ConfigView,
             crate::rest_api::config::ConfigPatch,
             crate::rest_api::config::InputView,
@@ -166,6 +164,8 @@ use utoipa_rapidoc::RapiDoc;
             crate::rest_api::config::VerbosePatch,
             crate::rest_api::config::TrackingOptions,
             crate::rest_api::change_state::ChangeState,
+            crate::rest_api::errors::ErrorResponse,
+            crate::rest_api::errors::FieldError,
             crate::rest_api::restart::RestartRefused,
             crate::rest_api::redis_check::RedisCheckRequest,
             crate::rest_api::redis_check::RedisCheckResponse,
@@ -173,7 +173,6 @@ use utoipa_rapidoc::RapiDoc;
             crate::lib::status::DetectionStatus,
             crate::lib::status::TrackingStatus,
             crate::lib::logging::LoggedProblem,
-            crate::rest_api::toml_mutations::ErrorResponse,
         ),
     )
 )]

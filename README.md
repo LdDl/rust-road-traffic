@@ -415,7 +415,7 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
 
     `GET /api/config` returns the settings held in memory, the ones `PATCH` changes, for the sections an operator may touch: `input`, `tracking`, `equipment_info`, `worker`, `redis_publisher` and `verbose`. Zones have their own endpoints; detection and the REST server itself are not part of it. `GET /api/tracking/types` lists the values `tracking.type` and `tracking.kalman_filter` accept.
 
-    `PATCH /api/config` changes the settings **in memory only**. Only the keys present in the request are touched, and a key the app has no setting for is refused by name:
+    `PATCH /api/config` changes the settings **in memory only**. Only the keys present in the request are touched, and a body this endpoint does not take is refused with 400 - what was wrong with it goes to the log rather than to the caller:
 
     ```shell
     curl -X PATCH -H 'Content-Type: application/json' \

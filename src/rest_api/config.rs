@@ -14,15 +14,8 @@ use utoipa::ToSchema;
 use crate::lib::logging;
 use crate::rest_api::APIStorage;
 use crate::rest_api::change_state::ChangeState;
+use crate::rest_api::errors::{ErrorResponse, FieldError};
 use crate::settings::{AppSettings, KALMAN_FILTERS, TRACKER_TYPES};
-
-/// Error response
-#[derive(Debug, Serialize, ToSchema)]
-pub struct ErrorResponse {
-    /// What was wrong with the request
-    #[schema(example = "Invalid tracker type: 'sort'. Supported: iou_naive, bytetrack")]
-    pub error_text: String,
-}
 
 /// Result of a configuration change
 #[derive(Debug, Serialize, ToSchema)]
@@ -169,7 +162,8 @@ pub struct ConfigPatch {
 #[serde(deny_unknown_fields)]
 pub struct InputPatch {
     pub video_src: Option<String>,
-    pub process_every_nth_frame: Option<u32>,
+    #[schema(value_type = u32)]
+    pub process_every_nth_frame: Option<i64>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -185,8 +179,9 @@ pub struct TrackingPatch {
     /// `null` clears it
     #[serde(default, deserialize_with = "nullable")]
     #[schema(value_type = Option<usize>)]
-    pub max_no_match: Option<Option<usize>>,
-    pub max_points_in_track: Option<usize>,
+    pub max_no_match: Option<Option<i64>>,
+    #[schema(value_type = usize)]
+    pub max_points_in_track: Option<i64>,
     /// `null` puts the default back
     #[serde(default, deserialize_with = "nullable")]
     #[schema(value_type = Option<f32>)]
@@ -232,10 +227,10 @@ pub struct VerbosePatch {
     pub logs_folder: Option<Option<String>>,
     #[serde(default, deserialize_with = "nullable")]
     #[schema(value_type = Option<u64>)]
-    pub max_file_size_mb: Option<Option<u64>>,
+    pub max_file_size_mb: Option<Option<i64>>,
     #[serde(default, deserialize_with = "nullable")]
     #[schema(value_type = Option<usize>)]
-    pub max_files: Option<Option<usize>>,
+    pub max_files: Option<Option<i64>>,
 }
 
 /// Tells a key sent as `null` from a key not sent at all: the first clears a
@@ -247,6 +242,53 @@ where
     D: serde::Deserializer<'de>,
 {
     Option::<T>::deserialize(deserializer).map(Some)
+}
+
+/// A number as the setting holds it.
+///
+/// Numbers are taken in signed and wide, so that one that does not fit is
+/// answered with a sentence about the setting. Left to serde, the answer would
+/// name the Rust type it could not fit the value into, which is this app's
+/// business rather than the caller's
+fn whole<T: TryFrom<i64>>(value: i64, field: &str) -> Result<T, FieldError> {
+    T::try_from(value).map_err(|_| {
+        FieldError::new(
+            field,
+            if value < 0 {
+                format!("must not be negative, got {value}")
+            } else {
+                format!("is too large: {value}")
+            },
+        )
+    })
+}
+
+fn whole_opt<T: TryFrom<i64>>(value: Option<i64>, field: &str) -> Result<Option<T>, FieldError> {
+    value.map(|value| whole(value, field)).transpose()
+}
+
+/// The same, for a setting that may also be cleared with `null`
+fn whole_nullable<T: TryFrom<i64>>(
+    value: Option<Option<i64>>,
+    field: &str,
+) -> Result<Option<Option<T>>, FieldError> {
+    match value {
+        None => Ok(None),
+        Some(None) => Ok(Some(None)),
+        Some(Some(value)) => Ok(Some(Some(whole(value, field)?))),
+    }
+}
+
+/// Keeps the value when it fits and the reason when it does not, so that one
+/// number that will not do does not hide the next
+fn take<T>(converted: Result<T, FieldError>, problems: &mut Vec<FieldError>) -> Option<T> {
+    match converted {
+        Ok(value) => Some(value),
+        Err(problem) => {
+            problems.push(problem);
+            None
+        }
+    }
 }
 
 /// Sets a value and names the path, but only when it really differs: the
@@ -261,9 +303,13 @@ fn set<T: PartialEq>(target: &mut T, value: Option<T>, path: &str, changed: &mut
 }
 
 impl ConfigPatch {
-    /// Applies the patch, returning the dotted paths that actually changed
-    pub fn apply(self, settings: &mut AppSettings) -> Vec<String> {
+    /// Applies the patch: what actually changed, and every number that would
+    /// not fit the setting it was sent for. A number that did not fit is not
+    /// written, the rest of the patch still is — the caller works on a copy,
+    /// so nothing reaches the app unless all of it is accepted
+    pub fn apply(self, settings: &mut AppSettings) -> (Vec<String>, Vec<FieldError>) {
         let mut changed = Vec::new();
+        let mut problems = Vec::new();
         if let Some(input) = self.input {
             set(
                 &mut settings.input.video_src,
@@ -271,10 +317,13 @@ impl ConfigPatch {
                 "input.video_src",
                 &mut changed,
             );
+            const NTH: &str = "input.process_every_nth_frame";
             set(
                 &mut settings.input.process_every_nth_frame,
-                input.process_every_nth_frame.map(Some),
-                "input.process_every_nth_frame",
+                take(whole_opt(input.process_every_nth_frame, NTH), &mut problems)
+                    .flatten()
+                    .map(Some),
+                NTH,
                 &mut changed,
             );
         }
@@ -297,16 +346,26 @@ impl ConfigPatch {
                 "tracking.max_lost_seconds",
                 &mut changed,
             );
+            const NO_MATCH: &str = "tracking.max_no_match";
             set(
                 &mut settings.tracking.max_no_match,
-                tracking.max_no_match,
-                "tracking.max_no_match",
+                take(
+                    whole_nullable(tracking.max_no_match, NO_MATCH),
+                    &mut problems,
+                )
+                .flatten(),
+                NO_MATCH,
                 &mut changed,
             );
+            const POINTS: &str = "tracking.max_points_in_track";
             set(
                 &mut settings.tracking.max_points_in_track,
-                tracking.max_points_in_track,
-                "tracking.max_points_in_track",
+                take(
+                    whole_opt(tracking.max_points_in_track, POINTS),
+                    &mut problems,
+                )
+                .flatten(),
+                POINTS,
                 &mut changed,
             );
             set(
@@ -391,20 +450,26 @@ impl ConfigPatch {
                 "verbose.logs_folder",
                 &mut changed,
             );
+            const SIZE: &str = "verbose.max_file_size_mb";
             set(
                 &mut current.max_file_size_mb,
-                verbose.max_file_size_mb,
-                "verbose.max_file_size_mb",
+                take(
+                    whole_nullable(verbose.max_file_size_mb, SIZE),
+                    &mut problems,
+                )
+                .flatten(),
+                SIZE,
                 &mut changed,
             );
+            const FILES: &str = "verbose.max_files";
             set(
                 &mut current.max_files,
-                verbose.max_files,
-                "verbose.max_files",
+                take(whole_nullable(verbose.max_files, FILES), &mut problems).flatten(),
+                FILES,
                 &mut changed,
             );
         }
-        changed
+        (changed, problems)
     }
 }
 
@@ -479,18 +544,24 @@ pub async fn update_config(
         .expect("Settings are poisoned [RwLock]");
 
     let mut updated = settings.clone();
-    let changed = patch.into_inner().apply(&mut updated);
+    let (changed, mut problems) = patch.into_inner().apply(&mut updated);
+    // Both kinds of trouble in one answer: a number that will not fit the
+    // setting, and a value the settings as a whole will not have
+    problems.extend(
+        updated
+            .problems()
+            .into_iter()
+            .map(|(field, error)| FieldError::new(field, error)),
+    );
+    if !problems.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ErrorResponse::fields(problems)));
+    }
     if changed.is_empty() {
         drop(settings);
         return Ok(HttpResponse::Ok().json(UpdateConfigResponse {
             message: "ok",
             changed,
             state: ChangeState::of(&data),
-        }));
-    }
-    if let Err(err) = updated.validate() {
-        return Ok(HttpResponse::BadRequest().json(ErrorResponse {
-            error_text: err.to_string(),
         }));
     }
     *settings = updated;
@@ -584,7 +655,8 @@ mod tests {
             r#"{"input":{"video_src":"rtsp://cam"},"worker":{"reset_data_milliseconds":30000}}"#,
         )
         .unwrap()
-        .apply(&mut s);
+        .apply(&mut s)
+        .0;
         // The worker interval was sent, but it was already that
         assert_eq!(changed, ["input.video_src"]);
         assert_eq!(s.input.video_src, "rtsp://cam");
@@ -597,7 +669,8 @@ mod tests {
         assert!(s.verbose.is_none());
         let changed = patch(r#"{"verbose":{"level":"debug"}}"#)
             .unwrap()
-            .apply(&mut s);
+            .apply(&mut s)
+            .0;
         assert_eq!(changed, ["verbose.level"]);
         assert_eq!(s.verbose.unwrap().level.as_deref(), Some("debug"));
     }
@@ -636,7 +709,8 @@ mod tests {
 
         let changed = patch(r#"{"redis_publisher":{"password":"new","username":"stats"}}"#)
             .unwrap()
-            .apply(&mut s);
+            .apply(&mut s)
+            .0;
         assert_eq!(
             changed,
             ["redis_publisher.username", "redis_publisher.password"]
@@ -679,14 +753,16 @@ mod tests {
         // Not sent: untouched
         let changed = patch(r#"{"tracking":{"max_points_in_track":50}}"#)
             .unwrap()
-            .apply(&mut s);
+            .apply(&mut s)
+            .0;
         assert_eq!(changed, ["tracking.max_points_in_track"]);
         assert_eq!(s.tracking.max_lost_seconds, Some(2.0));
 
         // Switching from seconds to frames needs the seconds gone
         let changed = patch(r#"{"tracking":{"max_lost_seconds":null,"max_no_match":60}}"#)
             .unwrap()
-            .apply(&mut s);
+            .apply(&mut s)
+            .0;
         assert_eq!(
             changed,
             ["tracking.max_lost_seconds", "tracking.max_no_match"]
@@ -696,14 +772,50 @@ mod tests {
 
         let changed = patch(r#"{"redis_publisher":{"username":null}}"#)
             .unwrap()
-            .apply(&mut s);
+            .apply(&mut s)
+            .0;
         assert_eq!(changed, ["redis_publisher.username"]);
         assert_eq!(s.redis_publisher.username, None);
 
         // Clearing what is already clear changes nothing
         let changed = patch(r#"{"redis_publisher":{"username":null}}"#)
             .unwrap()
-            .apply(&mut s);
+            .apply(&mut s)
+            .0;
         assert!(changed.is_empty());
+    }
+
+    #[test]
+    fn every_number_that_does_not_fit_is_named_at_once() {
+        let mut s = settings("numbers");
+        let (changed, problems) =
+            patch(r#"{"input":{"process_every_nth_frame":-3},"verbose":{"max_files":-1}}"#)
+                .expect("negative numbers parse; it is us who refuse them")
+                .apply(&mut s);
+
+        assert!(changed.is_empty(), "{changed:?}");
+        assert_eq!(
+            problems
+                .iter()
+                .map(|problem| (problem.field.as_str(), problem.error.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                (
+                    "input.process_every_nth_frame",
+                    "must not be negative, got -3"
+                ),
+                ("verbose.max_files", "must not be negative, got -1"),
+            ]
+        );
+
+        // Larger than the setting itself can hold, not merely unreasonable
+        let (_, problems) = patch(r#"{"input":{"process_every_nth_frame":5000000000}}"#)
+            .unwrap()
+            .apply(&mut s);
+        assert_eq!(problems[0].field, "input.process_every_nth_frame");
+        assert_eq!(problems[0].error, "is too large: 5000000000");
+
+        // Nothing was written along the way
+        assert_eq!(s.input.process_every_nth_frame, None);
     }
 }

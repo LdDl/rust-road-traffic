@@ -2,19 +2,12 @@ use crate::lib::logging;
 use crate::lib::zones::{VirtualLine, VirtualLineDirection, Zone};
 use crate::rest_api::APIStorage;
 use crate::rest_api::change_state::ChangeState;
+use crate::rest_api::errors::ErrorResponse;
 use actix_web::{Error, HttpResponse, http::StatusCode, web};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use tracing::info;
+use tracing::{error, info};
 use utoipa::ToSchema;
-
-/// Error response
-#[derive(Debug, Serialize, ToSchema)]
-pub struct ErrorResponse {
-    /// Error message
-    #[schema(example = "No such zone. Requested ID: dir_0_lane_1")]
-    pub error_text: String,
-}
 
 /// The body of the request to update the zone
 #[derive(Debug, Deserialize, ToSchema)]
@@ -79,11 +72,12 @@ pub async fn update_zone(
         /* Check if polygon with such identifier exists */
         Some(val) => val,
         None => {
-            return Ok(
-                HttpResponse::build(StatusCode::FAILED_DEPENDENCY).json(ErrorResponse {
-                    error_text: format!("No such zone. Requested ID: {}", _update_zone.zone_id),
-                }),
-            );
+            return Ok(HttpResponse::build(StatusCode::FAILED_DEPENDENCY).json(
+                ErrorResponse::text(format!(
+                    "No such zone. Requested ID: {}",
+                    _update_zone.zone_id
+                )),
+            ));
         }
     };
 
@@ -212,14 +206,16 @@ pub async fn delete_zone(
     match ds_guard.delete_zone(&_delete_zone.zone_id) {
         Ok(_) => {}
         Err(err) => {
-            return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).json(
-                ErrorResponse {
-                    error_text: format!(
-                        "Can't delete zone ID: {}. Error: {}",
-                        _delete_zone.zone_id, err
-                    ),
-                },
-            ));
+            // Why it failed describes how this app is built, so it goes to the
+            // log; the caller is told what did not happen
+            error!(
+                scope = logging::SCOPE_REST_API,
+                zone_id = %_delete_zone.zone_id,
+                error = %err,
+                "Can't delete the zone"
+            );
+            return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
+                .json(ErrorResponse::text("could not delete the zone")));
         }
     }
     // Rebuild zone grid after deletion
@@ -358,11 +354,14 @@ pub async fn create_zone(
     match ds_guard.insert_zone(zone) {
         Ok(_) => {}
         Err(err) => {
-            return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).json(
-                ErrorResponse {
-                    error_text: format!("Can't insert zone ID: {}. Error: {}", new_id, err),
-                },
-            ));
+            error!(
+                scope = logging::SCOPE_REST_API,
+                zone_id = %new_id,
+                error = %err,
+                "Can't create the zone"
+            );
+            return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
+                .json(ErrorResponse::text("could not create the zone")));
         }
     }
 
@@ -410,11 +409,8 @@ pub async fn replace_all(
     _new_zones: web::Json<ZonesOverwriteAllRequest>,
 ) -> Result<HttpResponse, Error> {
     if _new_zones.data.len() == 0 {
-        return Ok(
-            HttpResponse::build(StatusCode::BAD_REQUEST).json(ErrorResponse {
-                error_text: "No polygons".to_string(),
-            }),
-        );
+        return Ok(HttpResponse::build(StatusCode::BAD_REQUEST)
+            .json(ErrorResponse::text("No polygons".to_string())));
     }
 
     // Mark data for clean
@@ -494,11 +490,14 @@ pub async fn replace_all(
         match ds_guard.insert_zone(zone) {
             Ok(_) => {}
             Err(err) => {
-                return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).json(
-                    ErrorResponse {
-                        error_text: format!("Can't insert zone ID: {}. Error: {}", new_id, err),
-                    },
-                ));
+                error!(
+                    scope = logging::SCOPE_REST_API,
+                    zone_id = %new_id,
+                    error = %err,
+                    "Can't create the zone while replacing them all"
+                );
+                return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
+                    .json(ErrorResponse::text("could not replace the zones")));
             }
         }
         drop(ds_guard);
@@ -515,14 +514,14 @@ pub async fn replace_all(
         match ds_guard.delete_zone(zone_id) {
             Ok(_) => {}
             Err(err) => {
-                return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).json(
-                    ErrorResponse {
-                        error_text: format!(
-                            "Can't delete obsolete zone ID: {}. Error: {}",
-                            zone_id, err
-                        ),
-                    },
-                ));
+                error!(
+                    scope = logging::SCOPE_REST_API,
+                    zone_id = %zone_id,
+                    error = %err,
+                    "Can't delete a zone that is no longer there while replacing them all"
+                );
+                return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
+                    .json(ErrorResponse::text("could not replace the zones")));
             }
         }
     }

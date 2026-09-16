@@ -1,18 +1,11 @@
 use crate::lib::logging;
 use crate::rest_api::APIStorage;
 use crate::rest_api::change_state::{ChangeState, live_road_lanes};
+use crate::rest_api::errors::ErrorResponse;
 use actix_web::{Error, HttpResponse, web};
 use serde::Serialize;
-use tracing::info;
+use tracing::{error, info};
 use utoipa::ToSchema;
-
-/// Error response
-#[derive(Debug, Serialize, ToSchema)]
-pub struct ErrorResponse {
-    /// Error message
-    #[schema(example = "Can't save TOML due the error")]
-    pub error_text: String,
-}
 
 /// Response for the save configuration file request
 #[derive(Debug, Serialize, ToSchema)]
@@ -49,9 +42,15 @@ pub async fn save_toml(data: web::Data<APIStorage>) -> Result<HttpResponse, Erro
     let mut to_save = settings.clone();
     to_save.road_lanes = Some(zones.clone());
     if let Err(err) = to_save.save(&data.settings_filename) {
-        return Ok(HttpResponse::InternalServerError().json(ErrorResponse {
-            error_text: format!("Can't save TOML due the error: {}", err),
-        }));
+        // The path and what the file system said about it stay in the log
+        error!(
+            scope = logging::SCOPE_REST_API,
+            file = %data.settings_filename,
+            error = %err,
+            "Can't save the configuration"
+        );
+        return Ok(HttpResponse::InternalServerError()
+            .json(ErrorResponse::text("could not save the configuration")));
     }
     settings.road_lanes = Some(zones);
     *data

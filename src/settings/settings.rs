@@ -733,79 +733,126 @@ impl AppSettings {
         changed
     }
 
-    /// Checks the values that would otherwise only fail much later, when the
-    /// piece that reads them is built. Runs both on load and on every change
-    /// made through the API, so a file and a request are held to the same rules
-    pub fn validate(&self) -> Result<(), SettingsError> {
-        fn one_of(name: &str, value: &str, allowed: &[&str]) -> Result<(), SettingsError> {
-            if allowed.contains(&value) {
-                return Ok(());
-            }
-            Err(SettingsError::Validation(format!(
-                "Invalid {name}: '{value}'. Supported: {}",
-                allowed.join(", ")
-            )))
+    /// Everything wrong with these settings: which one, and why.
+    ///
+    /// A list rather than the first problem, so that a form is answered about
+    /// all of its fields at once instead of one per attempt
+    pub fn problems(&self) -> Vec<(String, String)> {
+        fn one_of(field: &str, value: &str, allowed: &[&str]) -> Option<(String, String)> {
+            (!allowed.contains(&value)).then(|| {
+                (
+                    field.to_string(),
+                    format!("must be one of {}, got '{}'", allowed.join(", "), value),
+                )
+            })
         }
         fn in_range<T: PartialOrd + std::fmt::Display>(
-            name: &str,
+            field: &str,
             value: T,
             low: T,
             high: T,
-        ) -> Result<(), SettingsError> {
-            if value >= low && value <= high {
-                return Ok(());
-            }
-            Err(SettingsError::Validation(format!(
-                "{name} must be between {low} and {high}, got {value}"
-            )))
+        ) -> Option<(String, String)> {
+            (value < low || value > high).then(|| {
+                (
+                    field.to_string(),
+                    format!("must be between {low} and {high}, got {value}"),
+                )
+            })
         }
 
-        if let Some(typ) = self.tracking.typ.as_deref() {
-            one_of("tracker type", typ, &TRACKER_TYPES)?;
-        }
-        if let Some(kalman_filter) = self.tracking.kalman_filter.as_deref() {
-            one_of("kalman filter type", kalman_filter, &KALMAN_FILTERS)?;
-        }
-        if let Some(level) = self.verbose.as_ref().and_then(|v| v.level.as_deref()) {
-            one_of("verbose level", level, &logging::LEVELS)?;
-        }
+        let mut problems = Vec::new();
         let video_src = self.input.video_src.trim();
         if video_src.is_empty() {
-            return Err(SettingsError::Validation(
-                "video_src must not be empty".to_string(),
+            problems.push((
+                "input.video_src".to_string(),
+                "must not be empty".to_string(),
             ));
-        }
-        // A camera, a stream or a GStreamer pipeline can only be checked by
-        // opening it, which is not this function's business; a file, though,
-        // is either there or a typo, and finding that out after a restart is
-        // too late — the app would have nothing to read and would stop
-        if crate::video_capture::is_file_source(video_src)
+        } else if crate::video_capture::is_file_source(video_src)
             && !std::path::Path::new(video_src).is_file()
         {
-            return Err(SettingsError::Validation(format!(
-                "video_src '{video_src}' is not a file this machine has"
-            )));
+            // A camera, a stream or a GStreamer pipeline can only be checked by
+            // opening it, which is not this function's business; a file, though,
+            // is either there or a typo, and finding that out after a restart is
+            // too late - the app would have nothing to read and would stop
+            problems.push((
+                "input.video_src".to_string(),
+                format!("'{video_src}' is not a file this machine has"),
+            ));
         }
         if let Some(nth) = self.input.process_every_nth_frame {
-            in_range("process_every_nth_frame", nth, 1, 1000)?;
+            problems.extend(in_range("input.process_every_nth_frame", nth, 1, 1000));
         }
-        in_range("conf_threshold", self.detection.conf_threshold, 0.0, 1.0)?;
-        in_range("nms_threshold", self.detection.nms_threshold, 0.0, 1.0)?;
+        if let Some(typ) = self.tracking.typ.as_deref() {
+            problems.extend(one_of("tracking.type", typ, &TRACKER_TYPES));
+        }
+        if let Some(kalman_filter) = self.tracking.kalman_filter.as_deref() {
+            problems.extend(one_of(
+                "tracking.kalman_filter",
+                kalman_filter,
+                &KALMAN_FILTERS,
+            ));
+        }
         if let Some(iou) = self.tracking.iou_threshold {
-            in_range("iou_threshold", iou, 0.0, 1.0)?;
+            problems.extend(in_range("tracking.iou_threshold", iou, 0.0, 1.0));
         }
         if let Some(seconds) = self.tracking.max_lost_seconds {
-            in_range("max_lost_seconds", seconds, 0.001, 3600.0)?;
+            problems.extend(in_range(
+                "tracking.max_lost_seconds",
+                seconds,
+                0.001,
+                3600.0,
+            ));
         }
-        in_range(
-            "reset_data_milliseconds",
+        problems.extend(in_range(
+            "detection.conf_threshold",
+            self.detection.conf_threshold,
+            0.0,
+            1.0,
+        ));
+        problems.extend(in_range(
+            "detection.nms_threshold",
+            self.detection.nms_threshold,
+            0.0,
+            1.0,
+        ));
+        problems.extend(in_range(
+            "worker.reset_data_milliseconds",
             self.worker.reset_data_milliseconds,
             1,
             24 * 60 * 60 * 1000,
-        )?;
-        in_range("back_end_port", self.rest_api.back_end_port, 1, 65535)?;
-        in_range("redis port", self.redis_publisher.port, 1, 65535)?;
-        Ok(())
+        ));
+        problems.extend(in_range(
+            "rest_api.back_end_port",
+            self.rest_api.back_end_port,
+            1,
+            65535,
+        ));
+        problems.extend(in_range(
+            "redis_publisher.port",
+            self.redis_publisher.port,
+            1,
+            65535,
+        ));
+        if let Some(level) = self.verbose.as_ref().and_then(|v| v.level.as_deref()) {
+            problems.extend(one_of("verbose.level", level, &logging::LEVELS));
+        }
+        problems
+    }
+
+    /// The same checks for a file being read, where there is nobody to hand a
+    /// list to: everything wrong with it, in one message
+    pub fn validate(&self) -> Result<(), SettingsError> {
+        let problems = self.problems();
+        if problems.is_empty() {
+            return Ok(());
+        }
+        Err(SettingsError::Validation(
+            problems
+                .into_iter()
+                .map(|(field, error)| format!("{field} {error}"))
+                .collect::<Vec<_>>()
+                .join("; "),
+        ))
     }
     /// Writes the settings back to `filename` keeping the file's comments, key
     /// order and formatting: every value this struct carries is set in the
@@ -1274,5 +1321,37 @@ mod tests {
         // A file that is really there
         settings.input.video_src = "./Cargo.toml".to_string();
         assert!(settings.validate().is_ok());
+    }
+
+    #[test]
+    fn everything_wrong_is_listed_at_once() {
+        let file = TempConfig::new("problems");
+        let mut settings = AppSettings::new(&file.0).unwrap();
+        settings.input.video_src = "./data/nowhere.mp4".to_string();
+        settings.tracking.typ = Some("sort".to_string());
+        settings.worker.reset_data_milliseconds = 0;
+
+        let problems = settings.problems();
+        assert_eq!(
+            problems
+                .iter()
+                .map(|(field, _)| field.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "input.video_src",
+                "tracking.type",
+                "worker.reset_data_milliseconds"
+            ]
+        );
+        assert_eq!(
+            problems[1].1,
+            "must be one of iou_naive, bytetrack, got 'sort'"
+        );
+
+        // Reading a file has nobody to hand a list to, so it gets one message
+        let error = settings.validate().expect_err("three problems").to_string();
+        assert!(error.contains("input.video_src"), "{error}");
+        assert!(error.contains("tracking.type"), "{error}");
+        assert!(error.contains("worker.reset_data_milliseconds"), "{error}");
     }
 }
