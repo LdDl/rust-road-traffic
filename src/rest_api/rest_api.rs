@@ -14,7 +14,7 @@ use std::sync::{Mutex, mpsc::Receiver};
 
 pub struct APIStorage {
     pub data_storage: ThreadedDataStorage,
-    /// Changed through `PUT /api/config`, so it is shared rather than owned:
+    /// Changed through `PATCH /api/config`, so it is shared rather than owned:
     /// the copy the detection loop started with stays as it was until a restart
     pub app_settings: RwLock<AppSettings>,
     /// The settings this run was started with. Comparing them with the ones
@@ -75,9 +75,11 @@ pub async fn start_rest_api(
                 http::header::ACCEPT,
                 http::header::ACCEPT_ENCODING,
             ])
-            .allowed_methods(vec!["GET", "POST"])
+            // Every method the API answers with, so that a browser's preflight
+            // for anything but GET and POST is not turned away. CORS guards
+            // nothing here anyway: the port is reachable directly
+            .allowed_methods(vec!["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
             .expose_headers(vec![http::header::CONTENT_LENGTH])
-            .supports_credentials()
             .max_age(5600);
         // A request body that does not parse is answered in the same shape as
         // every other refusal, instead of actix's plain-text default. Serde

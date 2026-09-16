@@ -43,7 +43,7 @@ pub fn init_routes(enable_mjpeg: bool) -> impl Fn(&mut web::ServiceConfig) {
                 .service(
                     web::resource("/config")
                         .route(web::get().to(config::get_config))
-                        .route(web::put().to(config::update_config)),
+                        .route(web::patch().to(config::update_config)),
                 )
                 .service(
                     web::scope("/redis").route("/check", web::post().to(redis_check::check_redis)),

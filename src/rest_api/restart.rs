@@ -53,7 +53,7 @@ pub struct RestartRefused {
 /// Restarts the application with the configuration file as it is on disk.
 ///
 /// A restart reads the file, so anything held only in memory - settings
-/// changed through `PUT /api/config`, zones, even the settings that took
+/// changed through `PATCH /api/config`, zones, even the settings that took
 /// effect at once - would be rolled back. While anything is unsaved the
 /// request is refused with 409 and the list of it; `?force=true` restarts
 /// anyway. The check is made here rather than left to a client because only

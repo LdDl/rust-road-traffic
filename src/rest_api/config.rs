@@ -456,7 +456,7 @@ pub async fn get_config(data: web::Data<APIStorage>) -> Result<HttpResponse, Err
 }
 
 #[utoipa::path(
-    put,
+    patch,
     tag = "Configuration",
     path = "/api/config",
     request_body = ConfigPatch,
