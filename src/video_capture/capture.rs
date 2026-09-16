@@ -248,6 +248,12 @@ impl Drop for VideoSource {
     }
 }
 
+/// Whether this source is a file on disk, as opposed to a camera, a stream or
+/// a GStreamer pipeline. Only a file can be checked without opening anything
+pub fn is_file_source(video_src: &str) -> bool {
+    matches!(detect_source_kind(video_src.trim()), SourceKind::File)
+}
+
 fn detect_source_kind(src: &str) -> SourceKind {
     if src.starts_with("rtsp://") || src.starts_with("rtsps://") {
         SourceKind::Rtsp

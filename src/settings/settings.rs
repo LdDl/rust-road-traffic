@@ -769,10 +769,22 @@ impl AppSettings {
         if let Some(level) = self.verbose.as_ref().and_then(|v| v.level.as_deref()) {
             one_of("verbose level", level, &logging::LEVELS)?;
         }
-        if self.input.video_src.trim().is_empty() {
+        let video_src = self.input.video_src.trim();
+        if video_src.is_empty() {
             return Err(SettingsError::Validation(
                 "video_src must not be empty".to_string(),
             ));
+        }
+        // A camera, a stream or a GStreamer pipeline can only be checked by
+        // opening it, which is not this function's business; a file, though,
+        // is either there or a typo, and finding that out after a restart is
+        // too late — the app would have nothing to read and would stop
+        if crate::video_capture::is_file_source(video_src)
+            && !std::path::Path::new(video_src).is_file()
+        {
+            return Err(SettingsError::Validation(format!(
+                "video_src '{video_src}' is not a file this machine has"
+            )));
         }
         if let Some(nth) = self.input.process_every_nth_frame {
             in_range("process_every_nth_frame", nth, 1, 1000)?;
@@ -892,7 +904,7 @@ mod tests {
     const CONFIG: &str = r#"# Road traffic config
 [input]
     # Path or RTSP URL
-    video_src = "./data/a.mp4" # trailing note
+    video_src = "rtsp://cam/stream" # trailing note
     process_every_nth_frame = 2
 
 [detection]
@@ -1204,7 +1216,7 @@ mod tests {
         let mut saved = running.clone();
         assert!(saved.differences_from(&running).is_empty());
 
-        saved.input.video_src = "rtsp://cam/stream".to_string();
+        saved.input.video_src = "rtsp://another-cam/stream".to_string();
         saved.road_lanes = Some(Vec::new());
         assert_eq!(saved.differences_from(&running), ["input.video_src"]);
     }
@@ -1237,5 +1249,30 @@ mod tests {
         let reloaded = AppSettings::new(&file.0).unwrap();
         assert_eq!(reloaded.tracking.max_lost_seconds, None);
         assert_eq!(reloaded.tracking.max_no_match, Some(60));
+    }
+
+    #[test]
+    fn a_file_source_has_to_exist_but_a_stream_is_taken_on_trust() {
+        let file = TempConfig::new("video_src");
+        let mut settings = AppSettings::new(&file.0).unwrap();
+
+        settings.input.video_src = "./data/nowhere.mp4".to_string();
+        let error = settings.validate().expect_err("a missing file").to_string();
+        assert!(error.contains("nowhere.mp4"), "{error}");
+
+        // Nothing on disk to look at, so these are accepted as they are
+        for source in [
+            "rtsp://cam/stream",
+            "0",
+            "/dev/video0",
+            "videotestsrc ! video/x-raw, width=(int)640 ! appsink",
+        ] {
+            settings.input.video_src = source.to_string();
+            assert!(settings.validate().is_ok(), "{source}");
+        }
+
+        // A file that is really there
+        settings.input.video_src = "./Cargo.toml".to_string();
+        assert!(settings.validate().is_ok());
     }
 }

@@ -544,7 +544,7 @@ mod tests {
             &path,
             r#"
 [input]
-    video_src = "a.mp4"
+    video_src = "rtsp://cam/stream"
 [detection]
     network_weights = "m.onnx"
     conf_threshold = 0.4
