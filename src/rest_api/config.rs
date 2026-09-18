@@ -305,7 +305,7 @@ fn set<T: PartialEq>(target: &mut T, value: Option<T>, path: &str, changed: &mut
 impl ConfigPatch {
     /// Applies the patch: what actually changed, and every number that would
     /// not fit the setting it was sent for. A number that did not fit is not
-    /// written, the rest of the patch still is — the caller works on a copy,
+    /// written, the rest of the patch still is - the caller works on a copy,
     /// so nothing reaches the app unless all of it is accepted
     pub fn apply(self, settings: &mut AppSettings) -> (Vec<String>, Vec<FieldError>) {
         let mut changed = Vec::new();

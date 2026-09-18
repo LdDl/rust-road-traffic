@@ -24,6 +24,7 @@ pub const SCOPE_PROCESSING: &str = "processing";
 pub const SCOPE_ANALYTICS: &str = "analytics";
 pub const SCOPE_REDIS: &str = "redis";
 pub const SCOPE_REST_API: &str = "rest_api";
+pub const SCOPE_MJPEG: &str = "mjpeg";
 pub const SCOPE_REPORT: &str = "report";
 pub const SCOPE_DATASET: &str = "dataset";
 /// Verbosity thresholds: "info" shows error, warn and info lines, "debug" adds debug
