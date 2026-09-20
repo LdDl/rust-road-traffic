@@ -14,7 +14,8 @@ pub struct AllZonesStats {
     pub equipment_id: String,
     /// Set of data with summary information about road traffic parameters for each detection zone
     pub data: Vec<ZoneStats>,
-    /// Origin-Destination matrix.
+    /// Origin-Destination matrix for the same period every zone below reports,
+    /// the last one that closed. The diagonal is U-turns.
     /// Key: "ld-{lane_direction}_ln-{lane_number}" (e.g. "ld-1_ln-2")
     /// Value: HashMap where key is the same as for the main HashMap and value is number of vehicles that moved from
     pub od_matrix: HashMap<String, HashMap<String, u32>>,
@@ -155,9 +156,12 @@ pub async fn all_zones_stats(data: web::Data<APIStorage>) -> Result<HttpResponse
             );
         }
         ans.data.push(stats);
-        // Populate OD matrix based on real-time income statistics
+        // The window that has just closed, the same one everything else in this
+        // answer describes. `current_statistics.income` is the window still
+        // filling up, and it would grow between two requests that report the
+        // same `period_end`
         let to_key = zone_id_to_key.get(&zone.get_id()).unwrap();
-        for (from_zone_id, flow_count) in zone.current_statistics.income.iter() {
+        for (from_zone_id, flow_count) in zone.statistics.income.iter() {
             // Convert from_zone_id (internal UUID) to OD matrix key format
             if let Some(from_key) = zone_id_to_key.get(from_zone_id) {
                 // Update the OD matrix: from from_key TO to_key
