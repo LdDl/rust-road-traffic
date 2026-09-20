@@ -2,9 +2,10 @@ use crate::lib::logging;
 use crate::lib::zones::{VirtualLine, VirtualLineDirection, Zone};
 use crate::rest_api::APIStorage;
 use crate::rest_api::change_state::ChangeState;
-use crate::rest_api::errors::ErrorResponse;
+use crate::rest_api::errors::{ErrorResponse, FieldError};
 use actix_web::{Error, HttpResponse, http::StatusCode, web};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::str::FromStr;
 use tracing::{error, info};
 use utoipa::ToSchema;
@@ -231,6 +232,13 @@ pub async fn delete_zone(
 /// The body of the request to create new zone
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ZoneCreateRequest {
+    /// Identifier to keep. Hand back the one this zone already has and it
+    /// stays addressable by that name; leave it out for a zone that is new,
+    /// and the answer says what it was called. Creating refuses an id that is
+    /// already taken, while `replace_all` takes it as meaning that zone and
+    /// replaces it, statistics and all
+    #[schema(example = "dir_0_lane_1")]
+    pub id: Option<String>,
     /// 4 points represinting zone for the image coordinates
     #[schema(example = json!([[230, 200], [550, 235], [512, 40], [359, 69]]))]
     pub pixel_points: Option<[[u16; 2]; 4]>,
@@ -284,6 +292,7 @@ pub struct ZoneCreateResponse {
     request_body = ZoneCreateRequest,
     responses(
         (status = 201, description = "Zone has been created", body = ZoneCreateResponse),
+        (status = 400, description = "The requested id is empty or already taken", body = ErrorResponse),
         (status = 500, description = "Internal error", body = ErrorResponse)
     )
 )]
@@ -295,6 +304,18 @@ pub async fn create_zone(
     // polygon.set_target_classes(COCO_FILTERED_CLASSNAMES);
 
     let mut zone = Zone::default();
+    // A zone keeps the name it was given; only a zone that has none gets the
+    // generated one `Zone::default` came with
+    let requested_id =
+        match _new_zone.id.as_deref().map(str::trim) {
+            Some(id) if id.is_empty() => {
+                return Ok(HttpResponse::build(StatusCode::BAD_REQUEST).json(
+                    ErrorResponse::fields(vec![FieldError::new("id", "must not be empty")]),
+                ));
+            }
+            Some(id) => Some(id.to_string()),
+            None => None,
+        };
     match _new_zone.pixel_points {
         Some(data) => {
             zone.update_pixel_map(data);
@@ -345,12 +366,33 @@ pub async fn create_zone(
         _ => {}
     }
 
+    if let Some(id) = requested_id {
+        zone.set_id(id);
+    }
     let new_id = zone.get_id().clone();
 
     let ds_guard = data
         .data_storage
         .read()
         .expect("DataStorage is poisoned [RWLock]");
+    // Creating is not a way to replace: the zone that is already called this
+    // keeps its statistics, and the caller is told rather than finding out by
+    // the numbers
+    let taken = ds_guard
+        .zones
+        .read()
+        .expect("Spatial data is poisoned [RWLock]")
+        .contains_key(&new_id);
+    if taken {
+        return Ok(
+            HttpResponse::build(StatusCode::BAD_REQUEST).json(ErrorResponse::fields(vec![
+                FieldError::new(
+                    "id",
+                    format!("'{new_id}' is the id of a zone that already exists"),
+                ),
+            ])),
+        );
+    }
     match ds_guard.insert_zone(zone) {
         Ok(_) => {}
         Err(err) => {
@@ -379,7 +421,8 @@ pub async fn create_zone(
 /// It does delete all existing zones and create new ones
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ZonesOverwriteAllRequest {
-    /// List of new zones
+    /// The zones that should exist after this request, all of them: anything
+    /// not in this list is deleted
     #[schema(example = json!([{"lane_number":53,"lane_direction":153,"pixel_points":[[230,200],[550,235],[512,40],[359,69]],"spatial_points":[[37.618908137083054,54.20564619851147],[37.61891517788172,54.20564502193819],[37.618927247822285,54.205668749493036],[37.61892020702362,54.2056701221611]],"color_rgb":[130,130,0],"virtual_line":{"geometry":[[365,177],[540,185]],"color_rgb":[210,65,80],"direction":"lrtb"}},{"lane_number":42,"lane_direction":142,"pixel_points":[[591,265],[835,265],[726,48],[555,58]],"spatial_points":[[37.618923808130916,54.205684902663165],[37.618887068935805,54.205689389059046],[37.618869252334406,54.205650113258066],[37.61890605402775,54.20564367215164]],"color_rgb":[130,0,130]}]))]
     pub data: Vec<ZoneCreateRequest>,
 }
@@ -401,9 +444,21 @@ pub struct ZonesOverwriteAllResponse {
     request_body = ZonesOverwriteAllRequest,
     responses(
         (status = 201, description = "All zones has been overwritten", body = ZonesOverwriteAllResponse),
+        (status = 400, description = "Two zones sent under one id, or an empty one", body = ErrorResponse),
         (status = 500, description = "Internal error", body = ErrorResponse)
     )
 )]
+/// The whole set of zones at once: whatever this request does not list stops
+/// existing.
+///
+/// A zone sent with the `id` of one that is already there **replaces** it
+/// rather than being merged into it. It keeps the name, so a client that
+/// stored the id goes on using it and the configuration file goes on calling
+/// the zone the same thing, but everything the running process had counted for
+/// it - the statistics of the current period, the vehicles it has registered,
+/// the crossings of its virtual line - starts over. A zone sent without an
+/// `id` is a new zone and is given one; the answer lists the ids in the order
+/// the zones were sent
 pub async fn replace_all(
     data: web::Data<APIStorage>,
     _new_zones: web::Json<ZonesOverwriteAllRequest>,
@@ -411,6 +466,31 @@ pub async fn replace_all(
     if _new_zones.data.len() == 0 {
         return Ok(HttpResponse::build(StatusCode::BAD_REQUEST)
             .json(ErrorResponse::text("No polygons".to_string())));
+    }
+
+    // Nothing is touched until the whole request is known to be good: two zones
+    // sent under one name cannot both be kept, and finding that out halfway
+    // through would leave the running zones in a state nobody asked for
+    let mut refused = Vec::new();
+    let mut named: HashSet<&str> = HashSet::new();
+    for (index, new_zone) in _new_zones.data.iter().enumerate() {
+        let Some(id) = new_zone.id.as_deref().map(str::trim) else {
+            continue;
+        };
+        let field = format!("data.{index}.id");
+        if id.is_empty() {
+            refused.push(FieldError::new(field, "must not be empty"));
+        } else if !named.insert(id) {
+            refused.push(FieldError::new(
+                field,
+                format!("'{id}' names more than one zone in this request"),
+            ));
+        }
+    }
+    if !refused.is_empty() {
+        return Ok(
+            HttpResponse::build(StatusCode::BAD_REQUEST).json(ErrorResponse::fields(refused))
+        );
     }
 
     // Mark data for clean
@@ -481,6 +561,9 @@ pub async fn replace_all(
             _ => {}
         }
 
+        if let Some(id) = new_zone.id.as_deref().map(str::trim) {
+            zone.set_id(id.to_string());
+        }
         let new_id = zone.get_id().clone();
 
         let ds_guard = data
@@ -505,12 +588,15 @@ pub async fn replace_all(
         response.push(new_id);
     }
 
-    // Clean data
+    // Clean data. A zone the caller sent back under the name it already had was
+    // replaced in place just now, so cleaning by the old list would delete the
+    // very zones this request came to keep
+    let kept: HashSet<&String> = response.iter().collect();
     let ds_guard = data
         .data_storage
         .read()
         .expect("DataStorage is poisoned [RWLock]");
-    for zone_id in need_to_clean.iter() {
+    for zone_id in need_to_clean.iter().filter(|id| !kept.contains(id)) {
         match ds_guard.delete_zone(zone_id) {
             Ok(_) => {}
             Err(err) => {

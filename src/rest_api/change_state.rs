@@ -93,6 +93,9 @@ pub fn live_road_lanes(data_storage: &ThreadedDataStorage) -> Vec<RoadLanesSetti
         .map(|zone_guarded| {
             let zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
             RoadLanesSettings {
+                // Written down so that the next run calls the zone what this
+                // one calls it, and a client's `zone_id` keeps working
+                id: Some(zone.get_id()),
                 // BGR -> RGB
                 color_rgb: [
                     zone.color[2] as i16,
@@ -188,6 +191,7 @@ mod tests {
 
     fn zone(direction: u8, lane: u16) -> RoadLanesSettings {
         RoadLanesSettings {
+            id: Some(format!("dir_{direction}_lane_{lane}")),
             lane_number: lane,
             lane_direction: direction,
             geometry: vec![[0, 0], [10, 0], [10, 10], [0, 10]],

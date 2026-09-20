@@ -146,8 +146,22 @@ fn run(
     let class_colors = draw::ClassColors::new(&net_classes);
 
     if let Some(road_lanes) = &settings.road_lanes {
-        for road_lane in road_lanes.iter() {
+        let ids = settings::assign_zone_ids(road_lanes);
+        for (road_lane, (zone_id, generated)) in road_lanes.iter().zip(ids) {
             let mut zone = Zone::from(road_lane);
+            if generated {
+                // Both zones stay: the one that arrives second is the one that
+                // gets a name it did not ask for, and saving the file writes it
+                // down so that this happens only once
+                warn!(
+                    scope = logging::SCOPE_STARTUP,
+                    lane_direction = road_lane.lane_direction,
+                    lane_number = road_lane.lane_number,
+                    zone_id = %zone_id,
+                    "Two zones share a direction and a lane, so this one was given a generated id"
+                );
+                zone.set_id(zone_id);
+            }
             zone.set_target_classes(if !target_classes.is_empty() {
                 &target_classes
             } else {
@@ -744,7 +758,7 @@ fn run(
         /* Re-stream input video as MJPEG */
         if enable_mjpeg {
             // Sleep for a while for debug
-            // thread::sleep(std::time::Duration::from_millis(100));
+            thread::sleep(std::time::Duration::from_millis(200));
 
             let mut frame = received.frame.clone();
 

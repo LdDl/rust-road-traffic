@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::io;
 
@@ -177,12 +178,53 @@ pub struct EquipmentInfo {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RoadLanesSettings {
+    /// What names the zone for its whole life: it is what `zones/update` and
+    /// `zones/delete` address, and what a saved file hands back to the next
+    /// run. A file written by hand may leave it out, in which case it is
+    /// derived on load and written back by the next save
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     pub lane_number: u16,
     pub lane_direction: u8,
     pub geometry: Vec<[i32; 2]>,
     pub geometry_wgs84: Vec<[f32; 2]>,
     pub color_rgb: [i16; 3],
     pub virtual_line: Option<VirtualLineSettings>,
+}
+
+impl RoadLanesSettings {
+    /// The zone's own identifier, or the one its direction and lane imply.
+    /// Deriving it is what keeps a file written before identifiers existed -
+    /// or by hand - working
+    pub fn zone_id(&self) -> String {
+        match self.id.as_deref().map(str::trim) {
+            Some(id) if !id.is_empty() => id.to_string(),
+            _ => format!("dir_{}_lane_{}", self.lane_direction, self.lane_number),
+        }
+    }
+}
+
+/// One identifier per zone, in the order the file lists them. The second field
+/// says the zone had to be given a generated identifier because the one its
+/// direction and lane imply was already taken, which is worth a line in the
+/// log: the file cannot tell two zones on the same direction and lane apart,
+/// and without an identifier of its own the second one would quietly replace
+/// the first. A file this app has saved always carries identifiers, so nothing
+/// is derived and nothing collides
+pub fn assign_zone_ids(lanes: &[RoadLanesSettings]) -> Vec<(String, bool)> {
+    let mut taken: HashSet<String> = HashSet::new();
+    lanes
+        .iter()
+        .map(|lane| {
+            let wanted = lane.zone_id();
+            if taken.insert(wanted.clone()) {
+                return (wanted, false);
+            }
+            let generated = uuid::Uuid::new_v4().to_string();
+            taken.insert(generated.clone());
+            (generated, true)
+        })
+        .collect()
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -413,13 +455,10 @@ fn merge_value(existing: &mut Table, key: &str, mut value: Value) {
         }
         Some(slot) => *slot = Item::Value(value),
         None => {
-            // A new key goes last in its section, indented like its neighbours
-            let indent = existing
-                .iter()
-                .last()
-                .and_then(|(k, _)| existing.key(k))
-                .map(|k| indentation_of(k.leaf_decor()))
-                .unwrap_or_default();
+            // A new key goes last in its section, indented like its neighbours.
+            // Taken from the first of them rather than the last, since the last
+            // may be a sub-table, whose own indentation lives on its header
+            let indent = first_key_indent(existing);
             existing.insert(key, Item::Value(value));
             if let Some(mut inserted) = existing.key_mut(key) {
                 inserted.leaf_decor_mut().set_prefix(indent);
@@ -684,10 +723,7 @@ impl From<&RoadLanesSettings> for Zone {
         };
 
         Zone::new(
-            format!(
-                "dir_{}_lane_{}",
-                setting.lane_direction, setting.lane_number
-            ),
+            setting.zone_id(),
             geom,
             geom_epsg4326,
             geom_epsg3857,
@@ -835,6 +871,24 @@ impl AppSettings {
         ));
         if let Some(level) = self.verbose.as_ref().and_then(|v| v.level.as_deref()) {
             problems.extend(one_of("verbose.level", level, &logging::LEVELS));
+        }
+        // An identifier the file spells out twice is a typo in a hand-edited
+        // file, and either zone could be the one meant: better to say so than
+        // to pick one. A derived identifier that collides is a different case
+        // and is settled on load, see `assign_zone_ids`
+        if let Some(lanes) = &self.road_lanes {
+            let mut seen: HashSet<&str> = HashSet::new();
+            for (index, lane) in lanes.iter().enumerate() {
+                let Some(id) = lane.id.as_deref() else {
+                    continue;
+                };
+                let field = format!("{ZONES_KEY}.{index}.id");
+                if id.trim().is_empty() {
+                    problems.push((field, "must not be empty".to_string()));
+                } else if !seen.insert(id) {
+                    problems.push((field, format!("'{id}' names more than one zone")));
+                }
+            }
         }
         problems
     }
@@ -1353,5 +1407,84 @@ mod tests {
         assert!(error.contains("input.video_src"), "{error}");
         assert!(error.contains("tracking.type"), "{error}");
         assert!(error.contains("worker.reset_data_milliseconds"), "{error}");
+    }
+
+    fn lane(direction: u8, number: u16, id: Option<&str>) -> RoadLanesSettings {
+        RoadLanesSettings {
+            id: id.map(str::to_string),
+            lane_number: number,
+            lane_direction: direction,
+            geometry: vec![[0, 0], [10, 0], [10, 10], [0, 10]],
+            geometry_wgs84: vec![[1.0, 2.0], [1.1, 2.0], [1.1, 2.1], [1.0, 2.1]],
+            color_rgb: [255, 0, 0],
+            virtual_line: None,
+        }
+    }
+
+    #[test]
+    fn a_file_without_ids_names_zones_by_direction_and_lane() {
+        let lanes = [lane(0, 0, None), lane(1, 0, None), lane(0, 1, None)];
+        let ids = assign_zone_ids(&lanes);
+        assert_eq!(
+            ids.iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>(),
+            ["dir_0_lane_0", "dir_1_lane_0", "dir_0_lane_1"]
+        );
+        assert!(ids.iter().all(|(_, generated)| !generated));
+    }
+
+    #[test]
+    fn a_zone_keeps_the_id_the_file_gives_it() {
+        let lanes = [lane(0, 0, Some("e63dbc51-c8f1-4a1e-9a0e-2f3b4c5d6e7f"))];
+        let ids = assign_zone_ids(&lanes);
+        assert_eq!(ids[0].0, "e63dbc51-c8f1-4a1e-9a0e-2f3b4c5d6e7f");
+        assert!(!ids[0].1);
+    }
+
+    #[test]
+    fn two_zones_on_the_same_lane_both_get_an_id() {
+        let lanes = [lane(0, 0, None), lane(0, 0, None)];
+        let ids = assign_zone_ids(&lanes);
+        assert_eq!(ids[0].0, "dir_0_lane_0");
+        assert!(!ids[0].1);
+        // The second one does not get to be the first one
+        assert!(ids[1].1, "{ids:?}");
+        assert_ne!(ids[0].0, ids[1].0);
+    }
+
+    #[test]
+    fn an_id_the_file_repeats_is_refused() {
+        let file = TempConfig::new("duplicate_zone_ids");
+        let mut settings = AppSettings::new(&file.0).unwrap();
+        let lanes = settings.road_lanes.as_mut().unwrap();
+        lanes[0].id = Some("same".to_string());
+        let mut second = lanes[0].clone();
+        second.lane_number = 1;
+        lanes.push(second);
+        let problems = settings.problems();
+        assert!(
+            problems.iter().any(|(field, _)| field == "road_lanes.1.id"),
+            "{problems:?}"
+        );
+        assert!(settings.validate().is_err());
+    }
+
+    #[test]
+    fn saving_writes_the_zone_ids_down() {
+        let file = TempConfig::new("zone_ids_saved");
+        let mut settings = AppSettings::new(&file.0).unwrap();
+        // What a file written before identifiers existed loads as
+        assert_eq!(settings.road_lanes.as_ref().unwrap()[0].id, None);
+        let lanes = settings.road_lanes.as_mut().unwrap();
+        lanes[0].id = Some(lanes[0].zone_id());
+        settings.save(&file.0).unwrap();
+
+        let text = fs::read_to_string(&file.0).unwrap();
+        // Indented like the keys it sits among, not flush against the margin
+        assert!(text.contains("\n    id = \"dir_0_lane_0\""), "{text}");
+        let reloaded = AppSettings::new(&file.0).unwrap();
+        assert_eq!(
+            reloaded.road_lanes.unwrap()[0].id.as_deref(),
+            Some("dir_0_lane_0")
+        );
     }
 }
