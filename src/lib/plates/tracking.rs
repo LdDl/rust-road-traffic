@@ -5,6 +5,7 @@ use crate::lib::cv::RawFrame;
 use crate::lib::logging;
 use crate::lib::vehicle_events::{BoundingBox, PlateDetection, VehicleDetection};
 
+use super::quality::CandidateQuality;
 use super::{PlateModels, crop_frame, ocr_crop_bbox, save_plate_crop};
 
 const MAX_ATTEMPTS: u8 = 3;
@@ -14,10 +15,15 @@ struct Candidate {
     crop_bbox: BoundingBox,
     vehicle: VehicleDetection,
     frame_size: (u32, u32),
+    quality: CandidateQuality,
 }
 
 impl Candidate {
-    fn new(frame: &RawFrame, vehicle: &VehicleDetection) -> Option<Self> {
+    fn new(
+        frame: &RawFrame,
+        vehicle: &VehicleDetection,
+        quality: CandidateQuality,
+    ) -> Option<Self> {
         if vehicle.bbox.width == 0 || vehicle.bbox.height == 0 {
             return None;
         }
@@ -28,6 +34,7 @@ impl Candidate {
             crop_bbox,
             vehicle: vehicle.clone(),
             frame_size: (frame.width, frame.height),
+            quality,
         })
     }
 }
@@ -79,10 +86,9 @@ impl TrackRecognition {
         if self.confirmed || self.attempts >= MAX_ATTEMPTS {
             return;
         }
-        let Some(candidate) = Candidate::new(frame, vehicle) else {
+        let Some(quality) = CandidateQuality::measure(frame, &vehicle.bbox) else {
             return;
         };
-        self.pending = Some(candidate);
 
         // Reserve the last attempt for track completion.
         let should_attempt = self.attempts == 0
@@ -92,7 +98,17 @@ impl TrackRecognition {
                     .as_ref()
                     .is_some_and(|previous| moved_enough(previous, &vehicle.bbox)));
         if should_attempt {
-            self.attempt(models, track_id);
+            if let Some(candidate) = Candidate::new(frame, vehicle, quality) {
+                self.attempt(models, track_id, candidate);
+            }
+        } else if self
+            .pending
+            .as_ref()
+            .is_none_or(|pending| quality.is_better_than(&pending.quality))
+        {
+            if let Some(candidate) = Candidate::new(frame, vehicle, quality) {
+                self.pending = Some(candidate);
+            }
         }
     }
 
@@ -101,8 +117,8 @@ impl TrackRecognition {
         models: Option<&mut PlateModels>,
         track_id: Uuid,
     ) -> Option<PlateObservation> {
-        if let Some(models) = models {
-            self.attempt(models, track_id);
+        if let (Some(models), Some(candidate)) = (models, self.pending.take()) {
+            self.attempt(models, track_id, candidate);
         }
         let best = (0..self.observations.len()).max_by(|&a, &b| {
             let a = &self.observations[a];
@@ -125,14 +141,10 @@ impl TrackRecognition {
             .count()
     }
 
-    fn attempt(&mut self, models: &mut PlateModels, track_id: Uuid) {
+    fn attempt(&mut self, models: &mut PlateModels, track_id: Uuid, candidate: Candidate) {
         if self.confirmed || self.attempts >= MAX_ATTEMPTS {
             return;
         }
-        // Taking the candidate prevents a final attempt from reusing an already processed frame.
-        let Some(candidate) = self.pending.take() else {
-            return;
-        };
         self.attempts += 1;
         self.last_attempt_bbox = Some(candidate.vehicle.bbox);
         debug!(
@@ -180,6 +192,9 @@ impl TrackRecognition {
             .observations
             .iter()
             .any(|result| self.votes(result) >= 2);
+        if self.confirmed {
+            self.pending = None;
+        }
     }
 }
 

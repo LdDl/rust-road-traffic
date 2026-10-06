@@ -9,6 +9,7 @@ use crate::lib::vehicle_events::{BoundingBox, PlateDetection};
 use crate::settings::{InferenceModelSettings, PlatesSettings};
 
 mod ocr;
+mod quality;
 mod tracking;
 use ocr::OcrRecognizer;
 pub(crate) use tracking::TrackRecognition;
