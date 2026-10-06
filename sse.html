@@ -1,0 +1,11 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>SSE</title>
+<pre id="events"></pre>
+<script>
+  const output = document.getElementById("events");
+  const source = new EventSource("http://localhost:42001/api/events/stream");
+  source.addEventListener("vehicle.passed", (event) => {
+    output.textContent += event.data + "\n";
+  });
+</script>
