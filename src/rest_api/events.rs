@@ -1,73 +1,10 @@
+use crate::lib::logging;
 use crate::rest_api::APIStorage;
 use actix_web::{HttpResponse, web};
-use futures::{SinkExt, channel::mpsc};
-use serde::Serialize;
+use futures::{StreamExt, stream};
 use std::time::Duration;
-
-#[derive(Serialize)]
-enum EventType {
-    #[serde(rename = "vehicle.passed")]
-    VehiclePassed,
-}
-
-impl EventType {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::VehiclePassed => "vehicle.passed",
-        }
-    }
-}
-
-#[derive(Serialize)]
-struct BoundingBox {
-    x: u32,
-    y: u32,
-    width: u32,
-    height: u32,
-}
-
-#[derive(Serialize)]
-struct VehicleDetection {
-    class: String,
-    confidence: f32,
-    bbox: BoundingBox,
-}
-
-#[derive(Serialize)]
-struct OcrSymbol {
-    class: String,
-    confidence: f32,
-    bbox: BoundingBox,
-}
-
-#[derive(Serialize)]
-struct OcrResult {
-    number: String,
-    symbols: Vec<OcrSymbol>,
-}
-
-#[derive(Serialize)]
-struct PlateDetection {
-    class: String,
-    bbox: BoundingBox,
-    ocr: Option<OcrResult>,
-}
-
-#[derive(Serialize)]
-struct DemoPassageEvent {
-    event_id: &'static str,
-    #[serde(rename = "type")]
-    event_type: EventType,
-    equipment_id: String,
-    passage_id: &'static str,
-    started_at: &'static str,
-    ended_at: &'static str,
-    vehicle: VehicleDetection,
-    plate: Option<PlateDetection>,
-    frame_base64: Option<String>,
-    frame_width: u32,
-    frame_height: u32,
-}
+use tokio::sync::broadcast::error::RecvError;
+use tracing::warn;
 
 #[utoipa::path(
     get,
@@ -78,83 +15,36 @@ struct DemoPassageEvent {
     )
 )]
 pub async fn stream(data: web::Data<APIStorage>) -> HttpResponse {
-    let (mut sender, receiver) = mpsc::channel(1);
-
-    actix_web::rt::spawn(async move {
-        loop {
-            let equipment_id = data
-                .app_settings
-                .read()
-                .expect("Settings are poisoned [RwLock]")
-                .equipment_info
-                .id
-                .clone();
-            let plate = "A123BC77";
-            let event = DemoPassageEvent {
-                event_id: "demo-passage-001",
-                event_type: EventType::VehiclePassed,
-                equipment_id,
-                passage_id: "demo-passage-001",
-                started_at: "2026-10-06T09:00:00Z",
-                ended_at: "2026-10-06T09:00:03Z",
-                frame_base64: None,
-                frame_width: 1920,
-                frame_height: 1080,
-                vehicle: VehicleDetection {
-                    class: "car".to_owned(),
-                    confidence: 0.97,
-                    bbox: BoundingBox {
-                        x: 600,
-                        y: 400,
-                        width: 500,
-                        height: 300,
-                    },
-                },
-                plate: Some(PlateDetection {
-                    class: "civilian".to_owned(),
-                    bbox: BoundingBox {
-                        x: 780,
-                        y: 610,
-                        width: 120,
-                        height: 30,
-                    },
-                    ocr: Some(OcrResult {
-                        number: plate.to_owned(),
-                        symbols: plate
-                            .chars()
-                            .enumerate()
-                            .map(|(index, symbol)| OcrSymbol {
-                                class: symbol.to_string(),
-                                confidence: 0.98,
-                                bbox: BoundingBox {
-                                    x: 784 + index as u32 * 14,
-                                    y: 613,
-                                    width: 12,
-                                    height: 24,
-                                },
-                            })
-                            .collect(),
-                    }),
-                }),
-            };
-            let frame = serde_json::to_string(&event)
+    let receiver = data.vehicle_events.subscribe();
+    let events = stream::unfold(receiver, |mut receiver| async move {
+        let frame = match tokio::time::timeout(Duration::from_secs(15), receiver.recv()).await {
+            Ok(Ok(event)) => serde_json::to_string(event.as_ref())
                 .map(|json| {
                     web::Bytes::from(format!(
                         "event: {}\ndata: {json}\n\n",
                         event.event_type.as_str()
                     ))
                 })
-                .map_err(actix_web::error::ErrorInternalServerError);
-            if sender.send(frame).await.is_err() {
-                break;
+                .map_err(actix_web::error::ErrorInternalServerError),
+            Ok(Err(RecvError::Closed)) => return None,
+            Ok(Err(RecvError::Lagged(skipped))) => {
+                warn!(
+                    scope = logging::SCOPE_REST_API,
+                    skipped, "Closing SSE connection because the client missed vehicle events"
+                );
+                return None;
             }
-            actix_web::rt::time::sleep(Duration::from_secs(5)).await;
-        }
+            Err(_) => Ok(web::Bytes::from_static(b": keep-alive\n\n")),
+        };
+        Some((frame, receiver))
+    });
+    let connected = stream::once(async {
+        Ok::<_, actix_web::Error>(web::Bytes::from_static(b": connected\n\n"))
     });
 
     HttpResponse::Ok()
         .content_type("text/event-stream")
         .insert_header(("Cache-Control", "no-cache, no-transform"))
         .insert_header(("X-Accel-Buffering", "no"))
-        .streaming(receiver)
+        .streaming(connected.chain(events))
 }

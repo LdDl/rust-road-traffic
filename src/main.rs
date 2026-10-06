@@ -19,6 +19,7 @@ use lib::logging;
 use lib::perf_stats::{PerfStats, Timer};
 use lib::status::{DetectionStatus, InputStatus, RuntimeStatus};
 use lib::tracker::{SpatialInfo, TrackerTrait, new_tracker_from_type};
+use lib::vehicle_events::VehicleEventCollector;
 use lib::zones::Zone;
 
 mod settings;
@@ -253,10 +254,14 @@ fn run(
     let status = std::sync::Arc::new(RuntimeStatus::new());
     let overwrite_file = path_to_config.to_string();
     let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(0);
+    let (vehicle_events, _) = tokio::sync::broadcast::channel(128);
+    let mut event_collector = (settings.rest_api.enable && !report_mode)
+        .then(|| VehicleEventCollector::new(vehicle_events.clone()));
     if settings.rest_api.enable && !report_mode {
         let settings_clone = settings.clone();
         let ds_api = data_storage.clone();
         let status_api = status.clone();
+        let events_api = vehicle_events.clone();
         thread::spawn(move || {
             match rest_api::start_rest_api(
                 settings_clone.rest_api.host.clone(),
@@ -267,6 +272,7 @@ fn run(
                 settings_clone,
                 &overwrite_file,
                 status_api,
+                events_api,
             ) {
                 Ok(_) => {}
                 Err(err) => {
@@ -474,6 +480,7 @@ fn run(
     /* Can't create colors as const/static currently */
     let mut first_frame: Option<lib::cv::RawFrame> = None;
     while let Some(received) = rx_capture.recv() {
+        let observed_at = Utc::now();
         if report_mode && first_frame.is_none() {
             first_frame = Some(received.frame.clone());
         }
@@ -609,6 +616,15 @@ fn run(
             .read()
             .expect("Zone grid is poisoned [RWLock]");
 
+        if let Some(collector) = event_collector.as_mut() {
+            collector.observe_detections(
+                &tmp_detections,
+                tracker,
+                observed_at,
+                (received.frame.width, received.frame.height),
+            );
+        }
+
         // Reset current occupancy for zones
         let current_ut = get_sys_time_in_secs();
         for (_, zone_guarded) in zones.iter() {
@@ -701,7 +717,7 @@ fn run(
                 } else {
                     None
                 };
-                match object_extra.spatial_info {
+                let counted_in_zone = match object_extra.spatial_info {
                     Some(ref mut spatial_info) => {
                         spatial_info.update_avg(
                             last_time,
@@ -719,7 +735,7 @@ fn run(
                             object_extra.get_classname(),
                             crossed,
                             zone_id_from.clone(),
-                        );
+                        )
                     }
                     None => {
                         object_extra.spatial_info = Some(SpatialInfo::new(
@@ -737,8 +753,11 @@ fn run(
                             object_extra.get_classname(),
                             crossed,
                             zone_id_from.clone(),
-                        );
+                        )
                     }
+                };
+                if let Some(collector) = event_collector.as_mut() {
+                    collector.record_zone_result(object_id, counted_in_zone);
                 }
                 // Only update vehicle zone tracking when vehicle crosses virtual line
                 if crossed {
@@ -755,10 +774,14 @@ fn run(
             }
         }
 
+        if let Some(collector) = event_collector.as_mut() {
+            collector.publish_completed(tracker, &ds_guard.id);
+        }
+
         /* Re-stream input video as MJPEG */
         if enable_mjpeg {
             // Sleep for a while for debug
-            // thread::sleep(std::time::Duration::from_millis(200));
+            thread::sleep(std::time::Duration::from_millis(200));
 
             let mut frame = received.frame.clone();
 

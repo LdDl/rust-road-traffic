@@ -281,6 +281,7 @@ impl Zone {
                 .insert(class.clone(), VehicleTypeParameters::default());
         }
     }
+    /// Returns whether this observation satisfies the zone's counting rule.
     pub fn register_or_update_object(
         &mut self,
         object_id: Uuid,
@@ -290,7 +291,7 @@ impl Zone {
         _classname: String,
         _crossed_virtual_line: bool,
         _zone_id_from: Option<String>,
-    ) {
+    ) -> bool {
         let register_as_crossed = match &self.virtual_line {
             Some(_) => _crossed_virtual_line,
             None => false,
@@ -317,7 +318,7 @@ impl Zone {
             }
         }
         if !register_as_crossed {
-            return;
+            return self.virtual_line.is_none();
         }
         // Check if this object has crossed the virtual line before
         if !self.objects_crossed.contains(&object_id) {
@@ -341,6 +342,7 @@ impl Zone {
                     .or_insert(0) += 1;
             }
         }
+        true
     }
     pub fn reset_objects_registered(&mut self) {
         self.objects_registered.clear();

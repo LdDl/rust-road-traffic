@@ -7,6 +7,7 @@ use tracing::{error, info};
 use crate::lib::data_storage::ThreadedDataStorage;
 use crate::lib::mjpeg_streaming::Broadcaster;
 use crate::lib::status::RuntimeStatus;
+use crate::lib::vehicle_events::VehicleEvents;
 use crate::rest_api::errors::ErrorResponse;
 use crate::rest_api::{change_state, services};
 use crate::settings::AppSettings;
@@ -28,6 +29,7 @@ pub struct APIStorage {
     pub mjpeg_broadcaster: web::Data<Mutex<Broadcaster>>,
     /// What the detection loop has learned about the run so far
     pub status: Arc<RuntimeStatus>,
+    pub vehicle_events: VehicleEvents,
 }
 
 #[actix_web::main]
@@ -40,6 +42,7 @@ pub async fn start_rest_api(
     app_settings: AppSettings,
     settings_filename: &str,
     status: Arc<RuntimeStatus>,
+    vehicle_events: VehicleEvents,
 ) -> std::io::Result<()> {
     let bind_address = format!("{}:{}", server_host, server_port);
     info!(scope = logging::SCOPE_REST_API, host = %server_host, port = server_port, "REST API starting");
@@ -56,6 +59,7 @@ pub async fn start_rest_api(
         settings_filename: settings_filename.to_string(),
         mjpeg_broadcaster: web::Data::new(Mutex::new(Broadcaster::default())),
         status: status,
+        vehicle_events,
     };
 
     /* Enable MJPEG streaming server if needed */

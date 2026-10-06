@@ -14,4 +14,5 @@ pub mod spatial;
 pub mod status;
 pub mod tracker;
 pub mod utils;
+pub mod vehicle_events;
 pub mod zones;
