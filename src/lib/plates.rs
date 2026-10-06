@@ -28,6 +28,18 @@ pub fn save_plate_crop(
     attempt: u8,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bbox = ocr_crop_bbox(frame, bbox);
+    save_debug_crop(
+        frame,
+        &bbox,
+        &format!("plate_crops/{track_id}-{attempt}.png"),
+    )
+}
+
+fn save_debug_crop(
+    frame: &RawFrame,
+    bbox: &BoundingBox,
+    path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut rgb = Vec::with_capacity(bbox.width as usize * bbox.height as usize * 3);
     for row in bbox.y..bbox.y + bbox.height {
         let start = row as usize * frame.step() + bbox.x as usize * 3;
@@ -38,7 +50,7 @@ pub fn save_plate_crop(
     }
 
     std::fs::create_dir_all("plate_crops")?;
-    let file = std::fs::File::create(format!("plate_crops/{track_id}-{attempt}.png"))?;
+    let file = std::fs::File::create(path)?;
     let mut encoder = png::Encoder::new(file, bbox.width, bbox.height);
     encoder.set_color(png::ColorType::Rgb);
     encoder.set_depth(png::BitDepth::Eight);

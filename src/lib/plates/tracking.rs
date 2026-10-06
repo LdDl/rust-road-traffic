@@ -1,4 +1,6 @@
-use tracing::{debug, warn};
+use serde::Serialize;
+use std::cmp::Ordering;
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::lib::cv::RawFrame;
@@ -6,7 +8,7 @@ use crate::lib::logging;
 use crate::lib::vehicle_events::{BoundingBox, PlateDetection, VehicleDetection};
 
 use super::quality::CandidateQuality;
-use super::{PlateModels, crop_frame, ocr_crop_bbox, save_plate_crop};
+use super::{PlateModels, crop_frame, ocr_crop_bbox, save_debug_crop, save_plate_crop};
 
 const MAX_ATTEMPTS: u8 = 3;
 
@@ -43,6 +45,7 @@ pub(crate) struct PlateObservation {
     pub vehicle: VehicleDetection,
     pub plate: PlateDetection,
     pub frame_size: (u32, u32),
+    attempt: u8,
 }
 
 impl PlateObservation {
@@ -55,14 +58,7 @@ impl PlateObservation {
     }
 
     fn confidence(&self) -> f32 {
-        self.plate.ocr.as_ref().map_or(0.0, |ocr| {
-            let count = ocr.symbols.len().max(1) as f32;
-            ocr.symbols
-                .iter()
-                .map(|symbol| symbol.confidence)
-                .sum::<f32>()
-                / count
-        })
+        self.plate.ocr.as_ref().map_or(0.0, |ocr| ocr.confidence)
     }
 }
 
@@ -120,15 +116,55 @@ impl TrackRecognition {
         if let (Some(models), Some(candidate)) = (models, self.pending.take()) {
             self.attempt(models, track_id, candidate);
         }
-        let best = (0..self.observations.len()).max_by(|&a, &b| {
-            let a = &self.observations[a];
-            let b = &self.observations[b];
-            self.votes(a)
-                .cmp(&self.votes(b))
-                .then_with(|| a.confidence().total_cmp(&b.confidence()))
-                .then_with(|| a.plate.confidence.total_cmp(&b.plate.confidence))
-        })?;
+        let Some(best) = (0..self.observations.len())
+            .max_by(|&a, &b| self.compare(&self.observations[a], &self.observations[b]))
+        else {
+            if self.attempts > 0 {
+                info!(
+                    scope = logging::SCOPE_PROCESSING,
+                    %track_id,
+                    attempts = self.attempts,
+                    reason = "no_plate_found",
+                    "Plate recognition finished without a result"
+                );
+            }
+            return None;
+        };
+        let selected = &self.observations[best];
+        let runner_up = self
+            .observations
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| *index != best)
+            .map(|(_, result)| result)
+            .max_by(|a, b| self.compare(a, b));
+        let reason = match runner_up {
+            None => "only_result",
+            Some(other) if self.votes(selected) > self.votes(other) => "number_votes",
+            Some(other) if selected.confidence() > other.confidence() => "ocr_confidence",
+            Some(other) if selected.plate.confidence > other.plate.confidence => "plate_confidence",
+            Some(_) => "equal_scores_latest_attempt",
+        };
+        info!(
+            scope = logging::SCOPE_PROCESSING,
+            %track_id,
+            attempts = self.attempts,
+            selected_attempt = selected.attempt,
+            number = selected.number().unwrap_or(""),
+            ocr_confidence = selected.confidence(),
+            matching_observations = self.votes(selected),
+            confirmed = self.confirmed,
+            reason,
+            "Plate recognition result selected"
+        );
         Some(self.observations.swap_remove(best))
+    }
+
+    fn compare(&self, a: &PlateObservation, b: &PlateObservation) -> Ordering {
+        self.votes(a)
+            .cmp(&self.votes(b))
+            .then_with(|| a.confidence().total_cmp(&b.confidence()))
+            .then_with(|| a.plate.confidence.total_cmp(&b.plate.confidence))
     }
 
     fn votes(&self, observation: &PlateObservation) -> usize {
@@ -160,18 +196,30 @@ impl TrackRecognition {
             width: candidate.vehicle.bbox.width,
             height: candidate.vehicle.bbox.height,
         };
+        if let Err(error) = save_debug_crop(
+            &candidate.crop,
+            &local_vehicle,
+            &format!("plate_crops/{track_id}-{}-vehicle.png", self.attempts),
+        ) {
+            warn!(scope = logging::SCOPE_PROCESSING, %track_id, %error, "Can't save temporary vehicle crop");
+        }
         let mut plate = match models.detect_plate(&candidate.crop, &local_vehicle) {
             Ok(Some(plate)) => plate,
-            Ok(None) => return,
+            Ok(None) => {
+                save_attempt_details(track_id, self.attempts, &candidate, None, None);
+                return;
+            }
             Err(error) => {
                 warn!(scope = logging::SCOPE_PROCESSING, %track_id, %error, "Plate detection failed");
+                save_attempt_details(track_id, self.attempts, &candidate, None, Some(&error));
                 return;
             }
         };
         if let Err(error) = save_plate_crop(&candidate.crop, &plate.bbox, track_id, self.attempts) {
             warn!(scope = logging::SCOPE_PROCESSING, %track_id, %error, "Can't save temporary plate crop");
         }
-        if let Err(error) = models.recognize_plate(&candidate.crop, &mut plate) {
+        let ocr_error = models.recognize_plate(&candidate.crop, &mut plate).err();
+        if let Some(error) = &ocr_error {
             warn!(scope = logging::SCOPE_PROCESSING, %track_id, %error, "Plate OCR failed");
         }
 
@@ -183,10 +231,18 @@ impl TrackRecognition {
                 symbol.bbox.y += candidate.crop_bbox.y;
             }
         }
+        save_attempt_details(
+            track_id,
+            self.attempts,
+            &candidate,
+            Some(&plate),
+            ocr_error.as_deref(),
+        );
         self.observations.push(PlateObservation {
             vehicle: candidate.vehicle,
             plate,
             frame_size: candidate.frame_size,
+            attempt: self.attempts,
         });
         self.confirmed = self
             .observations
@@ -195,6 +251,49 @@ impl TrackRecognition {
         if self.confirmed {
             self.pending = None;
         }
+    }
+}
+
+#[derive(Serialize)]
+struct AttemptDetails<'a> {
+    track_id: Uuid,
+    attempt: u8,
+    quality: &'a CandidateQuality,
+    vehicle: &'a VehicleDetection,
+    plate: Option<&'a PlateDetection>,
+    frame_width: u32,
+    frame_height: u32,
+    error: Option<&'a str>,
+}
+
+// Temporary companion to the PNG; failed attempts also get JSON so none are hidden.
+fn save_attempt_details(
+    track_id: Uuid,
+    attempt: u8,
+    candidate: &Candidate,
+    plate: Option<&PlateDetection>,
+    error: Option<&str>,
+) {
+    let details = AttemptDetails {
+        track_id,
+        attempt,
+        quality: &candidate.quality,
+        vehicle: &candidate.vehicle,
+        plate,
+        frame_width: candidate.frame_size.0,
+        frame_height: candidate.frame_size.1,
+        error,
+    };
+    let result = (|| -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::create_dir_all("plate_crops")?;
+        std::fs::write(
+            format!("plate_crops/{track_id}-{attempt}.json"),
+            serde_json::to_vec_pretty(&details)?,
+        )?;
+        Ok(())
+    })();
+    if let Err(error) = result {
+        warn!(scope = logging::SCOPE_PROCESSING, %track_id, attempt, %error, "Can't save temporary plate attempt JSON");
     }
 }
 

@@ -1,9 +1,15 @@
+use serde::Serialize;
+
 use crate::lib::cv::RawFrame;
 use crate::lib::vehicle_events::BoundingBox;
 
 const SAMPLE_SIZE: usize = 64;
 
+#[derive(Serialize)]
 pub(super) struct CandidateQuality {
+    area: u64,
+    touching_edges: u32,
+    laplacian_variance: f64,
     score: f64,
 }
 
@@ -19,11 +25,17 @@ impl CandidateQuality {
             + u32::from(bbox.y == 0)
             + u32::from(right == frame.width)
             + u32::from(bottom == frame.height);
-        let area = bbox.width as f64 * bbox.height as f64;
+        let area = bbox.width as u64 * bbox.height as u64;
         let sharpness = laplacian_variance(frame, bbox);
         // Logarithmic weighting limits the advantage from texture and noise. No blur cutoff.
-        let score = area.sqrt() * (1.0 + sharpness.ln_1p()).sqrt() / (1.0 + touching_edges as f64);
-        Some(Self { score })
+        let score =
+            (area as f64).sqrt() * (1.0 + sharpness.ln_1p()).sqrt() / (1.0 + touching_edges as f64);
+        Some(Self {
+            area,
+            touching_edges,
+            laplacian_variance: sharpness,
+            score,
+        })
     }
 
     pub fn is_better_than(&self, other: &Self) -> bool {

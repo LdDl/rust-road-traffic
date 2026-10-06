@@ -47,7 +47,13 @@ impl OcrRecognizer {
         }
         let symbols = reading_order(symbols);
         let number = symbols.iter().map(|symbol| symbol.class.as_str()).collect();
-        Ok(Some(OcrResult { number, symbols }))
+        let confidence =
+            symbols.iter().map(|symbol| symbol.confidence).sum::<f32>() / symbols.len() as f32;
+        Ok(Some(OcrResult {
+            number,
+            confidence,
+            symbols,
+        }))
     }
 }
 

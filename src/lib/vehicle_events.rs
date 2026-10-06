@@ -69,6 +69,7 @@ pub struct OcrSymbol {
 #[derive(Serialize)]
 pub struct OcrResult {
     pub number: String,
+    pub confidence: f32,
     pub symbols: Vec<OcrSymbol>,
 }
 
