@@ -46,6 +46,7 @@ pub struct AppSettings {
     pub input: InputSettings,
     pub verbose: Option<VerboseSettings>,
     pub detection: DetectionSettings,
+    pub plates: Option<PlatesSettings>,
     pub tracking: TrackingSettings,
     /// Identifies the installation point in everything the app publishes.
     /// Optional in the file: a blank one is generated and written back on start
@@ -149,6 +150,86 @@ pub struct DetectionSettings {
     /// Print performance stats every N frames. 0 = disabled.
     #[serde(default)]
     pub perf_stats_interval: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(default)]
+pub struct PlatesSettings {
+    pub enable: bool,
+    pub detection: InferenceModelSettings,
+    pub ocr: OcrSettings,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(default)]
+pub struct OcrSettings {
+    pub enable: bool,
+    #[serde(flatten)]
+    pub model: InferenceModelSettings,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
+pub struct InferenceModelSettings {
+    pub network_weights: String,
+    pub conf_threshold: f32,
+    pub nms_threshold: f32,
+    pub net_width: Option<i32>,
+    pub net_height: Option<i32>,
+    pub net_classes: Vec<String>,
+}
+
+impl Default for InferenceModelSettings {
+    fn default() -> Self {
+        Self {
+            network_weights: String::new(),
+            conf_threshold: 0.4,
+            nms_threshold: 0.2,
+            net_width: None,
+            net_height: None,
+            net_classes: Vec::new(),
+        }
+    }
+}
+
+impl InferenceModelSettings {
+    fn problems(&self, section: &str) -> Vec<(String, String)> {
+        let mut problems = Vec::new();
+        if self.network_weights.trim().is_empty() {
+            problems.push((
+                format!("{section}.network_weights"),
+                "must not be empty when enabled".to_string(),
+            ));
+        }
+        if self.net_classes.is_empty()
+            || self.net_classes.iter().any(|class| class.trim().is_empty())
+        {
+            problems.push((
+                format!("{section}.net_classes"),
+                "must contain non-empty class names when enabled".to_string(),
+            ));
+        }
+        for (field, threshold) in [
+            ("conf_threshold", self.conf_threshold),
+            ("nms_threshold", self.nms_threshold),
+        ] {
+            if !threshold.is_finite() || !(0.0..=1.0).contains(&threshold) {
+                problems.push((
+                    format!("{section}.{field}"),
+                    "must be a finite number between 0 and 1".to_string(),
+                ));
+            }
+        }
+        match (self.net_width, self.net_height) {
+            (None, None) => {}
+            (Some(width), Some(height)) if width > 0 && height > 0 => {}
+            _ => problems.push((
+                format!("{section}.net_width/net_height"),
+                "must both be positive or both be omitted".to_string(),
+            )),
+        }
+        problems
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -851,6 +932,12 @@ impl AppSettings {
             0.0,
             1.0,
         ));
+        if let Some(plates) = self.plates.as_ref().filter(|plates| plates.enable) {
+            problems.extend(plates.detection.problems("plates.detection"));
+            if plates.ocr.enable {
+                problems.extend(plates.ocr.model.problems("plates.ocr"));
+            }
+        }
         problems.extend(in_range(
             "worker.reset_data_milliseconds",
             self.worker.reset_data_milliseconds,
@@ -963,6 +1050,7 @@ impl AppSettings {
             input: self.input.clone(),
             verbose: self.verbose.clone(),
             detection: self.detection.clone(),
+            plates: self.plates.clone(),
             tracking: self.tracking.clone(),
             equipment_info: self.equipment_info.clone(),
             road_lanes: Some(Vec::new()),
