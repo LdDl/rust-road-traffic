@@ -4,13 +4,11 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use tracing::warn;
 use uuid::Uuid;
 
 use crate::lib::cv::RawFrame;
 use crate::lib::detection::{DetectionBlobs, Detections};
-use crate::lib::logging;
-use crate::lib::plates::PlateModels;
+use crate::lib::plates::{PlateModels, TrackRecognition};
 use crate::lib::tracker::TrackerTrait;
 
 pub type VehicleEvents = broadcast::Sender<Arc<VehicleEvent>>;
@@ -29,7 +27,7 @@ impl EventType {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Copy, Serialize)]
 pub struct BoundingBox {
     pub x: u32,
     pub y: u32,
@@ -54,7 +52,7 @@ impl BoundingBox {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct VehicleDetection {
     pub class: String,
     pub confidence: f32,
@@ -63,15 +61,15 @@ pub struct VehicleDetection {
 
 #[derive(Serialize)]
 pub struct OcrSymbol {
-    class: String,
-    confidence: f32,
-    bbox: BoundingBox,
+    pub class: String,
+    pub confidence: f32,
+    pub bbox: BoundingBox,
 }
 
 #[derive(Serialize)]
 pub struct OcrResult {
-    number: String,
-    symbols: Vec<OcrSymbol>,
+    pub number: String,
+    pub symbols: Vec<OcrSymbol>,
 }
 
 #[derive(Serialize)]
@@ -104,8 +102,7 @@ struct VehicleEventState {
     vehicle: VehicleDetection,
     frame_size: (u32, u32),
     eligible: bool,
-    plate_attempted: bool,
-    plate: Option<PlateDetection>,
+    recognition: TrackRecognition,
 }
 
 pub struct VehicleEventCollector {
@@ -160,11 +157,8 @@ impl VehicleEventCollector {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
                 let state = entry.get_mut();
                 state.ended_at = observed_at;
-                // Keep both boxes tied to the frame where the plate was found.
-                if state.plate.is_none() {
-                    state.vehicle = vehicle;
-                    state.frame_size = frame_size;
-                }
+                state.vehicle = vehicle;
+                state.frame_size = frame_size;
             }
             std::collections::hash_map::Entry::Vacant(entry) => {
                 entry.insert(VehicleEventState {
@@ -173,8 +167,7 @@ impl VehicleEventCollector {
                     vehicle,
                     frame_size,
                     eligible: false,
-                    plate_attempted: false,
-                    plate: None,
+                    recognition: TrackRecognition::default(),
                 });
             }
         }
@@ -193,25 +186,21 @@ impl VehicleEventCollector {
         observed_at: DateTime<Utc>,
     ) {
         for (track_id, state) in &mut self.active {
-            if !state.eligible || state.plate_attempted || state.ended_at != observed_at {
+            if !state.eligible || state.ended_at != observed_at {
                 continue;
             }
-            state.plate_attempted = true;
-            match models.detect_plate(frame, &state.vehicle.bbox) {
-                Ok(plate) => state.plate = plate,
-                Err(error) => {
-                    warn!(
-                        scope = logging::SCOPE_PROCESSING,
-                        %track_id,
-                        %error,
-                        "Plate detection failed"
-                    );
-                }
-            }
+            state
+                .recognition
+                .observe(models, frame, &state.vehicle, *track_id);
         }
     }
 
-    pub fn publish_completed(&mut self, tracker: &dyn TrackerTrait, equipment_id: &str) {
+    pub fn publish_completed(
+        &mut self,
+        tracker: &dyn TrackerTrait,
+        equipment_id: &str,
+        mut models: Option<&mut PlateModels>,
+    ) {
         let expired: Vec<Uuid> = self
             .active
             .keys()
@@ -226,6 +215,11 @@ impl VehicleEventCollector {
             if !state.eligible {
                 continue;
             }
+            let (vehicle, frame_size, plate) =
+                match state.recognition.complete(models.as_deref_mut(), id) {
+                    Some(result) => (result.vehicle, result.frame_size, Some(result.plate)),
+                    None => (state.vehicle, state.frame_size, None),
+                };
             let event = VehicleEvent {
                 event_id: Uuid::new_v4(),
                 event_type: EventType::VehiclePassed,
@@ -233,11 +227,11 @@ impl VehicleEventCollector {
                 track_id: id,
                 started_at: state.started_at,
                 ended_at: state.ended_at,
-                vehicle: state.vehicle,
-                plate: state.plate,
+                vehicle,
+                plate,
                 frame_base64: None,
-                frame_width: state.frame_size.0,
-                frame_height: state.frame_size.1,
+                frame_width: frame_size.0,
+                frame_height: frame_size.1,
             };
             // A broadcast with no subscribers is intentionally discarded.
             let _ = self.events.send(Arc::new(event));

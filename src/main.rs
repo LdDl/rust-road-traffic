@@ -776,10 +776,6 @@ fn run(
             }
         }
 
-        if let Some(collector) = event_collector.as_mut() {
-            collector.publish_completed(tracker, &ds_guard.id);
-        }
-
         /* Re-stream input video as MJPEG */
         if enable_mjpeg {
             // Sleep for a while for debug
@@ -826,6 +822,14 @@ fn run(
             (event_collector.as_mut(), plate_models.as_deref_mut())
         {
             collector.detect_plates(models, &received.frame, observed_at);
+        }
+        if let Some(collector) = event_collector.as_mut() {
+            let equipment_id = ds_tracker
+                .read()
+                .expect("DataStorage is poisoned [RWLock]")
+                .id
+                .clone();
+            collector.publish_completed(tracker, &equipment_id, plate_models.as_deref_mut());
         }
     }
 
