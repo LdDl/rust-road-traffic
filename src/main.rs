@@ -758,7 +758,7 @@ fn run(
         /* Re-stream input video as MJPEG */
         if enable_mjpeg {
             // Sleep for a while for debug
-            thread::sleep(std::time::Duration::from_millis(200));
+            // thread::sleep(std::time::Duration::from_millis(200));
 
             let mut frame = received.frame.clone();
 
