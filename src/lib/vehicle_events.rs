@@ -4,9 +4,13 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast;
+use tracing::warn;
 use uuid::Uuid;
 
+use crate::lib::cv::RawFrame;
 use crate::lib::detection::{DetectionBlobs, Detections};
+use crate::lib::logging;
+use crate::lib::plates::PlateModels;
 use crate::lib::tracker::TrackerTrait;
 
 pub type VehicleEvents = broadcast::Sender<Arc<VehicleEvent>>;
@@ -27,10 +31,10 @@ impl EventType {
 
 #[derive(Serialize)]
 pub struct BoundingBox {
-    x: u32,
-    y: u32,
-    width: u32,
-    height: u32,
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
 }
 
 impl BoundingBox {
@@ -72,9 +76,10 @@ pub struct OcrResult {
 
 #[derive(Serialize)]
 pub struct PlateDetection {
-    class: String,
-    bbox: BoundingBox,
-    ocr: Option<OcrResult>,
+    pub class: String,
+    pub confidence: f32,
+    pub bbox: BoundingBox,
+    pub ocr: Option<OcrResult>,
 }
 
 #[derive(Serialize)]
@@ -99,6 +104,8 @@ struct VehicleEventState {
     vehicle: VehicleDetection,
     frame_size: (u32, u32),
     eligible: bool,
+    plate_attempted: bool,
+    plate: Option<PlateDetection>,
 }
 
 pub struct VehicleEventCollector {
@@ -153,8 +160,11 @@ impl VehicleEventCollector {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
                 let state = entry.get_mut();
                 state.ended_at = observed_at;
-                state.vehicle = vehicle;
-                state.frame_size = frame_size;
+                // Keep both boxes tied to the frame where the plate was found.
+                if state.plate.is_none() {
+                    state.vehicle = vehicle;
+                    state.frame_size = frame_size;
+                }
             }
             std::collections::hash_map::Entry::Vacant(entry) => {
                 entry.insert(VehicleEventState {
@@ -163,6 +173,8 @@ impl VehicleEventCollector {
                     vehicle,
                     frame_size,
                     eligible: false,
+                    plate_attempted: false,
+                    plate: None,
                 });
             }
         }
@@ -171,6 +183,31 @@ impl VehicleEventCollector {
     pub fn record_zone_result(&mut self, track_id: Uuid, counted_in_zone: bool) {
         if let Some(state) = self.active.get_mut(&track_id) {
             state.eligible |= counted_in_zone;
+        }
+    }
+
+    pub fn detect_plates(
+        &mut self,
+        models: &mut PlateModels,
+        frame: &RawFrame,
+        observed_at: DateTime<Utc>,
+    ) {
+        for (track_id, state) in &mut self.active {
+            if !state.eligible || state.plate_attempted || state.ended_at != observed_at {
+                continue;
+            }
+            state.plate_attempted = true;
+            match models.detect_plate(frame, &state.vehicle.bbox) {
+                Ok(plate) => state.plate = plate,
+                Err(error) => {
+                    warn!(
+                        scope = logging::SCOPE_PROCESSING,
+                        %track_id,
+                        %error,
+                        "Plate detection failed"
+                    );
+                }
+            }
         }
     }
 
@@ -197,7 +234,7 @@ impl VehicleEventCollector {
                 started_at: state.started_at,
                 ended_at: state.ended_at,
                 vehicle: state.vehicle,
-                plate: None,
+                plate: state.plate,
                 frame_base64: None,
                 frame_width: state.frame_size.0,
                 frame_height: state.frame_size.1,

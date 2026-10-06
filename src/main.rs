@@ -105,6 +105,7 @@ fn run(
     path_to_config: &str,
     tracker: &mut dyn TrackerTrait,
     detector: &mut Detector,
+    mut plate_models: Option<&mut PlateModels>,
 ) -> Result<(), AppError> {
     let report_mode = settings.is_report_mode();
     if report_mode && !std::path::Path::new(&settings.input.video_src).is_file() {
@@ -782,7 +783,7 @@ fn run(
         /* Re-stream input video as MJPEG */
         if enable_mjpeg {
             // Sleep for a while for debug
-            thread::sleep(std::time::Duration::from_millis(200));
+            thread::sleep(std::time::Duration::from_millis(500));
 
             let mut frame = received.frame.clone();
 
@@ -819,6 +820,12 @@ fn run(
             drop(zone_grid);
             drop(zones);
             drop(ds_guard);
+        }
+
+        if let (Some(collector), Some(models)) =
+            (event_collector.as_mut(), plate_models.as_deref_mut())
+        {
+            collector.detect_plates(models, &received.frame, observed_at);
         }
     }
 
@@ -972,12 +979,18 @@ fn main() {
         std::process::exit(1);
     });
 
-    let _plate_models = PlateModels::from_settings(app_settings.plates.as_ref()).unwrap_or_else(|e| {
+    let mut plate_models = PlateModels::from_settings(app_settings.plates.as_ref()).unwrap_or_else(|e| {
         error!(scope = logging::SCOPE_STARTUP, error = %e, "Failed to load plate models");
         std::process::exit(1);
     });
 
-    match run(&app_settings, path_to_config, &mut *tracker, &mut detector) {
+    match run(
+        &app_settings,
+        path_to_config,
+        &mut *tracker,
+        &mut detector,
+        plate_models.as_mut(),
+    ) {
         Ok(_) => {}
         Err(err) => {
             error!(scope = logging::SCOPE_PROCESSING, error = %err, "Error in main thread");
