@@ -27,6 +27,13 @@ struct BoundingBox {
 }
 
 #[derive(Serialize)]
+struct VehicleDetection {
+    class: String,
+    confidence: f32,
+    bbox: BoundingBox,
+}
+
+#[derive(Serialize)]
 struct OcrSymbol {
     class: String,
     confidence: f32,
@@ -55,12 +62,11 @@ struct DemoPassageEvent {
     passage_id: &'static str,
     started_at: &'static str,
     ended_at: &'static str,
-    vehicle_class: String,
+    vehicle: VehicleDetection,
     plate: Option<PlateDetection>,
     frame_base64: Option<String>,
     frame_width: u32,
     frame_height: u32,
-    vehicle_bbox: BoundingBox,
 }
 
 #[utoipa::path(
@@ -91,15 +97,18 @@ pub async fn stream(data: web::Data<APIStorage>) -> HttpResponse {
                 passage_id: "demo-passage-001",
                 started_at: "2026-10-06T09:00:00Z",
                 ended_at: "2026-10-06T09:00:03Z",
-                vehicle_class: "car".to_owned(),
                 frame_base64: None,
                 frame_width: 1920,
                 frame_height: 1080,
-                vehicle_bbox: BoundingBox {
-                    x: 600,
-                    y: 400,
-                    width: 500,
-                    height: 300,
+                vehicle: VehicleDetection {
+                    class: "car".to_owned(),
+                    confidence: 0.97,
+                    bbox: BoundingBox {
+                        x: 600,
+                        y: 400,
+                        width: 500,
+                        height: 300,
+                    },
                 },
                 plate: Some(PlateDetection {
                     class: "civilian".to_owned(),
