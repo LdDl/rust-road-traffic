@@ -7,6 +7,7 @@ pub mod draw;
 pub mod logging;
 pub mod mjpeg_streaming;
 pub mod perf_stats;
+pub mod plates;
 pub mod publisher;
 pub mod report;
 pub mod restart;

@@ -17,6 +17,7 @@ use lib::detection::process_yolo_detections;
 use lib::draw;
 use lib::logging;
 use lib::perf_stats::{PerfStats, Timer};
+use lib::plates::PlateModels;
 use lib::status::{DetectionStatus, InputStatus, RuntimeStatus};
 use lib::tracker::{SpatialInfo, TrackerTrait, new_tracker_from_type};
 use lib::vehicle_events::VehicleEventCollector;
@@ -968,6 +969,11 @@ fn main() {
     )
     .unwrap_or_else(|e| {
         error!(scope = logging::SCOPE_STARTUP, error = %e, "Failed to create detector");
+        std::process::exit(1);
+    });
+
+    let _plate_models = PlateModels::from_settings(app_settings.plates.as_ref()).unwrap_or_else(|e| {
+        error!(scope = logging::SCOPE_STARTUP, error = %e, "Failed to load plate models");
         std::process::exit(1);
     });
 
