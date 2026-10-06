@@ -4,30 +4,31 @@ use serde::Serialize;
 use std::time::Duration;
 
 #[derive(Serialize)]
+enum EventType {
+    #[serde(rename = "vehicle.passed")]
+    VehiclePassed,
+}
+
+impl EventType {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::VehiclePassed => "vehicle.passed",
+        }
+    }
+}
+
+#[derive(Serialize)]
 struct DemoPassageEvent {
-    demo: bool,
     event_id: &'static str,
     #[serde(rename = "type")]
-    event_type: &'static str,
+    event_type: EventType,
     equipment_id: &'static str,
     passage_id: &'static str,
     started_at: &'static str,
     ended_at: &'static str,
-    vehicle_class: &'static str,
+    vehicle_class: String,
     plate: &'static str,
 }
-
-const DEMO_EVENT: DemoPassageEvent = DemoPassageEvent {
-    demo: true,
-    event_id: "demo-passage-001",
-    event_type: "vehicle.passed",
-    equipment_id: "demo-camera",
-    passage_id: "demo-passage-001",
-    started_at: "2026-10-06T09:00:00Z",
-    ended_at: "2026-10-06T09:00:03Z",
-    vehicle_class: "car",
-    plate: "A123BC77",
-};
 
 #[utoipa::path(
     get,
@@ -38,11 +39,20 @@ const DEMO_EVENT: DemoPassageEvent = DemoPassageEvent {
     )
 )]
 pub async fn stream() -> Result<HttpResponse, actix_web::Error> {
-    let data =
-        serde_json::to_string(&DEMO_EVENT).map_err(actix_web::error::ErrorInternalServerError)?;
+    let event = DemoPassageEvent {
+        event_id: "demo-passage-001",
+        event_type: EventType::VehiclePassed,
+        equipment_id: "demo-camera",
+        passage_id: "demo-passage-001",
+        started_at: "2026-10-06T09:00:00Z",
+        ended_at: "2026-10-06T09:00:03Z",
+        vehicle_class: "car".to_owned(),
+        plate: "A123BC77",
+    };
+    let data = serde_json::to_string(&event).map_err(actix_web::error::ErrorInternalServerError)?;
     let frame = Bytes::from(format!(
         "event: {}\ndata: {data}\n\n",
-        DEMO_EVENT.event_type
+        event.event_type.as_str()
     ));
     let (mut sender, receiver) = mpsc::channel(1);
 
