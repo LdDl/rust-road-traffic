@@ -18,8 +18,6 @@ impl BoundingBox {
             y: i64::from(self.y) - i64::from(parent.y),
             width: self.width,
             height: self.height,
-            parent_width: parent.width,
-            parent_height: parent.height,
         }
     }
 
@@ -45,8 +43,6 @@ pub struct RelativeBoundingBox {
     pub y: i64,
     pub width: u32,
     pub height: u32,
-    pub parent_width: u32,
-    pub parent_height: u32,
 }
 
 #[derive(Clone, Serialize)]
