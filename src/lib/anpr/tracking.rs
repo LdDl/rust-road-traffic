@@ -196,12 +196,13 @@ impl TrackRecognition {
             fusion::summarize(&fallback, selected.attempt, &selected.plate)
         });
         let selected = self.observations.swap_remove(best);
+        let plate_bbox = selected.plate.bbox.relative_to(selected.vehicle.bbox);
         Some(RecognitionResult {
             vehicle: selected.vehicle,
             plate: PlateResult {
                 class: selected.plate.class,
                 confidence: selected.plate.confidence,
-                bbox: selected.plate.bbox,
+                bbox: plate_bbox,
                 ocr,
             },
             frame_size: selected.frame_size,

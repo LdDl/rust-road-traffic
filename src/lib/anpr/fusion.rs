@@ -63,7 +63,7 @@ pub fn summarize(
                 .iter()
                 .find(|symbol| symbol.attempt == reference_attempt)
                 .and_then(|symbol| reference.ocr.as_ref()?.symbols.get(symbol.index))
-                .map(|symbol| symbol.bbox);
+                .map(|symbol| symbol.bbox.relative_to(reference.bbox));
             positions.push(OcrPosition {
                 // Positions are global reading-order indices; rows are also zero-based.
                 position: positions.len(),

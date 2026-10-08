@@ -11,6 +11,18 @@ pub struct BoundingBox {
 }
 
 impl BoundingBox {
+    pub fn relative_to(self, parent: Self) -> RelativeBoundingBox {
+        RelativeBoundingBox {
+            // OCR padding can place a symbol before the detected plate origin.
+            x: i64::from(self.x) - i64::from(parent.x),
+            y: i64::from(self.y) - i64::from(parent.y),
+            width: self.width,
+            height: self.height,
+            parent_width: parent.width,
+            parent_height: parent.height,
+        }
+    }
+
     pub fn from_detection(rect: Rect, frame_width: u32, frame_height: u32) -> Self {
         let x = rect.x.clamp(0.0, frame_width as f32).floor() as u32;
         let y = rect.y.clamp(0.0, frame_height as f32).floor() as u32;
@@ -27,11 +39,28 @@ impl BoundingBox {
     }
 }
 
+#[derive(Serialize)]
+pub struct RelativeBoundingBox {
+    pub x: i64,
+    pub y: i64,
+    pub width: u32,
+    pub height: u32,
+    pub parent_width: u32,
+    pub parent_height: u32,
+}
+
 #[derive(Clone, Serialize)]
 pub struct VehicleDetection {
     pub class: String,
     pub confidence: f32,
     pub bbox: BoundingBox,
+}
+
+#[derive(Serialize)]
+pub struct VehicleResult {
+    pub class: String,
+    pub confidence: f32,
+    pub bbox: RelativeBoundingBox,
 }
 
 #[derive(Serialize)]
@@ -60,7 +89,7 @@ pub struct PlateDetection {
 pub struct PlateResult {
     pub class: String,
     pub confidence: f32,
-    pub bbox: BoundingBox,
+    pub bbox: RelativeBoundingBox,
     pub ocr: Option<OcrSummary>,
 }
 
@@ -80,7 +109,7 @@ pub struct OcrPosition {
     pub class: String,
     pub mean_confidence: f64,
     pub status: PositionStatus,
-    pub bbox: Option<BoundingBox>,
+    pub bbox: Option<RelativeBoundingBox>,
     pub observations: Vec<OcrObservation>,
     pub alternatives: Vec<OcrAlternative>,
 }
