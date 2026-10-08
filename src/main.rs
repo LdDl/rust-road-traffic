@@ -983,7 +983,7 @@ fn main() {
         std::process::exit(1);
     });
 
-    let mut plate_models = PlateModels::from_settings(app_settings.plates.as_ref()).unwrap_or_else(|e| {
+    let mut plate_models = PlateModels::from_settings(app_settings.anpr.as_ref()).unwrap_or_else(|e| {
         error!(scope = logging::SCOPE_STARTUP, error = %e, "Failed to load plate models");
         std::process::exit(1);
     });

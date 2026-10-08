@@ -43,12 +43,12 @@
     # Print performance stats every N frames (0 = disabled)
     perf_stats_interval = 0
 
-[plates]
+[anpr]
     enable = false
     # Image selection: "" (none, default), "full", "vehicle" or "plate".
     image = ""
 
-[plates.detection]
+[anpr.plates]
     # Set the plate model path before enabling: .onnx or .engine/.trt.
     network_weights = ""
     conf_threshold = 0.4
@@ -59,8 +59,8 @@
     # Class order must match the model output.
     net_classes = ["civilian", "taxi", "military", "police", "diplomatic"]
 
-[plates.ocr]
-    # Set the character model path before enabling plates: .onnx or .engine/.trt.
+[anpr.ocr]
+    # Set the character model path before enabling ANPR: .onnx or .engine/.trt.
     network_weights = ""
     conf_threshold = 0.4
     nms_threshold = 0.2

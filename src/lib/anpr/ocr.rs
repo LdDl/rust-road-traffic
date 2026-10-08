@@ -39,7 +39,7 @@ impl OcrRecognizer {
                 continue;
             };
             let class = self.settings.net_classes.get(class_id).ok_or_else(|| {
-                format!("OCR class ID {class_id} is missing from plates.ocr.net_classes")
+                format!("OCR class ID {class_id} is missing from anpr.ocr.net_classes")
             })?;
             symbols.push(OcrSymbol {
                 class: class.clone(),

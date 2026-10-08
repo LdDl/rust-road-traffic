@@ -46,7 +46,7 @@ pub struct AppSettings {
     pub input: InputSettings,
     pub verbose: Option<VerboseSettings>,
     pub detection: DetectionSettings,
-    pub plates: Option<PlatesSettings>,
+    pub anpr: Option<AnprSettings>,
     pub tracking: TrackingSettings,
     /// Identifies the installation point in everything the app publishes.
     /// Optional in the file: a blank one is generated and written back on start
@@ -167,10 +167,10 @@ pub enum EventImage {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(default)]
-pub struct PlatesSettings {
+pub struct AnprSettings {
     pub enable: bool,
     pub image: EventImage,
-    pub detection: InferenceModelSettings,
+    pub plates: InferenceModelSettings,
     pub ocr: InferenceModelSettings,
 }
 
@@ -938,9 +938,9 @@ impl AppSettings {
             0.0,
             1.0,
         ));
-        if let Some(plates) = self.plates.as_ref().filter(|plates| plates.enable) {
-            problems.extend(plates.detection.problems("plates.detection"));
-            problems.extend(plates.ocr.problems("plates.ocr"));
+        if let Some(anpr) = self.anpr.as_ref().filter(|anpr| anpr.enable) {
+            problems.extend(anpr.plates.problems("anpr.plates"));
+            problems.extend(anpr.ocr.problems("anpr.ocr"));
         }
         problems.extend(in_range(
             "worker.reset_data_milliseconds",
@@ -1054,7 +1054,7 @@ impl AppSettings {
             input: self.input.clone(),
             verbose: self.verbose.clone(),
             detection: self.detection.clone(),
-            plates: self.plates.clone(),
+            anpr: self.anpr.clone(),
             tracking: self.tracking.clone(),
             equipment_info: self.equipment_info.clone(),
             road_lanes: Some(Vec::new()),

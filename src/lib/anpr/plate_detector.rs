@@ -7,7 +7,7 @@ use crate::lib::anpr::types::{BoundingBox, PlateDetection};
 use crate::lib::cv::RawFrame;
 use crate::lib::detection::{Detector, DetectorError};
 use crate::lib::logging;
-use crate::settings::{InferenceModelSettings, PlatesSettings};
+use crate::settings::{AnprSettings, InferenceModelSettings};
 
 pub struct PlateModels {
     detection: Detector,
@@ -35,22 +35,22 @@ impl std::error::Error for PlateModelLoadError {
 
 impl PlateModels {
     pub fn from_settings(
-        settings: Option<&PlatesSettings>,
+        settings: Option<&AnprSettings>,
     ) -> Result<Option<Self>, PlateModelLoadError> {
         let Some(settings) = settings.filter(|settings| settings.enable) else {
             return Ok(None);
         };
 
-        let detection = Self::load_model(&settings.detection, "plates.detection")?;
+        let detection = Self::load_model(&settings.plates, "anpr.plates")?;
         let ocr = OcrRecognizer::new(
-            Self::load_model(&settings.ocr, "plates.ocr")?,
+            Self::load_model(&settings.ocr, "anpr.ocr")?,
             settings.ocr.clone(),
         );
 
         Ok(Some(Self {
             detection,
             ocr,
-            detection_settings: settings.detection.clone(),
+            detection_settings: settings.plates.clone(),
         }))
     }
 
@@ -71,7 +71,7 @@ impl PlateModels {
                 continue;
             }
             let class = settings.net_classes.get(class_id).ok_or_else(|| {
-                format!("Plate class ID {class_id} is missing from plates.detection.net_classes")
+                format!("Plate class ID {class_id} is missing from anpr.plates.net_classes")
             })?;
             let Some(bbox) = bbox_in_frame(bbox, &vehicle_bbox) else {
                 continue;
