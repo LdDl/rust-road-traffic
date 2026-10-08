@@ -43,6 +43,31 @@
     # Print performance stats every N frames (0 = disabled)
     perf_stats_interval = 0
 
+[plates]
+    enable = false
+
+[plates.detection]
+    # Set the plate model path before enabling: .onnx or .engine/.trt.
+    network_weights = ""
+    conf_threshold = 0.4
+    nms_threshold = 0.2
+    # Must match the selected model's input size.
+    net_width = 320
+    net_height = 192
+    # Class order must match the model output.
+    net_classes = ["civilian", "taxi", "military", "police", "diplomatic"]
+
+[plates.ocr]
+    # Set the character model path before enabling plates: .onnx or .engine/.trt.
+    network_weights = ""
+    conf_threshold = 0.4
+    nms_threshold = 0.2
+    # Must match the selected model's input size.
+    net_width = 224
+    net_height = 64
+    # Class order from vehicles_yolo/ocr/classes.names, including diplomatic D.
+    net_classes = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "E", "H", "K", "M", "O", "P", "T", "X", "Y", "D"]
+
 [tracking]
     # Either "bytetrack" or "iou_naive". Default is "iou_naive"
     type = "iou_naive"

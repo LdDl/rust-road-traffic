@@ -157,15 +157,7 @@ pub struct DetectionSettings {
 pub struct PlatesSettings {
     pub enable: bool,
     pub detection: InferenceModelSettings,
-    pub ocr: OcrSettings,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-#[serde(default)]
-pub struct OcrSettings {
-    pub enable: bool,
-    #[serde(flatten)]
-    pub model: InferenceModelSettings,
+    pub ocr: InferenceModelSettings,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -934,9 +926,7 @@ impl AppSettings {
         ));
         if let Some(plates) = self.plates.as_ref().filter(|plates| plates.enable) {
             problems.extend(plates.detection.problems("plates.detection"));
-            if plates.ocr.enable {
-                problems.extend(plates.ocr.model.problems("plates.ocr"));
-            }
+            problems.extend(plates.ocr.problems("plates.ocr"));
         }
         problems.extend(in_range(
             "worker.reset_data_milliseconds",

@@ -11,7 +11,7 @@ use crate::settings::{InferenceModelSettings, PlatesSettings};
 
 pub struct PlateModels {
     detection: Detector,
-    ocr: Option<OcrRecognizer>,
+    ocr: OcrRecognizer,
     detection_settings: InferenceModelSettings,
 }
 
@@ -42,14 +42,10 @@ impl PlateModels {
         };
 
         let detection = Self::load_model(&settings.detection, "plates.detection")?;
-        let ocr = if settings.ocr.enable {
-            Some(OcrRecognizer::new(
-                Self::load_model(&settings.ocr.model, "plates.ocr")?,
-                settings.ocr.model.clone(),
-            ))
-        } else {
-            None
-        };
+        let ocr = OcrRecognizer::new(
+            Self::load_model(&settings.ocr, "plates.ocr")?,
+            settings.ocr.clone(),
+        );
 
         Ok(Some(Self {
             detection,
@@ -113,13 +109,10 @@ impl PlateModels {
         frame: &RawFrame,
         plate: &mut PlateDetection,
     ) -> Result<(), String> {
-        let Some(ocr) = self.ocr.as_mut() else {
-            return Ok(());
-        };
         let crop_bbox = ocr_crop_bbox(frame, &plate.bbox);
         let crop = crop_frame(frame, &crop_bbox)
             .ok_or_else(|| "Plate bbox does not define a valid frame crop".to_string())?;
-        plate.ocr = ocr.recognize(&crop, &crop_bbox)?;
+        plate.ocr = self.ocr.recognize(&crop, &crop_bbox)?;
         Ok(())
     }
 
