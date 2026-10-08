@@ -9,6 +9,7 @@ Road traffic monitoring utility written in pure Rust. **OpenCV is not required**
 - [Traffic flow parameters](#traffic-flow-parameters)
 - [Installation and usage](#installation-and-usage)
 - [Virtual lines](#virtual-lines)
+- [ANPR and vehicle events](#anpr-and-vehicle-events)
 - [Dataset collection](#dataset-collection-auto-labeling)
 - [Report mode](#report-mode)
 - [ROADMAP](#roadmap)
@@ -442,6 +443,39 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
     ```
 
     Anything left out of the request is taken from the current configuration, so an empty body checks what the app is set up to use.
+
+## ANPR and vehicle events
+
+`GET /api/events/stream` sends named `vehicle.passed` SSE events when an eligible vehicle track expires. Eligibility follows the existing zones and their virtual-line rules. Events are available when the REST API is enabled outside report mode. The stream has no replay; Redis currently publishes statistics, not these vehicle events.
+
+```shell
+curl -N http://localhost:42001/api/events/stream
+```
+
+Plate detection and OCR are optional. Configure both models under `[anpr.plates]` and `[anpr.ocr]` using [data/conf.toml](data/conf.toml), then enable the cascade:
+
+```toml
+[anpr]
+    enable = true
+    image = "vehicle"
+```
+
+Recognition makes at most three attempts per track and stops after two identical nonempty readings. The final `plate.ocr` contains the fused `number`, `mean_confidence`, `has_conflicts`, `reference_attempt` and `positions` with observations and competing alternatives. Missing plate or OCR results are `null`; agreement is not a guarantee of correctness. ANPR settings are currently configured through TOML, not `GET/PATCH /api/config`.
+
+`anpr.image` is optional and accepts:
+
+| Value | `frame_base64` contents |
+| --- | --- |
+| `""` | `null`, no image encoding |
+| `"full"` | Full processing frame, without overlays |
+| `"vehicle"` | Crop matching `vehicle.bbox` |
+| `"plate"` | Crop matching the original `plate.bbox`, without OCR padding; `null` if no plate was found |
+
+Images require `anpr.enable = true` and are JPEG, quality 90, encoded as standard Base64 without a data-URL prefix. The event's `frame_type` identifies the configured image mode, or `""` when image export is disabled. For browser display, prepend `data:image/jpeg;base64,` to a non-null `frame_base64`. Encoding failures are logged and produce `null` without preventing event delivery.
+
+The image and all boxes belong to the selected reference observation. If no attempt finds a plate, `full` and `vehicle` use the last attempt with an encoded image and its vehicle metadata. `frame_width` and `frame_height` always describe the full processing frame, including when a crop is sent. Crop dimensions are the corresponding bbox's `width` and `height`. Coordinates are pixels: vehicle relative to frame, plate relative to vehicle, OCR positions relative to the original plate. OCR uses padding internally, but symbol boxes are clipped to the original plate before export; a position absent from the reference attempt has a `null` bbox.
+
+Only the selected image mode is retained. Attempt images are stored as JPEG and Base64 is generated at event completion. Full-frame mode also compresses frames when pending recognition candidates change; tracks selecting the same frame share the JPEG. This bounds retained images per track but adds more encoding work than vehicle or plate mode.
 
 ## Virtual lines
 

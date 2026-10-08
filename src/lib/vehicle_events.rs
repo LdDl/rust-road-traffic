@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -5,12 +6,14 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
+use crate::lib::anpr::images::EventImages;
 use crate::lib::anpr::plate_detector::PlateModels;
 use crate::lib::anpr::tracking::TrackRecognition;
 use crate::lib::anpr::types::{BoundingBox, PlateResult, VehicleDetection};
 use crate::lib::cv::RawFrame;
 use crate::lib::detection::{DetectionBlobs, Detections};
 use crate::lib::tracker::TrackerTrait;
+use crate::settings::EventImage;
 
 pub type VehicleEvents = broadcast::Sender<Arc<VehicleEvent>>;
 
@@ -40,6 +43,7 @@ pub struct VehicleEvent {
     vehicle: VehicleDetection,
     plate: Option<PlateResult>,
     frame_base64: Option<String>,
+    frame_type: EventImage,
     frame_width: u32,
     frame_height: u32,
 }
@@ -56,13 +60,15 @@ struct VehicleEventState {
 pub struct VehicleEventCollector {
     active: HashMap<Uuid, VehicleEventState>,
     events: VehicleEvents,
+    images: EventImages,
 }
 
 impl VehicleEventCollector {
-    pub fn new(events: VehicleEvents) -> Self {
+    pub fn new(events: VehicleEvents, image: EventImage) -> Self {
         Self {
             active: HashMap::new(),
             events,
+            images: EventImages::new(image),
         }
     }
 
@@ -133,13 +139,14 @@ impl VehicleEventCollector {
         frame: &RawFrame,
         observed_at: DateTime<Utc>,
     ) {
+        self.images.begin_frame();
         for (track_id, state) in &mut self.active {
             if !state.eligible || state.ended_at != observed_at {
                 continue;
             }
             state
                 .recognition
-                .observe(models, frame, &state.vehicle, *track_id);
+                .observe(models, frame, &state.vehicle, *track_id, &mut self.images);
         }
     }
 
@@ -163,10 +170,18 @@ impl VehicleEventCollector {
             if !state.eligible {
                 continue;
             }
-            let (vehicle, frame_size, plate) =
-                match state.recognition.complete(models.as_deref_mut(), id) {
-                    Some(result) => (result.vehicle, result.frame_size, Some(result.plate)),
-                    None => (state.vehicle, state.frame_size, None),
+            let (vehicle, frame_size, plate, image) =
+                match state
+                    .recognition
+                    .complete(models.as_deref_mut(), id, &mut self.images)
+                {
+                    Some(result) => (
+                        result.vehicle,
+                        result.frame_size,
+                        result.plate,
+                        result.image,
+                    ),
+                    None => (state.vehicle, state.frame_size, None, None),
                 };
             let event = VehicleEvent {
                 event_id: Uuid::new_v4(),
@@ -177,7 +192,8 @@ impl VehicleEventCollector {
                 ended_at: state.ended_at,
                 vehicle,
                 plate,
-                frame_base64: None,
+                frame_base64: image.map(|bytes| STANDARD.encode(bytes.as_slice())),
+                frame_type: self.images.mode(),
                 frame_width: frame_size.0,
                 frame_height: frame_size.1,
             };

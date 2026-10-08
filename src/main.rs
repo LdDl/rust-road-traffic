@@ -257,8 +257,17 @@ fn run(
     let overwrite_file = path_to_config.to_string();
     let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(0);
     let (vehicle_events, _) = tokio::sync::broadcast::channel(128);
-    let mut event_collector = (settings.rest_api.enable && !report_mode)
-        .then(|| VehicleEventCollector::new(vehicle_events.clone()));
+    let mut event_collector = (settings.rest_api.enable && !report_mode).then(|| {
+        VehicleEventCollector::new(
+            vehicle_events.clone(),
+            settings
+                .anpr
+                .as_ref()
+                .filter(|anpr| anpr.enable)
+                .map(|anpr| anpr.image)
+                .unwrap_or_default(),
+        )
+    });
     if settings.rest_api.enable && !report_mode {
         let settings_clone = settings.clone();
         let ds_api = data_storage.clone();

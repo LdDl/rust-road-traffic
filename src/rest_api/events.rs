@@ -1,7 +1,7 @@
 use crate::lib::logging;
 use crate::rest_api::APIStorage;
-use actix_web::{HttpResponse, web};
-use futures::{StreamExt, stream};
+use actix_web::{web, HttpResponse};
+use futures::{stream, StreamExt};
 use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::warn;
@@ -11,7 +11,7 @@ use tracing::warn;
     tag = "Events",
     path = "/api/events/stream",
     responses(
-        (status = 200, description = "test sse", body = String, content_type = "text/event-stream")
+        (status = 200, description = "Completed vehicle events with optional ANPR and JPEG image", body = String, content_type = "text/event-stream")
     )
 )]
 pub async fn stream(data: web::Data<APIStorage>) -> HttpResponse {
