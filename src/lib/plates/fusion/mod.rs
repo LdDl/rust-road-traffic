@@ -8,7 +8,7 @@ mod alignment;
 mod registration;
 mod result;
 
-pub(super) use result::OcrSummary;
+pub(crate) use result::OcrSummary;
 
 // Bound the experimental analysis independently of detector output size.
 const MAX_SYMBOLS: usize = 128;

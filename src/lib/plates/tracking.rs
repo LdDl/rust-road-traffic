@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::lib::cv::RawFrame;
 use crate::lib::logging;
-use crate::lib::vehicle_events::{BoundingBox, PlateDetection, VehicleDetection};
+use crate::lib::vehicle_events::{BoundingBox, PlateDetection, PlateResult, VehicleDetection};
 
 use super::fusion;
 use super::quality::{CandidateQuality, PlateQuality};
@@ -42,11 +42,17 @@ impl Candidate {
     }
 }
 
-pub(crate) struct PlateObservation {
-    pub vehicle: VehicleDetection,
-    pub plate: PlateDetection,
-    pub frame_size: (u32, u32),
+struct PlateObservation {
+    vehicle: VehicleDetection,
+    plate: PlateDetection,
+    frame_size: (u32, u32),
     attempt: u8,
+}
+
+pub(crate) struct RecognitionResult {
+    pub vehicle: VehicleDetection,
+    pub plate: PlateResult,
+    pub frame_size: (u32, u32),
 }
 
 impl PlateObservation {
@@ -131,7 +137,7 @@ impl TrackRecognition {
         mut self,
         models: Option<&mut PlateModels>,
         track_id: Uuid,
-    ) -> Option<PlateObservation> {
+    ) -> Option<RecognitionResult> {
         if let (Some(models), Some(mut candidate)) = (models, self.pending.take()) {
             candidate.quality.update_visibility(
                 &candidate.vehicle.bbox,
@@ -142,6 +148,7 @@ impl TrackRecognition {
             );
             self.attempt(models, track_id, candidate);
         }
+        let fusion = fusion::analyze(self.observations.iter().map(|o| (o.attempt, &o.plate)));
         let Some(best) = (0..self.observations.len())
             .max_by(|&a, &b| self.compare(&self.observations[a], &self.observations[b]))
         else {
@@ -153,7 +160,7 @@ impl TrackRecognition {
                     reason = "no_plate_found",
                     "Plate recognition finished without a result"
                 );
-                self.save_comparison(track_id, None);
+                self.save_comparison(track_id, None, &fusion, None);
             }
             return None;
         };
@@ -182,10 +189,27 @@ impl TrackRecognition {
             matching_observations = self.votes(selected),
             confirmed = self.confirmed,
             reason,
-            "Plate recognition result selected"
+            "Plate recognition reference frame selected"
         );
-        self.save_comparison(track_id, Some(selected));
-        Some(self.observations.swap_remove(best))
+        let ocr = fusion
+            .ocr_summary(selected.attempt, &selected.plate)
+            .or_else(|| {
+                // Preserve the selected reading when observations cannot be aligned into one result.
+                fusion::analyze([(selected.attempt, &selected.plate)])
+                    .ocr_summary(selected.attempt, &selected.plate)
+            });
+        self.save_comparison(track_id, Some(selected), &fusion, ocr.as_ref());
+        let selected = self.observations.swap_remove(best);
+        Some(RecognitionResult {
+            vehicle: selected.vehicle,
+            plate: PlateResult {
+                class: selected.plate.class,
+                confidence: selected.plate.confidence,
+                bbox: selected.plate.bbox,
+                ocr,
+            },
+            frame_size: selected.frame_size,
+        })
     }
 
     fn compare(&self, a: &PlateObservation, b: &PlateObservation) -> Ordering {
@@ -205,9 +229,13 @@ impl TrackRecognition {
             .count()
     }
 
-    fn save_comparison(&self, track_id: Uuid, selected: Option<&PlateObservation>) {
-        let fusion = fusion::analyze(self.observations.iter().map(|o| (o.attempt, &o.plate)));
-        let ocr = selected.and_then(|s| fusion.ocr_summary(s.attempt, &s.plate));
+    fn save_comparison(
+        &self,
+        track_id: Uuid,
+        selected: Option<&PlateObservation>,
+        fusion: &fusion::FusionResult,
+        ocr: Option<&fusion::OcrSummary>,
+    ) {
         let current = selected.map(|s| SelectedReading {
             attempt: s.attempt,
             number: s.number(),
@@ -375,8 +403,8 @@ struct TrackComparison<'a> {
     track_id: Uuid,
     attempts: u8,
     current: Option<SelectedReading<'a>>,
-    ocr: Option<fusion::OcrSummary>,
-    fusion: fusion::FusionResult,
+    ocr: Option<&'a fusion::OcrSummary>,
+    fusion: &'a fusion::FusionResult,
     differs: Option<bool>,
 }
 

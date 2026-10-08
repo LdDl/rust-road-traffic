@@ -12,6 +12,7 @@ mod fusion;
 mod ocr;
 mod quality;
 mod tracking;
+pub(crate) use fusion::OcrSummary;
 use ocr::OcrRecognizer;
 pub(crate) use tracking::TrackRecognition;
 

@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::lib::cv::RawFrame;
 use crate::lib::detection::{DetectionBlobs, Detections};
-use crate::lib::plates::{PlateModels, TrackRecognition};
+use crate::lib::plates::{OcrSummary, PlateModels, TrackRecognition};
 use crate::lib::tracker::TrackerTrait;
 
 pub type VehicleEvents = broadcast::Sender<Arc<VehicleEvent>>;
@@ -82,6 +82,14 @@ pub struct PlateDetection {
 }
 
 #[derive(Serialize)]
+pub(crate) struct PlateResult {
+    pub class: String,
+    pub confidence: f32,
+    pub bbox: BoundingBox,
+    pub ocr: Option<OcrSummary>,
+}
+
+#[derive(Serialize)]
 pub struct VehicleEvent {
     event_id: Uuid,
     #[serde(rename = "type")]
@@ -91,7 +99,7 @@ pub struct VehicleEvent {
     started_at: DateTime<Utc>,
     ended_at: DateTime<Utc>,
     vehicle: VehicleDetection,
-    plate: Option<PlateDetection>,
+    plate: Option<PlateResult>,
     frame_base64: Option<String>,
     frame_width: u32,
     frame_height: u32,

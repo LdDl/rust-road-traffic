@@ -5,7 +5,7 @@ use crate::lib::vehicle_events::{BoundingBox, PlateDetection};
 use super::{Alternative, FusionResult, Position, PositionStatus, mean};
 
 #[derive(Serialize)]
-pub(in crate::lib::plates) struct OcrSummary {
+pub(crate) struct OcrSummary {
     number: String,
     mean_confidence: f64,
     has_conflicts: bool,
