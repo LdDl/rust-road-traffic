@@ -1,5 +1,3 @@
-use serde::Serialize;
-
 use crate::lib::anpr::types::BoundingBox;
 use crate::lib::cv::RawFrame;
 
@@ -7,38 +5,8 @@ const SAMPLE_SIZE: usize = 64;
 // Use a vehicle-relative border margin, independent of frame resolution.
 const EDGE_MARGIN: f64 = 0.1;
 
-#[derive(Serialize)]
-pub struct PlateQuality {
-    area: u64,
-    laplacian_variance: f64,
-    score: f64,
-}
-
-impl PlateQuality {
-    pub fn measure(frame: &RawFrame, bbox: &BoundingBox) -> Option<Self> {
-        if bbox.width == 0
-            || bbox.height == 0
-            || bbox.x.checked_add(bbox.width)? > frame.width
-            || bbox.y.checked_add(bbox.height)? > frame.height
-        {
-            return None;
-        }
-        let area = bbox.width as u64 * bbox.height as u64;
-        // Measure the detected plate itself, excluding the surrounding OCR padding.
-        let laplacian_variance = laplacian_variance(frame, bbox);
-        let score = (area as f64).sqrt() * (1.0 + laplacian_variance.ln_1p()).sqrt();
-        Some(Self {
-            area,
-            laplacian_variance,
-            score,
-        })
-    }
-}
-
-#[derive(Serialize)]
 pub struct CandidateQuality {
     area: u64,
-    touching_edges: u32,
     edge_penalty: f64,
     estimated_plate_visibility: Option<f64>,
     laplacian_variance: f64,
@@ -52,16 +20,10 @@ impl CandidateQuality {
         if bbox.width == 0 || bbox.height == 0 || right > frame.width || bottom > frame.height {
             return None;
         }
-        // A clamped bbox cannot tell how much was cut off; touching an edge is only a proxy.
-        let touching_edges = u32::from(bbox.x == 0)
-            + u32::from(bbox.y == 0)
-            + u32::from(right == frame.width)
-            + u32::from(bottom == frame.height);
         let area = bbox.width as u64 * bbox.height as u64;
         let sharpness = laplacian_variance(frame, bbox);
         let mut quality = Self {
             area,
-            touching_edges,
             edge_penalty: 1.0,
             estimated_plate_visibility: None,
             laplacian_variance: sharpness,

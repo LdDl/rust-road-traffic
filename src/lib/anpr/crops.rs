@@ -1,47 +1,5 @@
-use uuid::Uuid;
-
 use crate::lib::anpr::types::BoundingBox;
 use crate::lib::cv::{RawFrame, Rect};
-
-// Temporary visual check of the detected plate crop.
-pub fn save_plate_crop(
-    frame: &RawFrame,
-    bbox: &BoundingBox,
-    track_id: Uuid,
-    attempt: u8,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let bbox = ocr_crop_bbox(frame, bbox);
-    save_debug_crop(
-        frame,
-        &bbox,
-        &format!("plate_crops/{track_id}-{attempt}.png"),
-    )
-}
-
-pub fn save_debug_crop(
-    frame: &RawFrame,
-    bbox: &BoundingBox,
-    path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut rgb = Vec::with_capacity(bbox.width as usize * bbox.height as usize * 3);
-    for row in bbox.y..bbox.y + bbox.height {
-        let start = row as usize * frame.step() + bbox.x as usize * 3;
-        let end = start + bbox.width as usize * 3;
-        for bgr in frame.data[start..end].chunks_exact(3) {
-            rgb.extend_from_slice(&[bgr[2], bgr[1], bgr[0]]);
-        }
-    }
-
-    std::fs::create_dir_all("plate_crops")?;
-    let file = std::fs::File::create(path)?;
-    let mut encoder = png::Encoder::new(file, bbox.width, bbox.height);
-    encoder.set_color(png::ColorType::Rgb);
-    encoder.set_depth(png::BitDepth::Eight);
-    let mut writer = encoder.write_header()?;
-    writer.write_image_data(&rgb)?;
-    writer.finish()?;
-    Ok(())
-}
 
 pub fn ocr_crop_bbox(frame: &RawFrame, bbox: &BoundingBox) -> BoundingBox {
     // Expand each side by 10%, with at least two pixels for small plates.

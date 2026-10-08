@@ -1,4 +1,3 @@
-use serde::Serialize;
 use std::cmp::Ordering;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -7,12 +6,10 @@ use crate::lib::anpr::types::{BoundingBox, PlateDetection, PlateResult, VehicleD
 use crate::lib::cv::RawFrame;
 use crate::lib::logging;
 
-use crate::lib::anpr::crops::{crop_frame, ocr_crop_bbox, save_debug_crop, save_plate_crop};
+use crate::lib::anpr::crops::{crop_frame, ocr_crop_bbox};
 use crate::lib::anpr::fusion;
 use crate::lib::anpr::plate_detector::PlateModels;
-use crate::lib::anpr::quality::{CandidateQuality, PlateQuality};
-use crate::lib::anpr::types::OcrSummary;
-use crate::lib::ocr_fusion::types::FusionResult;
+use crate::lib::anpr::quality::CandidateQuality;
 
 const MAX_ATTEMPTS: u8 = 3;
 
@@ -151,7 +148,6 @@ impl TrackRecognition {
             );
             self.attempt(models, track_id, candidate);
         }
-        let fusion = fusion::analyze(self.observations.iter().map(|o| (o.attempt, &o.plate)));
         let Some(best) = (0..self.observations.len())
             .max_by(|&a, &b| self.compare(&self.observations[a], &self.observations[b]))
         else {
@@ -163,7 +159,6 @@ impl TrackRecognition {
                     reason = "no_plate_found",
                     "Plate recognition finished without a result"
                 );
-                self.save_comparison(track_id, None, &fusion, None);
             }
             return None;
         };
@@ -194,12 +189,12 @@ impl TrackRecognition {
             reason,
             "Plate recognition reference frame selected"
         );
+        let fusion = fusion::analyze(self.observations.iter().map(|o| (o.attempt, &o.plate)));
         let ocr = fusion::summarize(&fusion, selected.attempt, &selected.plate).or_else(|| {
             // Preserve the selected reading when observations cannot be aligned into one result.
             let fallback = fusion::analyze([(selected.attempt, &selected.plate)]);
             fusion::summarize(&fallback, selected.attempt, &selected.plate)
         });
-        self.save_comparison(track_id, Some(selected), &fusion, ocr.as_ref());
         let selected = self.observations.swap_remove(best);
         Some(RecognitionResult {
             vehicle: selected.vehicle,
@@ -230,46 +225,6 @@ impl TrackRecognition {
             .count()
     }
 
-    fn save_comparison(
-        &self,
-        track_id: Uuid,
-        selected: Option<&PlateObservation>,
-        fusion: &FusionResult,
-        ocr: Option<&OcrSummary>,
-    ) {
-        let current = selected.map(|s| SelectedReading {
-            attempt: s.attempt,
-            number: s.number(),
-            mean_confidence: s.plate.ocr.as_ref().map(|ocr| ocr.confidence),
-            matching_observations: self.votes(s),
-            confirmed: self.confirmed,
-        });
-        let differs = fusion
-            .hypothesis
-            .as_deref()
-            .zip(selected.and_then(|s| s.number()))
-            .map(|(merged, current)| merged != current);
-        let details = TrackComparison {
-            track_id,
-            attempts: self.attempts,
-            current,
-            ocr,
-            fusion,
-            differs,
-        };
-        let result = (|| -> Result<(), Box<dyn std::error::Error>> {
-            std::fs::create_dir_all("plate_crops")?;
-            std::fs::write(
-                format!("plate_crops/{track_id}-summary.json"),
-                serde_json::to_vec_pretty(&details)?,
-            )?;
-            Ok(())
-        })();
-        if let Err(error) = result {
-            warn!(scope = logging::SCOPE_PROCESSING, %track_id, %error, "Can't save temporary OCR comparison JSON");
-        }
-    }
-
     fn attempt(&mut self, models: &mut PlateModels, track_id: Uuid, candidate: Candidate) {
         if self.confirmed || self.attempts >= MAX_ATTEMPTS {
             return;
@@ -289,56 +244,15 @@ impl TrackRecognition {
             width: candidate.vehicle.bbox.width,
             height: candidate.vehicle.bbox.height,
         };
-        if let Err(error) = save_debug_crop(
-            &candidate.crop,
-            &local_vehicle,
-            &format!("plate_crops/{track_id}-{}-vehicle.png", self.attempts),
-        ) {
-            warn!(scope = logging::SCOPE_PROCESSING, %track_id, %error, "Can't save temporary vehicle crop");
-        }
         let mut plate = match models.detect_plate(&candidate.crop, &local_vehicle) {
             Ok(Some(plate)) => plate,
-            Ok(None) => {
-                save_attempt_details(
-                    track_id,
-                    self.attempts,
-                    &candidate,
-                    None,
-                    None,
-                    OcrDecision::NoPlate,
-                    None,
-                );
-                return;
-            }
+            Ok(None) => return,
             Err(error) => {
                 warn!(scope = logging::SCOPE_PROCESSING, %track_id, %error, "Plate detection failed");
-                save_attempt_details(
-                    track_id,
-                    self.attempts,
-                    &candidate,
-                    None,
-                    None,
-                    OcrDecision::DetectionFailed,
-                    Some(&error),
-                );
                 return;
             }
         };
-        if let Err(error) = save_plate_crop(&candidate.crop, &plate.bbox, track_id, self.attempts) {
-            warn!(scope = logging::SCOPE_PROCESSING, %track_id, %error, "Can't save temporary plate crop");
-        }
-        let plate_quality = PlateQuality::measure(&candidate.crop, &plate.bbox);
-        let ocr_decision = if models.ocr_enabled() {
-            OcrDecision::PlateFound
-        } else {
-            OcrDecision::Disabled
-        };
-        let ocr_error = if ocr_decision.should_recognize() {
-            models.recognize_plate(&candidate.crop, &mut plate).err()
-        } else {
-            None
-        };
-        if let Some(error) = &ocr_error {
+        if let Err(error) = models.recognize_plate(&candidate.crop, &mut plate) {
             warn!(scope = logging::SCOPE_PROCESSING, %track_id, %error, "Plate OCR failed");
         }
 
@@ -350,15 +264,6 @@ impl TrackRecognition {
                 symbol.bbox.y += candidate.crop_bbox.y;
             }
         }
-        save_attempt_details(
-            track_id,
-            self.attempts,
-            &candidate,
-            Some(&plate),
-            plate_quality.as_ref(),
-            ocr_decision,
-            ocr_error.as_deref(),
-        );
         self.observations.push(PlateObservation {
             vehicle: candidate.vehicle,
             plate,
@@ -372,89 +277,6 @@ impl TrackRecognition {
         if self.confirmed {
             self.pending = None;
         }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum OcrDecision {
-    PlateFound,
-    Disabled,
-    NoPlate,
-    DetectionFailed,
-}
-
-impl OcrDecision {
-    fn should_recognize(self) -> bool {
-        matches!(self, Self::PlateFound)
-    }
-}
-
-#[derive(Serialize)]
-struct SelectedReading<'a> {
-    attempt: u8,
-    number: Option<&'a str>,
-    mean_confidence: Option<f32>,
-    matching_observations: usize,
-    confirmed: bool,
-}
-
-#[derive(Serialize)]
-struct TrackComparison<'a> {
-    track_id: Uuid,
-    attempts: u8,
-    current: Option<SelectedReading<'a>>,
-    ocr: Option<&'a OcrSummary>,
-    fusion: &'a FusionResult,
-    differs: Option<bool>,
-}
-
-#[derive(Serialize)]
-struct AttemptDetails<'a> {
-    track_id: Uuid,
-    attempt: u8,
-    quality: &'a CandidateQuality,
-    vehicle: &'a VehicleDetection,
-    plate: Option<&'a PlateDetection>,
-    plate_quality: Option<&'a PlateQuality>,
-    ocr_decision: OcrDecision,
-    frame_width: u32,
-    frame_height: u32,
-    error: Option<&'a str>,
-}
-
-// Temporary companion to the PNG; failed attempts also get JSON so none are hidden.
-fn save_attempt_details(
-    track_id: Uuid,
-    attempt: u8,
-    candidate: &Candidate,
-    plate: Option<&PlateDetection>,
-    plate_quality: Option<&PlateQuality>,
-    ocr_decision: OcrDecision,
-    error: Option<&str>,
-) {
-    let details = AttemptDetails {
-        track_id,
-        attempt,
-        quality: &candidate.quality,
-        vehicle: &candidate.vehicle,
-        plate,
-        plate_quality,
-        ocr_decision,
-        frame_width: candidate.frame_size.0,
-        frame_height: candidate.frame_size.1,
-        error,
-    };
-    let result = (|| -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::create_dir_all("plate_crops")?;
-        std::fs::write(
-            format!("plate_crops/{track_id}-{attempt}.json"),
-            serde_json::to_vec_pretty(&details)?,
-        )?;
-        Ok(())
-    })();
-    if let Err(error) = result {
-        warn!(scope = logging::SCOPE_PROCESSING, %track_id, attempt, %error, "Can't save temporary plate attempt JSON");
     }
 }
 

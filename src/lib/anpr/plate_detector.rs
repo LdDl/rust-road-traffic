@@ -34,10 +34,6 @@ impl std::error::Error for PlateModelLoadError {
 }
 
 impl PlateModels {
-    pub fn ocr_enabled(&self) -> bool {
-        self.ocr.is_some()
-    }
-
     pub fn from_settings(
         settings: Option<&PlatesSettings>,
     ) -> Result<Option<Self>, PlateModelLoadError> {
