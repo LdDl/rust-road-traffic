@@ -1,17 +1,9 @@
-use serde::Serialize;
-
-use super::{Group, NormalizedBox, Symbol, median, representative};
+use crate::lib::ocr_fusion::geometry::{median, representative};
+use crate::lib::ocr_fusion::types::{Group, Metrics, NormalizedBox, Symbol};
 
 // Costs are experimental alignment scores, not probabilities.
 const GAP_COST: f64 = 1.0;
 const AMBIGUOUS_MARGIN: f64 = 0.25;
-
-#[derive(Serialize)]
-pub(super) struct Metrics {
-    cost: f64,
-    alternative_margin: Option<f64>,
-    pub ambiguous: bool,
-}
 
 #[derive(Clone, Copy)]
 enum Step {
@@ -45,11 +37,7 @@ fn match_cost(b: NormalizedBox, group: &Group, symbol: &Symbol, max_shift: f64) 
     0.7 * dx + 0.2 * dy + 0.2 * (1.0 - iou) + class_cost
 }
 
-pub(super) fn align(
-    groups: &[Group],
-    symbols: &[Symbol],
-    registered: bool,
-) -> (Vec<Group>, Metrics) {
+pub fn align(groups: &[Group], symbols: &[Symbol], registered: bool) -> (Vec<Group>, Metrics) {
     let (n, m) = (groups.len(), symbols.len());
     let stride = m + 1;
     let mut cells = vec![

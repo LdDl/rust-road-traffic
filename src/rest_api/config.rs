@@ -599,7 +599,7 @@ pub async fn update_config(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::rest_api::config::*;
     use crate::settings::needs_restart;
 
     fn patch(text: &str) -> Result<ConfigPatch, serde_json::Error> {

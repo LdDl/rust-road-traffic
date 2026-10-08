@@ -17,7 +17,7 @@ use lib::detection::process_yolo_detections;
 use lib::draw;
 use lib::logging;
 use lib::perf_stats::{PerfStats, Timer};
-use lib::plates::PlateModels;
+use lib::anpr::plate_detector::PlateModels;
 use lib::status::{DetectionStatus, InputStatus, RuntimeStatus};
 use lib::tracker::{SpatialInfo, TrackerTrait, new_tracker_from_type};
 use lib::vehicle_events::VehicleEventCollector;

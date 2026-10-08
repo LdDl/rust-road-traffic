@@ -3,13 +3,16 @@ use std::cmp::Ordering;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+use crate::lib::anpr::types::{BoundingBox, PlateDetection, PlateResult, VehicleDetection};
 use crate::lib::cv::RawFrame;
 use crate::lib::logging;
-use crate::lib::vehicle_events::{BoundingBox, PlateDetection, PlateResult, VehicleDetection};
 
-use super::fusion;
-use super::quality::{CandidateQuality, PlateQuality};
-use super::{PlateModels, crop_frame, ocr_crop_bbox, save_debug_crop, save_plate_crop};
+use crate::lib::anpr::crops::{crop_frame, ocr_crop_bbox, save_debug_crop, save_plate_crop};
+use crate::lib::anpr::fusion;
+use crate::lib::anpr::plate_detector::PlateModels;
+use crate::lib::anpr::quality::{CandidateQuality, PlateQuality};
+use crate::lib::anpr::types::OcrSummary;
+use crate::lib::ocr_fusion::types::FusionResult;
 
 const MAX_ATTEMPTS: u8 = 3;
 
@@ -49,7 +52,7 @@ struct PlateObservation {
     attempt: u8,
 }
 
-pub(crate) struct RecognitionResult {
+pub struct RecognitionResult {
     pub vehicle: VehicleDetection,
     pub plate: PlateResult,
     pub frame_size: (u32, u32),
@@ -70,7 +73,7 @@ impl PlateObservation {
 }
 
 #[derive(Default)]
-pub(crate) struct TrackRecognition {
+pub struct TrackRecognition {
     attempts: u8,
     last_attempt_bbox: Option<BoundingBox>,
     pending: Option<Candidate>,
@@ -191,13 +194,11 @@ impl TrackRecognition {
             reason,
             "Plate recognition reference frame selected"
         );
-        let ocr = fusion
-            .ocr_summary(selected.attempt, &selected.plate)
-            .or_else(|| {
-                // Preserve the selected reading when observations cannot be aligned into one result.
-                fusion::analyze([(selected.attempt, &selected.plate)])
-                    .ocr_summary(selected.attempt, &selected.plate)
-            });
+        let ocr = fusion::summarize(&fusion, selected.attempt, &selected.plate).or_else(|| {
+            // Preserve the selected reading when observations cannot be aligned into one result.
+            let fallback = fusion::analyze([(selected.attempt, &selected.plate)]);
+            fusion::summarize(&fallback, selected.attempt, &selected.plate)
+        });
         self.save_comparison(track_id, Some(selected), &fusion, ocr.as_ref());
         let selected = self.observations.swap_remove(best);
         Some(RecognitionResult {
@@ -233,8 +234,8 @@ impl TrackRecognition {
         &self,
         track_id: Uuid,
         selected: Option<&PlateObservation>,
-        fusion: &fusion::FusionResult,
-        ocr: Option<&fusion::OcrSummary>,
+        fusion: &FusionResult,
+        ocr: Option<&OcrSummary>,
     ) {
         let current = selected.map(|s| SelectedReading {
             attempt: s.attempt,
@@ -327,7 +328,7 @@ impl TrackRecognition {
             warn!(scope = logging::SCOPE_PROCESSING, %track_id, %error, "Can't save temporary plate crop");
         }
         let plate_quality = PlateQuality::measure(&candidate.crop, &plate.bbox);
-        let ocr_decision = if models.ocr.is_some() {
+        let ocr_decision = if models.ocr_enabled() {
             OcrDecision::PlateFound
         } else {
             OcrDecision::Disabled
@@ -403,8 +404,8 @@ struct TrackComparison<'a> {
     track_id: Uuid,
     attempts: u8,
     current: Option<SelectedReading<'a>>,
-    ocr: Option<&'a fusion::OcrSummary>,
-    fusion: &'a fusion::FusionResult,
+    ocr: Option<&'a OcrSummary>,
+    fusion: &'a FusionResult,
     differs: Option<bool>,
 }
 

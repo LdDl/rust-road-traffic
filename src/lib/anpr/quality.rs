@@ -1,14 +1,14 @@
 use serde::Serialize;
 
+use crate::lib::anpr::types::BoundingBox;
 use crate::lib::cv::RawFrame;
-use crate::lib::vehicle_events::BoundingBox;
 
 const SAMPLE_SIZE: usize = 64;
 // Use a vehicle-relative border margin, independent of frame resolution.
 const EDGE_MARGIN: f64 = 0.1;
 
 #[derive(Serialize)]
-pub(super) struct PlateQuality {
+pub struct PlateQuality {
     area: u64,
     laplacian_variance: f64,
     score: f64,
@@ -36,7 +36,7 @@ impl PlateQuality {
 }
 
 #[derive(Serialize)]
-pub(super) struct CandidateQuality {
+pub struct CandidateQuality {
     area: u64,
     touching_edges: u32,
     edge_penalty: f64,

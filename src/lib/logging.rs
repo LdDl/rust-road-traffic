@@ -318,7 +318,7 @@ fn filter_directive(level: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::lib::logging::*;
 
     fn config(folder: Option<PathBuf>) -> LogConfig {
         LogConfig {

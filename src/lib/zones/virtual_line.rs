@@ -118,7 +118,7 @@ impl VirtualLine {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::lib::zones::virtual_line::*;
     #[test]
     fn test_vertical_line() {
         let vertical_line = VirtualLine::new_from_cv(

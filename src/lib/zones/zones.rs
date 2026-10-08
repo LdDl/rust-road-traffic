@@ -1,6 +1,6 @@
 // Export submodules
-pub(crate) mod geojson;
-pub(crate) mod geometry;
+pub mod geojson;
+pub mod geometry;
 
 use chrono::{DateTime, Utc};
 use std::collections::hash_map::Entry::{Occupied, Vacant};
@@ -708,7 +708,7 @@ fn find_skeleton_line(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::lib::zones::zones::*;
     #[test]
     fn test_contains_point() {
         let convex_polygons = vec![

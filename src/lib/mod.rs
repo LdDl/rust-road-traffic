@@ -1,3 +1,4 @@
+pub mod anpr;
 pub mod constants;
 pub mod cv;
 pub mod data_storage;
@@ -7,7 +8,7 @@ pub mod draw;
 pub mod logging;
 pub mod mjpeg_streaming;
 pub mod perf_stats;
-pub mod plates;
+pub mod ocr_fusion;
 pub mod publisher;
 pub mod report;
 pub mod restart;

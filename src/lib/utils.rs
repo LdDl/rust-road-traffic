@@ -181,7 +181,7 @@ pub fn parse_darknet_cfg_net_size(cfg_path: &str) -> io::Result<(i32, i32)> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::lib::utils::*;
 
     #[test]
     fn cuda_check_does_not_panic() {

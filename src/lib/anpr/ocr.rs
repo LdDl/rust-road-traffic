@@ -1,11 +1,11 @@
+use crate::lib::anpr::types::{BoundingBox, OcrResult, OcrSymbol};
 use crate::lib::cv::RawFrame;
 use crate::lib::detection::Detector;
-use crate::lib::vehicle_events::{BoundingBox, OcrResult, OcrSymbol};
 use crate::settings::InferenceModelSettings;
 
-use super::bbox_in_frame;
+use crate::lib::anpr::crops::bbox_in_frame;
 
-pub(super) struct OcrRecognizer {
+pub struct OcrRecognizer {
     detector: Detector,
     settings: InferenceModelSettings,
 }

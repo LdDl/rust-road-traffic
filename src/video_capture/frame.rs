@@ -155,7 +155,7 @@ impl LatestFrameSlot {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::video_capture::frame::*;
     use std::thread;
     use std::time::Duration;
 

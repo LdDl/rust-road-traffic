@@ -147,7 +147,7 @@ fn same_zones(a: &[RoadLanesSettings], b: &[RoadLanesSettings]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::rest_api::change_state::*;
 
     fn settings(name: &str) -> AppSettings {
         let path =

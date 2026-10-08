@@ -1088,7 +1088,7 @@ impl fmt::Display for AppSettings {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::settings::settings::*;
 
     const CONFIG: &str = r#"# Road traffic config
 [input]

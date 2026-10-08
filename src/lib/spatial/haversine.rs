@@ -62,7 +62,7 @@ pub fn compute_center(lon1: f32, lat1: f32, lon2: f32, lat2: f32) -> (f32, f32) 
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::lib::spatial::haversine::*;
     #[test]
     fn test_haversine() {
         let src: (f32, f32) = (6.602018, 52.036769);

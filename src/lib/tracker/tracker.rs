@@ -6,9 +6,9 @@ use std::fmt;
 use tracing::warn;
 use uuid::Uuid;
 
-use super::object_extra::ObjectExtra;
-use super::tracked_blob::{TrackedBlob, TrackedBlobRef};
 use crate::lib::detection::{DetectionBlobs, Detections, KalmanFilterType};
+use crate::lib::tracker::object_extra::ObjectExtra;
+use crate::lib::tracker::tracked_blob::{TrackedBlob, TrackedBlobRef};
 
 /// Trait for SimpleBlob trackers
 pub trait TrackerEngineSimple {

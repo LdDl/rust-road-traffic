@@ -155,7 +155,7 @@ impl Stream for Client {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::lib::mjpeg_streaming::broadcaster::*;
 
     fn frame() -> Vec<u8> {
         Broadcaster::make_message_block(&[0xFF, 0xD8, 0xFF, 0xD9])

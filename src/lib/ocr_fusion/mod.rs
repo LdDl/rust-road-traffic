@@ -1,130 +1,32 @@
 use std::collections::BTreeMap;
 
-use serde::Serialize;
+use crate::lib::ocr_fusion::geometry::mean;
+use crate::lib::ocr_fusion::types::{
+    Alignment, Alternative, Flag, FusionResult, Group, Input, Observation, Position,
+    PositionStatus, Symbol,
+};
 
-use crate::lib::vehicle_events::PlateDetection;
-
-mod alignment;
-mod registration;
-mod result;
-
-pub(crate) use result::OcrSummary;
+pub mod alignment;
+pub mod geometry;
+pub mod registration;
+pub mod types;
 
 // Bound the experimental analysis independently of detector output size.
 const MAX_SYMBOLS: usize = 128;
 const MAX_READINGS: usize = 3;
 
-#[derive(Clone, Copy, Serialize)]
-struct NormalizedBox {
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-}
-
-impl NormalizedBox {
-    fn cx(self) -> f64 {
-        self.x + self.width / 2.0
-    }
-
-    fn cy(self) -> f64 {
-        self.y + self.height / 2.0
-    }
-}
-
-#[derive(Clone, Serialize)]
-struct Symbol {
-    attempt: u8,
-    index: usize,
-    class: String,
-    confidence: f64,
-    bbox: NormalizedBox,
-    original_bbox: Option<NormalizedBox>,
-}
-
-type Group = Vec<Symbol>;
-
-struct Reading {
+struct PreparedReading {
     attempt: u8,
     rows: Vec<Vec<Symbol>>,
     confidence: f64,
     count: usize,
 }
 
-#[derive(Serialize)]
-struct Input {
-    attempt: u8,
-    number: String,
-    rows: usize,
-}
-
-#[derive(Serialize)]
-struct Alternative {
-    class: String,
-    votes: usize,
-    confidence_sum: f64,
-    attempts: Vec<u8>,
-}
-
-#[derive(Clone, Copy, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum PositionStatus {
-    Agreement,
-    Single,
-    Conflict,
-}
-
-#[derive(Serialize)]
-struct Position {
-    proposed_class: String,
-    status: PositionStatus,
-    missing_attempts: Vec<u8>,
-    alternatives: Vec<Alternative>,
-    observations: Group,
-}
-
-#[derive(Clone, Copy, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum Flag {
-    NoOcr,
-    InvalidInput,
-    InputLimit,
-    RowLayoutMismatch,
-    SingleReading,
-    AmbiguousAlignment,
-    ConflictSymbols,
-    SingleSymbols,
-}
-
-#[derive(Serialize)]
-struct Alignment {
-    attempt: u8,
-    row: usize,
-    registration: registration::Registration,
-    #[serde(flatten)]
-    metrics: alignment::Metrics,
-}
-
-#[derive(Serialize)]
-pub(super) struct FusionResult {
-    pub hypothesis: Option<String>,
-    experimental: bool,
-    coordinate_space: &'static str,
-    inputs: Vec<Input>,
-    anchor_attempt: Option<u8>,
-    alignment_order: Vec<u8>,
-    alignment: Vec<Alignment>,
-    rows: Vec<Vec<Position>>,
-    flags: Vec<Flag>,
-}
-
-pub(super) fn analyze<'a>(
-    observations: impl IntoIterator<Item = (u8, &'a PlateDetection)>,
-) -> FusionResult {
+pub fn analyze(observations: impl IntoIterator<Item = Observation>) -> FusionResult {
     let mut result = FusionResult {
         hypothesis: None,
         experimental: true,
-        coordinate_space: "anchor_plate_normalized",
+        coordinate_space: "anchor_normalized",
         inputs: Vec::new(),
         anchor_attempt: None,
         alignment_order: Vec::new(),
@@ -133,43 +35,49 @@ pub(super) fn analyze<'a>(
         flags: Vec::new(),
     };
     let mut readings = Vec::new();
-    for (attempt, plate) in observations {
-        let Some(ocr) = plate.ocr.as_ref().filter(|ocr| !ocr.symbols.is_empty()) else {
+    for observation in observations {
+        let attempt = observation.attempt;
+        if observation.symbols.is_empty() {
             continue;
-        };
-        if ocr.symbols.len() > MAX_SYMBOLS || readings.len() >= MAX_READINGS {
+        }
+        if observation.symbols.len() > MAX_SYMBOLS || readings.len() >= MAX_READINGS {
             result.flags.push(Flag::InputLimit);
             return result;
         }
-        if plate.bbox.width == 0
-            || plate.bbox.height == 0
-            || readings.iter().any(|r: &Reading| r.attempt == attempt)
+        if readings
+            .iter()
+            .any(|r: &PreparedReading| r.attempt == attempt)
         {
             result.flags.push(Flag::InvalidInput);
             return result;
         }
         let mut symbols = Vec::new();
-        for (index, symbol) in ocr.symbols.iter().enumerate() {
+        for (index, symbol) in observation.symbols.into_iter().enumerate() {
+            let bbox = symbol.bbox;
             if !symbol.confidence.is_finite()
                 || !(0.0..=1.0).contains(&symbol.confidence)
-                || symbol.bbox.width == 0
-                || symbol.bbox.height == 0
+                || ![
+                    bbox.x,
+                    bbox.y,
+                    bbox.width,
+                    bbox.height,
+                    bbox.cx(),
+                    bbox.cy(),
+                ]
+                .iter()
+                .all(|value| value.is_finite())
+                || bbox.width <= 0.0
+                || bbox.height <= 0.0
             {
                 result.flags.push(Flag::InvalidInput);
                 return result;
             }
-            // Padding can place symbols outside the detected plate; do not clamp coordinates.
             symbols.push(Symbol {
                 attempt,
                 index,
-                class: symbol.class.clone(),
-                confidence: symbol.confidence as f64,
-                bbox: NormalizedBox {
-                    x: (symbol.bbox.x as f64 - plate.bbox.x as f64) / plate.bbox.width as f64,
-                    y: (symbol.bbox.y as f64 - plate.bbox.y as f64) / plate.bbox.height as f64,
-                    width: symbol.bbox.width as f64 / plate.bbox.width as f64,
-                    height: symbol.bbox.height as f64 / plate.bbox.height as f64,
-                },
+                class: symbol.class,
+                confidence: symbol.confidence,
+                bbox,
                 original_bbox: None,
             });
         }
@@ -178,10 +86,10 @@ pub(super) fn analyze<'a>(
         let rows = reading_rows(symbols);
         result.inputs.push(Input {
             attempt,
-            number: ocr.number.clone(),
+            number: observation.number,
             rows: rows.len(),
         });
-        readings.push(Reading {
+        readings.push(PreparedReading {
             attempt,
             rows,
             confidence,
@@ -331,30 +239,5 @@ fn summarize(mut group: Group, attempts: &[u8]) -> Position {
             .collect(),
         alternatives,
         observations: group,
-    }
-}
-
-fn mean(values: impl Iterator<Item = f64>) -> f64 {
-    let (sum, count) = values.fold((0.0, 0), |(sum, count), v| (sum + v, count + 1));
-    sum / count as f64
-}
-
-fn median(values: impl Iterator<Item = f64>) -> f64 {
-    let mut values: Vec<_> = values.collect();
-    values.sort_by(f64::total_cmp);
-    let middle = values.len() / 2;
-    if values.len() % 2 == 0 {
-        (values[middle - 1] + values[middle]) / 2.0
-    } else {
-        values[middle]
-    }
-}
-
-fn representative(group: &Group) -> NormalizedBox {
-    NormalizedBox {
-        x: median(group.iter().map(|s| s.bbox.x)),
-        y: median(group.iter().map(|s| s.bbox.y)),
-        width: median(group.iter().map(|s| s.bbox.width)),
-        height: median(group.iter().map(|s| s.bbox.height)),
     }
 }

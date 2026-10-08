@@ -1,14 +1,15 @@
 use chrono::{DateTime, Utc};
-use mot_rs::utils::Rect;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
+use crate::lib::anpr::plate_detector::PlateModels;
+use crate::lib::anpr::tracking::TrackRecognition;
+use crate::lib::anpr::types::{BoundingBox, PlateResult, VehicleDetection};
 use crate::lib::cv::RawFrame;
 use crate::lib::detection::{DetectionBlobs, Detections};
-use crate::lib::plates::{OcrSummary, PlateModels, TrackRecognition};
 use crate::lib::tracker::TrackerTrait;
 
 pub type VehicleEvents = broadcast::Sender<Arc<VehicleEvent>>;
@@ -25,68 +26,6 @@ impl EventType {
             Self::VehiclePassed => "vehicle.passed",
         }
     }
-}
-
-#[derive(Clone, Copy, Serialize)]
-pub struct BoundingBox {
-    pub x: u32,
-    pub y: u32,
-    pub width: u32,
-    pub height: u32,
-}
-
-impl BoundingBox {
-    pub fn from_detection(rect: Rect, frame_width: u32, frame_height: u32) -> Self {
-        let x = rect.x.clamp(0.0, frame_width as f32).floor() as u32;
-        let y = rect.y.clamp(0.0, frame_height as f32).floor() as u32;
-        let right = (rect.x + rect.width).clamp(0.0, frame_width as f32).ceil() as u32;
-        let bottom = (rect.y + rect.height)
-            .clamp(0.0, frame_height as f32)
-            .ceil() as u32;
-        Self {
-            x,
-            y,
-            width: right.saturating_sub(x),
-            height: bottom.saturating_sub(y),
-        }
-    }
-}
-
-#[derive(Clone, Serialize)]
-pub struct VehicleDetection {
-    pub class: String,
-    pub confidence: f32,
-    pub bbox: BoundingBox,
-}
-
-#[derive(Serialize)]
-pub struct OcrSymbol {
-    pub class: String,
-    pub confidence: f32,
-    pub bbox: BoundingBox,
-}
-
-#[derive(Serialize)]
-pub struct OcrResult {
-    pub number: String,
-    pub confidence: f32,
-    pub symbols: Vec<OcrSymbol>,
-}
-
-#[derive(Serialize)]
-pub struct PlateDetection {
-    pub class: String,
-    pub confidence: f32,
-    pub bbox: BoundingBox,
-    pub ocr: Option<OcrResult>,
-}
-
-#[derive(Serialize)]
-pub(crate) struct PlateResult {
-    pub class: String,
-    pub confidence: f32,
-    pub bbox: BoundingBox,
-    pub ocr: Option<OcrSummary>,
 }
 
 #[derive(Serialize)]

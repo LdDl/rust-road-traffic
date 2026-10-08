@@ -1,30 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::Serialize;
-
-use super::{Group, NormalizedBox, Symbol, mean, median, representative};
+use crate::lib::ocr_fusion::geometry::{mean, median, representative};
+use crate::lib::ocr_fusion::types::{Group, NormalizedBox, Registration, Symbol, Transform};
 
 const MIN_ANCHORS: usize = 3;
 const ANCHOR_TOLERANCE: f64 = 0.5;
-
-#[derive(Serialize)]
-struct Transform {
-    scale_x: f64,
-    shift_x: f64,
-    scale_y: f64,
-    shear_y: f64,
-    shift_y: f64,
-}
-
-#[derive(Serialize)]
-pub(super) struct Registration {
-    pub applied: bool,
-    available_anchors: usize,
-    reason: &'static str,
-    anchors: Vec<String>,
-    transform: Option<Transform>,
-    max_anchor_error: Option<f64>,
-}
 
 struct Anchor {
     class: String,
@@ -50,7 +30,7 @@ fn fit_line(points: &[(f64, f64)]) -> (f64, f64) {
     (slope, cy - slope * cx)
 }
 
-pub(super) fn register(groups: &[Group], mut symbols: Vec<Symbol>) -> (Vec<Symbol>, Registration) {
+pub fn register(groups: &[Group], mut symbols: Vec<Symbol>) -> (Vec<Symbol>, Registration) {
     let mut target_counts: BTreeMap<&str, usize> = BTreeMap::new();
     for group in groups {
         for class in group
