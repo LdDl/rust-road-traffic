@@ -45,6 +45,8 @@
 
 [plates]
     enable = false
+    # Image selection: "" (none, default), "full", "vehicle" or "plate".
+    image = ""
 
 [plates.detection]
     # Set the plate model path before enabling: .onnx or .engine/.trt.

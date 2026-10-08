@@ -152,10 +152,24 @@ pub struct DetectionSettings {
     pub perf_stats_interval: u32,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EventImage {
+    #[default]
+    #[serde(rename = "")]
+    None,
+    #[serde(rename = "full")]
+    Full,
+    #[serde(rename = "vehicle")]
+    Vehicle,
+    #[serde(rename = "plate")]
+    Plate,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(default)]
 pub struct PlatesSettings {
     pub enable: bool,
+    pub image: EventImage,
     pub detection: InferenceModelSettings,
     pub ocr: InferenceModelSettings,
 }
