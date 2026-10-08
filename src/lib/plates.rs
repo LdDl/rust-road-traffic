@@ -8,6 +8,7 @@ use crate::lib::logging;
 use crate::lib::vehicle_events::{BoundingBox, PlateDetection};
 use crate::settings::{InferenceModelSettings, PlatesSettings};
 
+mod fusion;
 mod ocr;
 mod quality;
 mod tracking;

@@ -4,11 +4,43 @@ use crate::lib::cv::RawFrame;
 use crate::lib::vehicle_events::BoundingBox;
 
 const SAMPLE_SIZE: usize = 64;
+// Use a vehicle-relative border margin, independent of frame resolution.
+const EDGE_MARGIN: f64 = 0.1;
+
+#[derive(Serialize)]
+pub(super) struct PlateQuality {
+    area: u64,
+    laplacian_variance: f64,
+    score: f64,
+}
+
+impl PlateQuality {
+    pub fn measure(frame: &RawFrame, bbox: &BoundingBox) -> Option<Self> {
+        if bbox.width == 0
+            || bbox.height == 0
+            || bbox.x.checked_add(bbox.width)? > frame.width
+            || bbox.y.checked_add(bbox.height)? > frame.height
+        {
+            return None;
+        }
+        let area = bbox.width as u64 * bbox.height as u64;
+        // Measure the detected plate itself, excluding the surrounding OCR padding.
+        let laplacian_variance = laplacian_variance(frame, bbox);
+        let score = (area as f64).sqrt() * (1.0 + laplacian_variance.ln_1p()).sqrt();
+        Some(Self {
+            area,
+            laplacian_variance,
+            score,
+        })
+    }
+}
 
 #[derive(Serialize)]
 pub(super) struct CandidateQuality {
     area: u64,
     touching_edges: u32,
+    edge_penalty: f64,
+    estimated_plate_visibility: Option<f64>,
     laplacian_variance: f64,
     score: f64,
 }
@@ -27,19 +59,96 @@ impl CandidateQuality {
             + u32::from(bottom == frame.height);
         let area = bbox.width as u64 * bbox.height as u64;
         let sharpness = laplacian_variance(frame, bbox);
-        // Logarithmic weighting limits the advantage from texture and noise. No blur cutoff.
-        let score =
-            (area as f64).sqrt() * (1.0 + sharpness.ln_1p()).sqrt() / (1.0 + touching_edges as f64);
-        Some(Self {
+        let mut quality = Self {
             area,
             touching_edges,
+            edge_penalty: 1.0,
+            estimated_plate_visibility: None,
             laplacian_variance: sharpness,
-            score,
-        })
+            score: 0.0,
+        };
+        quality.update_visibility(bbox, (frame.width, frame.height), None);
+        Some(quality)
+    }
+
+    pub fn update_visibility(
+        &mut self,
+        bbox: &BoundingBox,
+        frame_size: (u32, u32),
+        plate_reference: Option<(&BoundingBox, &BoundingBox)>,
+    ) {
+        let gaps = [
+            (bbox.x as f64, bbox.width as f64),
+            (
+                (frame_size.0 - bbox.x - bbox.width) as f64,
+                bbox.width as f64,
+            ),
+            (bbox.y as f64, bbox.height as f64),
+            (
+                (frame_size.1 - bbox.y - bbox.height) as f64,
+                bbox.height as f64,
+            ),
+        ];
+        // A detector can stop its bbox short of the image edge even when the car is cut off.
+        self.edge_penalty = 1.0
+            + gaps
+                .iter()
+                .map(|(gap, size)| (1.0 - gap / (size * EDGE_MARGIN)).clamp(0.0, 1.0))
+                .sum::<f64>();
+        self.estimated_plate_visibility = plate_reference
+            .map(|(vehicle, plate)| estimated_plate_visibility(bbox, frame_size, vehicle, plate));
+        // Logarithmic weighting limits the advantage from texture and noise. No blur cutoff.
+        self.score = (self.area as f64).sqrt() * (1.0 + self.laplacian_variance.ln_1p()).sqrt()
+            / self.edge_penalty
+            * self.estimated_plate_visibility.unwrap_or(1.0).powi(2);
     }
 
     pub fn is_better_than(&self, other: &Self) -> bool {
         self.score > other.score
+    }
+}
+
+fn estimated_plate_visibility(
+    current: &BoundingBox,
+    frame_size: (u32, u32),
+    previous: &BoundingBox,
+    plate: &BoundingBox,
+) -> f64 {
+    // Clipping can shrink one dimension. Uniform scaling avoids squeezing the plate back in.
+    let scale = (current.width as f64 / previous.width.max(1) as f64)
+        .max(current.height as f64 / previous.height.max(1) as f64);
+    let projected_x = projected_origin(
+        current.x,
+        current.width,
+        frame_size.0,
+        previous.width,
+        scale,
+    ) + (plate.x as f64 - previous.x as f64) * scale;
+    let projected_y = projected_origin(
+        current.y,
+        current.height,
+        frame_size.1,
+        previous.height,
+        scale,
+    ) + (plate.y as f64 - previous.y as f64) * scale;
+    let width = plate.width as f64 * scale;
+    let height = plate.height as f64 * scale;
+    // Plate detection receives the vehicle crop, so visibility within that crop matters too.
+    let visible_width = ((projected_x + width).min((current.x + current.width) as f64)
+        - projected_x.max(current.x as f64))
+    .max(0.0);
+    let visible_height = ((projected_y + height).min((current.y + current.height) as f64)
+        - projected_y.max(current.y as f64))
+    .max(0.0);
+    (visible_width * visible_height / (width * height).max(f64::EPSILON)).clamp(0.0, 1.0)
+}
+
+fn projected_origin(start: u32, size: u32, limit: u32, previous_size: u32, scale: f64) -> f64 {
+    // Anchor at the edge farther from the image border, which is less likely to be clipped.
+    if start < limit - start - size {
+        (start + size) as f64 - previous_size as f64 * scale
+    } else {
+        start as f64
     }
 }
 
