@@ -6,7 +6,7 @@ use crate::lib::anpr::types::{BoundingBox, PlateDetection, PlateResult, VehicleD
 use crate::lib::cv::RawFrame;
 use crate::lib::logging;
 
-use crate::lib::anpr::crops::{crop_frame, ocr_crop_bbox};
+use crate::lib::anpr::crops::crop_frame;
 use crate::lib::anpr::fusion;
 use crate::lib::anpr::plate_detector::PlateModels;
 use crate::lib::anpr::quality::CandidateQuality;
@@ -15,7 +15,6 @@ const MAX_ATTEMPTS: u8 = 3;
 
 struct Candidate {
     crop: RawFrame,
-    crop_bbox: BoundingBox,
     vehicle: VehicleDetection,
     frame_size: (u32, u32),
     quality: CandidateQuality,
@@ -30,11 +29,8 @@ impl Candidate {
         if vehicle.bbox.width == 0 || vehicle.bbox.height == 0 {
             return None;
         }
-        // Preserve surrounding pixels for the OCR padding, without retaining a full frame.
-        let crop_bbox = ocr_crop_bbox(frame, &vehicle.bbox);
         Some(Self {
-            crop: crop_frame(frame, &crop_bbox)?,
-            crop_bbox,
+            crop: crop_frame(frame, &vehicle.bbox)?,
             vehicle: vehicle.clone(),
             frame_size: (frame.width, frame.height),
             quality,
@@ -239,13 +235,7 @@ impl TrackRecognition {
             "Plate recognition attempt"
         );
 
-        let local_vehicle = BoundingBox {
-            x: candidate.vehicle.bbox.x - candidate.crop_bbox.x,
-            y: candidate.vehicle.bbox.y - candidate.crop_bbox.y,
-            width: candidate.vehicle.bbox.width,
-            height: candidate.vehicle.bbox.height,
-        };
-        let mut plate = match models.detect_plate(&candidate.crop, &local_vehicle) {
+        let mut plate = match models.detect_plate(&candidate.crop) {
             Ok(Some(plate)) => plate,
             Ok(None) => return,
             Err(error) => {
@@ -257,12 +247,12 @@ impl TrackRecognition {
             warn!(scope = logging::SCOPE_PROCESSING, %track_id, %error, "Plate OCR failed");
         }
 
-        plate.bbox.x += candidate.crop_bbox.x;
-        plate.bbox.y += candidate.crop_bbox.y;
+        plate.bbox.x += candidate.vehicle.bbox.x;
+        plate.bbox.y += candidate.vehicle.bbox.y;
         if let Some(ocr) = &mut plate.ocr {
             for symbol in &mut ocr.symbols {
-                symbol.bbox.x += candidate.crop_bbox.x;
-                symbol.bbox.y += candidate.crop_bbox.y;
+                symbol.bbox.x += candidate.vehicle.bbox.x;
+                symbol.bbox.y += candidate.vehicle.bbox.y;
             }
         }
         self.observations.push(PlateObservation {

@@ -18,7 +18,6 @@ pub fn analyze<'a>(
             .map(|symbol| DetectedSymbol {
                 class: symbol.class.clone(),
                 confidence: symbol.confidence as f64,
-                // Padding can place symbols outside the detected plate; do not clamp coordinates.
                 // Zero-size plate boxes yield non-finite coordinates, rejected by the fusion input validation.
                 bbox: NormalizedBox {
                     x: (symbol.bbox.x as f64 - plate.bbox.x as f64) / plate.bbox.width as f64,

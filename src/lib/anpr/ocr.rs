@@ -19,6 +19,7 @@ impl OcrRecognizer {
         &mut self,
         crop: &RawFrame,
         crop_bbox: &BoundingBox,
+        plate_bbox: &BoundingBox,
     ) -> Result<Option<OcrResult>, String> {
         let (boxes, classes, confidences) = self.detector.detect_frame(
             crop,
@@ -31,6 +32,10 @@ impl OcrRecognizer {
                 continue;
             }
             let Some(bbox) = bbox_in_frame(bbox, crop_bbox) else {
+                continue;
+            };
+            // Padding provides context for OCR but is excluded from the reported plate geometry.
+            let Some(bbox) = bbox.intersection(*plate_bbox) else {
                 continue;
             };
             let class = self.settings.net_classes.get(class_id).ok_or_else(|| {

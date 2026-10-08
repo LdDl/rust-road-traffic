@@ -11,11 +11,32 @@ pub struct BoundingBox {
 }
 
 impl BoundingBox {
-    pub fn relative_to(self, parent: Self) -> RelativeBoundingBox {
-        RelativeBoundingBox {
-            // OCR padding can place a symbol before the detected plate origin.
-            x: i64::from(self.x) - i64::from(parent.x),
-            y: i64::from(self.y) - i64::from(parent.y),
+    pub fn intersection(self, other: Self) -> Option<Self> {
+        let x = self.x.max(other.x);
+        let y = self.y.max(other.y);
+        let right = self
+            .x
+            .checked_add(self.width)?
+            .min(other.x.checked_add(other.width)?);
+        let bottom = self
+            .y
+            .checked_add(self.height)?
+            .min(other.y.checked_add(other.height)?);
+        if right <= x || bottom <= y {
+            return None;
+        }
+        Some(Self {
+            x,
+            y,
+            width: right - x,
+            height: bottom - y,
+        })
+    }
+
+    pub fn relative_to(self, parent: Self) -> Self {
+        Self {
+            x: self.x - parent.x,
+            y: self.y - parent.y,
             width: self.width,
             height: self.height,
         }
@@ -37,26 +58,11 @@ impl BoundingBox {
     }
 }
 
-#[derive(Serialize)]
-pub struct RelativeBoundingBox {
-    pub x: i64,
-    pub y: i64,
-    pub width: u32,
-    pub height: u32,
-}
-
 #[derive(Clone, Serialize)]
 pub struct VehicleDetection {
     pub class: String,
     pub confidence: f32,
     pub bbox: BoundingBox,
-}
-
-#[derive(Serialize)]
-pub struct VehicleResult {
-    pub class: String,
-    pub confidence: f32,
-    pub bbox: RelativeBoundingBox,
 }
 
 #[derive(Serialize)]
@@ -85,7 +91,7 @@ pub struct PlateDetection {
 pub struct PlateResult {
     pub class: String,
     pub confidence: f32,
-    pub bbox: RelativeBoundingBox,
+    pub bbox: BoundingBox,
     pub ocr: Option<OcrSummary>,
 }
 
@@ -105,7 +111,7 @@ pub struct OcrPosition {
     pub class: String,
     pub mean_confidence: f64,
     pub status: PositionStatus,
-    pub bbox: Option<RelativeBoundingBox>,
+    pub bbox: Option<BoundingBox>,
     pub observations: Vec<OcrObservation>,
     pub alternatives: Vec<OcrAlternative>,
 }

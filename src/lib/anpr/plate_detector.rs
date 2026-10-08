@@ -54,29 +54,17 @@ impl PlateModels {
         }))
     }
 
-    pub fn detect_plate(
-        &mut self,
-        frame: &RawFrame,
-        vehicle_bbox: &BoundingBox,
-    ) -> Result<Option<PlateDetection>, String> {
-        let x = vehicle_bbox.x.min(frame.width);
-        let y = vehicle_bbox.y.min(frame.height);
-        let width = vehicle_bbox.width.min(frame.width - x);
-        let height = vehicle_bbox.height.min(frame.height - y);
-        let crop_bbox = BoundingBox {
-            x,
-            y,
-            width,
-            height,
+    pub fn detect_plate(&mut self, frame: &RawFrame) -> Result<Option<PlateDetection>, String> {
+        let vehicle_bbox = BoundingBox {
+            x: 0,
+            y: 0,
+            width: frame.width,
+            height: frame.height,
         };
-        let Some(crop) = crop_frame(frame, &crop_bbox) else {
-            return Ok(None);
-        };
-
         let settings = &self.detection_settings;
         let (boxes, classes, confidences) =
             self.detection
-                .detect_frame(&crop, settings.conf_threshold, settings.nms_threshold)?;
+                .detect_frame(frame, settings.conf_threshold, settings.nms_threshold)?;
         let mut best: Option<PlateDetection> = None;
         for ((bbox, class_id), confidence) in boxes.into_iter().zip(classes).zip(confidences) {
             if !confidence.is_finite() || bbox.width <= 0 || bbox.height <= 0 {
@@ -85,7 +73,7 @@ impl PlateModels {
             let class = settings.net_classes.get(class_id).ok_or_else(|| {
                 format!("Plate class ID {class_id} is missing from plates.detection.net_classes")
             })?;
-            let Some(bbox) = bbox_in_frame(bbox, &crop_bbox) else {
+            let Some(bbox) = bbox_in_frame(bbox, &vehicle_bbox) else {
                 continue;
             };
             if best
@@ -112,7 +100,7 @@ impl PlateModels {
         let crop_bbox = ocr_crop_bbox(frame, &plate.bbox);
         let crop = crop_frame(frame, &crop_bbox)
             .ok_or_else(|| "Plate bbox does not define a valid frame crop".to_string())?;
-        plate.ocr = self.ocr.recognize(&crop, &crop_bbox)?;
+        plate.ocr = self.ocr.recognize(&crop, &crop_bbox, &plate.bbox)?;
         Ok(())
     }
 

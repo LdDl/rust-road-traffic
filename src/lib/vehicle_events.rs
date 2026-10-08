@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::lib::anpr::plate_detector::PlateModels;
 use crate::lib::anpr::tracking::TrackRecognition;
-use crate::lib::anpr::types::{BoundingBox, PlateResult, VehicleDetection, VehicleResult};
+use crate::lib::anpr::types::{BoundingBox, PlateResult, VehicleDetection};
 use crate::lib::cv::RawFrame;
 use crate::lib::detection::{DetectionBlobs, Detections};
 use crate::lib::tracker::TrackerTrait;
@@ -37,7 +37,7 @@ pub struct VehicleEvent {
     track_id: Uuid,
     started_at: DateTime<Utc>,
     ended_at: DateTime<Utc>,
-    vehicle: VehicleResult,
+    vehicle: VehicleDetection,
     plate: Option<PlateResult>,
     frame_base64: Option<String>,
     frame_width: u32,
@@ -175,16 +175,7 @@ impl VehicleEventCollector {
                 track_id: id,
                 started_at: state.started_at,
                 ended_at: state.ended_at,
-                vehicle: VehicleResult {
-                    class: vehicle.class,
-                    confidence: vehicle.confidence,
-                    bbox: vehicle.bbox.relative_to(BoundingBox {
-                        x: 0,
-                        y: 0,
-                        width: frame_size.0,
-                        height: frame_size.1,
-                    }),
-                },
+                vehicle,
                 plate,
                 frame_base64: None,
                 frame_width: frame_size.0,
