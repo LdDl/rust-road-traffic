@@ -152,7 +152,7 @@ pub struct DetectionSettings {
     pub perf_stats_interval: u32,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default, utoipa::ToSchema)]
 pub enum EventImage {
     #[default]
     #[serde(rename = "")]

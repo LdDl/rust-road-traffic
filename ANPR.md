@@ -14,7 +14,7 @@ Plate detection and OCR are optional. Configure both models under `[anpr.plates]
     image = "vehicle"
 ```
 
-Recognition makes at most three attempts per track and stops after two identical nonempty readings. The final `plate.ocr` contains the fused `number`, `mean_confidence`, `has_conflicts`, `reference_attempt` and `positions` with observations and competing alternatives. Missing plate or OCR results are `null`; agreement is not a guarantee of correctness. ANPR settings are currently configured through TOML, not `GET/PATCH /api/config`.
+Recognition makes at most three attempts per track and stops after two identical nonempty readings. The final `plate.ocr` contains the fused `number`, `mean_confidence`, `has_conflicts`, `reference_attempt` and `positions` with observations and competing alternatives. Missing plate or OCR results are `null`; agreement is not a guarantee of correctness. ANPR settings are also available through `GET/PATCH /api/config`; save with `GET /api/mutations/save_toml`, then restart to apply.
 
 `anpr.image` is optional and accepts:
 
@@ -56,7 +56,7 @@ To send events to a different Redis, add an optional connection block:
 
 In this block, `host` is required obviously. And omitted values use port 6379, no credentials and database 0 as is.
 
-Parent credentials are not inherited in that case. So you could just delete the entire block to use the shared parent connection. Vehicle-event publisher settings are currently TOML-only and take effect after restart; the existing configuration and status API Redis fields describe statistics.
+Parent credentials are not inherited in that case. So you could just delete the entire block to use the shared parent connection. These settings are also available through `GET/PATCH /api/config`; `connection: null` restores the shared connection. Save and restart to apply.
 
 Subscribe before a track ends, using the configured Redis host, credentials and channel:
 
