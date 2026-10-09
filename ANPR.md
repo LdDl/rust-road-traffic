@@ -14,7 +14,7 @@ Plate detection and OCR are optional. Configure both models under `[anpr.plates]
     image = "vehicle"
 ```
 
-Recognition makes at most three attempts per track and stops after two identical nonempty readings. The final `plate.ocr` contains the fused `number`, `mean_confidence`, `has_conflicts`, `reference_attempt` and `positions` with observations and competing alternatives. Missing plate or OCR results are `null`; agreement is not a guarantee of correctness. ANPR settings are also available through `GET/PATCH /api/config`; save with `GET /api/mutations/save_toml`, then restart to apply.
+Recognition makes at most three attempts per track and stops after two identical nonempty readings. The final `plate.ocr` contains the fused `number`, `mean_confidence`, `has_conflicts`, `reference_attempt` and `positions` with observations and competing alternatives. Missing plate or OCR results are `null`; agreement is not a guarantee of correctness. Only `anpr.enable` and `anpr.image` are available through `GET/PATCH /api/config`; model settings remain in TOML. Save API changes with `GET /api/mutations/save_toml`, then restart to apply.
 
 `anpr.image` is optional and accepts:
 

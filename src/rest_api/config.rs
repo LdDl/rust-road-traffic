@@ -11,7 +11,7 @@ use crate::rest_api::APIStorage;
 use crate::rest_api::change_state::ChangeState;
 use crate::rest_api::errors::{ErrorResponse, FieldError};
 use crate::settings::{
-    AnprSettings, AppSettings, EventImage, InferenceModelSettings, KALMAN_FILTERS,
+    AnprSettings, AppSettings, EventImage, KALMAN_FILTERS,
     RedisConnectionSettings, RedisVehicleEventsSettings, TRACKER_TYPES,
 };
 
@@ -124,8 +124,6 @@ impl From<&RedisConnectionSettings> for RedisConnectionView {
 pub struct AnprView {
     pub enable: bool,
     pub image: EventImage,
-    pub plates: InferenceModelView,
-    pub ocr: InferenceModelView,
 }
 
 impl From<&AnprSettings> for AnprView {
@@ -133,32 +131,6 @@ impl From<&AnprSettings> for AnprView {
         Self {
             enable: settings.enable,
             image: settings.image,
-            plates: InferenceModelView::from(&settings.plates),
-            ocr: InferenceModelView::from(&settings.ocr),
-        }
-    }
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct InferenceModelView {
-    /// Model file must be available on the device
-    pub network_weights: String,
-    pub conf_threshold: f32,
-    pub nms_threshold: f32,
-    pub net_width: Option<i32>,
-    pub net_height: Option<i32>,
-    pub net_classes: Vec<String>,
-}
-
-impl From<&InferenceModelSettings> for InferenceModelView {
-    fn from(settings: &InferenceModelSettings) -> Self {
-        Self {
-            network_weights: settings.network_weights.clone(),
-            conf_threshold: settings.conf_threshold,
-            nms_threshold: settings.nms_threshold,
-            net_width: settings.net_width,
-            net_height: settings.net_height,
-            net_classes: settings.net_classes.clone(),
         }
     }
 }
@@ -329,25 +301,6 @@ pub struct RedisConnectionPatch {
 pub struct AnprPatch {
     pub enable: Option<bool>,
     pub image: Option<EventImage>,
-    pub plates: Option<InferenceModelPatch>,
-    pub ocr: Option<InferenceModelPatch>,
-}
-
-#[derive(Debug, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-pub struct InferenceModelPatch {
-    /// Model file must be available on the device
-    pub network_weights: Option<String>,
-    pub conf_threshold: Option<f32>,
-    pub nms_threshold: Option<f32>,
-    /// Null restores automatic dimensions; clear both dimensions together
-    #[serde(default, deserialize_with = "nullable")]
-    #[schema(value_type = Option<i32>)]
-    pub net_width: Option<Option<i32>>,
-    #[serde(default, deserialize_with = "nullable")]
-    #[schema(value_type = Option<i32>)]
-    pub net_height: Option<Option<i32>>,
-    pub net_classes: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -437,59 +390,12 @@ fn set<T: PartialEq>(target: &mut T, value: Option<T>, path: &str, changed: &mut
     }
 }
 
-impl InferenceModelPatch {
-    fn apply(self, current: &mut InferenceModelSettings, prefix: &str, changed: &mut Vec<String>) {
-        set(
-            &mut current.network_weights,
-            self.network_weights,
-            &format!("{prefix}.network_weights"),
-            changed,
-        );
-        set(
-            &mut current.conf_threshold,
-            self.conf_threshold,
-            &format!("{prefix}.conf_threshold"),
-            changed,
-        );
-        set(
-            &mut current.nms_threshold,
-            self.nms_threshold,
-            &format!("{prefix}.nms_threshold"),
-            changed,
-        );
-        set(
-            &mut current.net_width,
-            self.net_width,
-            &format!("{prefix}.net_width"),
-            changed,
-        );
-        set(
-            &mut current.net_height,
-            self.net_height,
-            &format!("{prefix}.net_height"),
-            changed,
-        );
-        set(
-            &mut current.net_classes,
-            self.net_classes,
-            &format!("{prefix}.net_classes"),
-            changed,
-        );
-    }
-}
-
 impl AnprPatch {
     fn apply(self, settings: &mut Option<AnprSettings>, changed: &mut Vec<String>) {
         let mut current = settings.clone().unwrap_or_default();
         let before = changed.len();
         set(&mut current.enable, self.enable, "anpr.enable", changed);
         set(&mut current.image, self.image, "anpr.image", changed);
-        if let Some(plates) = self.plates {
-            plates.apply(&mut current.plates, "anpr.plates", changed);
-        }
-        if let Some(ocr) = self.ocr {
-            ocr.apply(&mut current.ocr, "anpr.ocr", changed);
-        }
         if changed.len() != before {
             *settings = Some(current);
         }
