@@ -1,5 +1,9 @@
 # ANPR and vehicle events
 
+Showcase:
+
+<video src='https://github.com/user-attachments/assets/2e44615e-6ed1-4a1f-a1c2-1bab4e3d0cb1' width="720px"></video>
+
 `GET /api/events/stream` sends named `vehicle.passed` SSE events when an eligible vehicle track expires. Eligibility follows the existing zones and their virtual-line rules. SSE is available whenever the REST API is enabled outside report mode and has no replay. Events can also be published to Redis independently of the REST API. Disabling ANPR leaves vehicle events enabled, with `plate: null` and no image.
 
 ```shell
@@ -14,7 +18,7 @@ Plate detection and OCR are optional. Configure both models under `[anpr.plates]
     image = "vehicle"
 ```
 
-Recognition makes at most three attempts per track and stops after two identical nonempty readings. The final `plate.ocr` contains the fused `number`, `mean_confidence`, `has_conflicts`, `reference_attempt` and `positions` with observations and competing alternatives. Missing plate or OCR results are `null`; agreement is not a guarantee of correctness. ANPR settings are also available through `GET/PATCH /api/config`; save with `GET /api/mutations/save_toml`, then restart to apply.
+Recognition makes at most three attempts per track and stops after two identical nonempty readings. The final `plate.ocr` contains the fused `number`, `mean_confidence`, `has_conflicts`, `reference_attempt` and `positions` with observations and competing alternatives. Missing plate or OCR results are `null`; agreement is not a guarantee of correctness. Only `anpr.enable` and `anpr.image` are available through `GET/PATCH /api/config`; model settings remain in TOML. Save API changes with `GET /api/mutations/save_toml`, then restart to apply.
 
 `anpr.image` is optional and accepts:
 

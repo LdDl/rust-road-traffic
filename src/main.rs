@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 #[path = "lib/mod.rs"]
 mod lib;
+use lib::anpr::plate_detector::PlateModels;
 use lib::data_storage::new_datastorage;
 use lib::dataset_collector::DatasetCollector;
 use lib::detection::DetectionBlobs::BBox;
@@ -17,7 +18,6 @@ use lib::detection::process_yolo_detections;
 use lib::draw;
 use lib::logging;
 use lib::perf_stats::{PerfStats, Timer};
-use lib::anpr::plate_detector::PlateModels;
 use lib::status::{DetectionStatus, InputStatus, RuntimeStatus};
 use lib::tracker::{SpatialInfo, TrackerTrait, new_tracker_from_type};
 use lib::vehicle_events::VehicleEventCollector;
@@ -967,10 +967,11 @@ fn main() {
         std::process::exit(1);
     });
 
-    let mut plate_models = PlateModels::from_settings(app_settings.anpr.as_ref()).unwrap_or_else(|e| {
-        error!(scope = logging::SCOPE_STARTUP, error = %e, "Failed to load plate models");
-        std::process::exit(1);
-    });
+    let mut plate_models =
+        PlateModels::from_settings(app_settings.anpr.as_ref()).unwrap_or_else(|e| {
+            error!(scope = logging::SCOPE_STARTUP, error = %e, "Failed to load plate models");
+            std::process::exit(1);
+        });
 
     match run(
         &app_settings,
