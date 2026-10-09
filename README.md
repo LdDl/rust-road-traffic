@@ -1,4 +1,4 @@
-# Rust toy utility for monitoring road traffic
+# Rust toy utility for monitoring road traffic and ANPR (automatic number plate recognition)
 
 Road traffic monitoring utility written in pure Rust. **OpenCV is not required** - the project supports ONNX Runtime and TensorRT backends that work without any OpenCV dependency (even for drawing/grabbing/postprocess frames stuff). OpenCV DNN backend is also available as an optional (and currently default) feature for those who prefer it.
 
