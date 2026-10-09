@@ -37,7 +37,7 @@ pub fn meters_to_lonlat(x: f32, y: f32) -> (f32, f32) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::lib::spatial::epsg::*;
     #[test]
     fn test_epsg_conversion() {
         let test_lon: f32 = 37.6202637616082;

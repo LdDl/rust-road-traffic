@@ -176,7 +176,7 @@ impl RuntimeStatus {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::lib::status::*;
 
     #[test]
     fn frames_and_timings_are_recorded() {

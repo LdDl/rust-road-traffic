@@ -592,7 +592,7 @@ fn parse_frame_rate(s: &str) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::video_capture::capture::*;
 
     // just helper for test assertions (SourceKind doesn't derive Debug)
     fn source_kind_name(kind: &SourceKind) -> &'static str {

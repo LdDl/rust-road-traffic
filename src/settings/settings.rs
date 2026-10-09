@@ -46,6 +46,7 @@ pub struct AppSettings {
     pub input: InputSettings,
     pub verbose: Option<VerboseSettings>,
     pub detection: DetectionSettings,
+    pub anpr: Option<AnprSettings>,
     pub tracking: TrackingSettings,
     /// Identifies the installation point in everything the app publishes.
     /// Optional in the file: a blank one is generated and written back on start
@@ -149,6 +150,92 @@ pub struct DetectionSettings {
     /// Print performance stats every N frames. 0 = disabled.
     #[serde(default)]
     pub perf_stats_interval: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default, utoipa::ToSchema)]
+pub enum EventImage {
+    #[default]
+    #[serde(rename = "")]
+    None,
+    #[serde(rename = "full")]
+    Full,
+    #[serde(rename = "vehicle")]
+    Vehicle,
+    #[serde(rename = "plate")]
+    Plate,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(default)]
+pub struct AnprSettings {
+    pub enable: bool,
+    pub image: EventImage,
+    pub plates: InferenceModelSettings,
+    pub ocr: InferenceModelSettings,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
+pub struct InferenceModelSettings {
+    pub network_weights: String,
+    pub conf_threshold: f32,
+    pub nms_threshold: f32,
+    pub net_width: Option<i32>,
+    pub net_height: Option<i32>,
+    pub net_classes: Vec<String>,
+}
+
+impl Default for InferenceModelSettings {
+    fn default() -> Self {
+        Self {
+            network_weights: String::new(),
+            conf_threshold: 0.4,
+            nms_threshold: 0.2,
+            net_width: None,
+            net_height: None,
+            net_classes: Vec::new(),
+        }
+    }
+}
+
+impl InferenceModelSettings {
+    fn problems(&self, section: &str) -> Vec<(String, String)> {
+        let mut problems = Vec::new();
+        if self.network_weights.trim().is_empty() {
+            problems.push((
+                format!("{section}.network_weights"),
+                "must not be empty when enabled".to_string(),
+            ));
+        }
+        if self.net_classes.is_empty()
+            || self.net_classes.iter().any(|class| class.trim().is_empty())
+        {
+            problems.push((
+                format!("{section}.net_classes"),
+                "must contain non-empty class names when enabled".to_string(),
+            ));
+        }
+        for (field, threshold) in [
+            ("conf_threshold", self.conf_threshold),
+            ("nms_threshold", self.nms_threshold),
+        ] {
+            if !threshold.is_finite() || !(0.0..=1.0).contains(&threshold) {
+                problems.push((
+                    format!("{section}.{field}"),
+                    "must be a finite number between 0 and 1".to_string(),
+                ));
+            }
+        }
+        match (self.net_width, self.net_height) {
+            (None, None) => {}
+            (Some(width), Some(height)) if width > 0 && height > 0 => {}
+            _ => problems.push((
+                format!("{section}.net_width/net_height"),
+                "must both be positive or both be omitted".to_string(),
+            )),
+        }
+        problems
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -262,6 +349,54 @@ pub struct RedisPublisherSettings {
     pub password: String,
     pub db_index: i32,
     pub channel_name: String,
+    #[serde(default)]
+    pub vehicle_events: RedisVehicleEventsSettings,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
+pub struct RedisVehicleEventsSettings {
+    pub enable: bool,
+    pub channel_name: String,
+    pub connection: Option<RedisConnectionSettings>,
+}
+
+impl Default for RedisVehicleEventsSettings {
+    fn default() -> Self {
+        Self {
+            enable: false,
+            channel_name: "VEHICLE_EVENTS".to_string(),
+            connection: None,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RedisConnectionSettings {
+    pub host: String,
+    #[serde(default = "default_redis_port")]
+    pub port: i32,
+    pub username: Option<String>,
+    #[serde(default)]
+    pub password: String,
+    #[serde(default)]
+    pub db_index: i32,
+}
+
+fn default_redis_port() -> i32 {
+    6379
+}
+
+impl RedisPublisherSettings {
+    pub fn connection(&self) -> RedisConnectionSettings {
+        RedisConnectionSettings {
+            host: self.host.clone(),
+            port: self.port,
+            username: self.username.clone(),
+            password: self.password.clone(),
+            db_index: self.db_index,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -851,6 +986,10 @@ impl AppSettings {
             0.0,
             1.0,
         ));
+        if let Some(anpr) = self.anpr.as_ref().filter(|anpr| anpr.enable) {
+            problems.extend(anpr.plates.problems("anpr.plates"));
+            problems.extend(anpr.ocr.problems("anpr.ocr"));
+        }
         problems.extend(in_range(
             "worker.reset_data_milliseconds",
             self.worker.reset_data_milliseconds,
@@ -869,6 +1008,40 @@ impl AppSettings {
             1,
             65535,
         ));
+        let events = &self.redis_publisher.vehicle_events;
+        if events.enable && events.channel_name.trim().is_empty() {
+            problems.push((
+                "redis_publisher.vehicle_events.channel_name".into(),
+                "must not be empty when enabled".into(),
+            ));
+        }
+        if let Some(connection) = &events.connection {
+            const PREFIX: &str = "redis_publisher.vehicle_events.connection";
+            if connection.host.trim().is_empty() {
+                problems.push((format!("{PREFIX}.host"), "must not be empty".into()));
+            }
+            problems.extend(in_range(&format!("{PREFIX}.port"), connection.port, 1, 65535));
+            problems.extend(in_range(
+                &format!("{PREFIX}.db_index"),
+                connection.db_index,
+                0,
+                i32::MAX,
+            ));
+        }
+        if self.redis_publisher.enable || (events.enable && events.connection.is_none()) {
+            if self.redis_publisher.host.trim().is_empty() {
+                problems.push((
+                    "redis_publisher.host".into(),
+                    "must not be empty when enabled".into(),
+                ));
+            }
+            problems.extend(in_range(
+                "redis_publisher.db_index",
+                self.redis_publisher.db_index,
+                0,
+                i32::MAX,
+            ));
+        }
         if let Some(level) = self.verbose.as_ref().and_then(|v| v.level.as_deref()) {
             problems.extend(one_of("verbose.level", level, &logging::LEVELS));
         }
@@ -963,6 +1136,7 @@ impl AppSettings {
             input: self.input.clone(),
             verbose: self.verbose.clone(),
             detection: self.detection.clone(),
+            anpr: self.anpr.clone(),
             tracking: self.tracking.clone(),
             equipment_info: self.equipment_info.clone(),
             road_lanes: Some(Vec::new()),
@@ -1000,7 +1174,7 @@ impl fmt::Display for AppSettings {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::settings::settings::*;
 
     const CONFIG: &str = r#"# Road traffic config
 [input]

@@ -9,6 +9,7 @@ Road traffic monitoring utility written in pure Rust. **OpenCV is not required**
 - [Traffic flow parameters](#traffic-flow-parameters)
 - [Installation and usage](#installation-and-usage)
 - [Virtual lines](#virtual-lines)
+- [ANPR and vehicle events](ANPR.md)
 - [Dataset collection](#dataset-collection-auto-labeling)
 - [Report mode](#report-mode)
 - [ROADMAP](#roadmap)
@@ -442,6 +443,10 @@ Locally you can access Swagger UI documentation via http://localhost:42001/api/d
     ```
 
     Anything left out of the request is taken from the current configuration, so an empty body checks what the app is set up to use.
+
+## ANPR and vehicle events
+
+See [ANPR.md](ANPR.md) for configuration, image export and the SSE JSON format.
 
 ## Virtual lines
 

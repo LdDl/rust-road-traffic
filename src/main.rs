@@ -17,8 +17,10 @@ use lib::detection::process_yolo_detections;
 use lib::draw;
 use lib::logging;
 use lib::perf_stats::{PerfStats, Timer};
+use lib::anpr::plate_detector::PlateModels;
 use lib::status::{DetectionStatus, InputStatus, RuntimeStatus};
 use lib::tracker::{SpatialInfo, TrackerTrait, new_tracker_from_type};
+use lib::vehicle_events::VehicleEventCollector;
 use lib::zones::Zone;
 
 mod settings;
@@ -27,7 +29,7 @@ use settings::AppSettings;
 mod video_capture;
 use video_capture::{ThreadedFrame, VideoSource, frame_channel, kill_capture_subprocesses};
 
-use lib::publisher::RedisConnection;
+use lib::publisher::RedisPublishers;
 
 mod rest_api;
 
@@ -103,6 +105,7 @@ fn run(
     path_to_config: &str,
     tracker: &mut dyn TrackerTrait,
     detector: &mut Detector,
+    mut plate_models: Option<&mut PlateModels>,
 ) -> Result<(), AppError> {
     let report_mode = settings.is_report_mode();
     if report_mode && !std::path::Path::new(&settings.input.video_src).is_file() {
@@ -126,6 +129,7 @@ fn run(
         scope = logging::SCOPE_STARTUP,
         rest_api = settings.rest_api.enable,
         redis_publisher = settings.redis_publisher.enable,
+        redis_vehicle_events = settings.redis_publisher.vehicle_events.enable,
         mjpeg = enable_mjpeg,
         mjpeg_quality,
         report_mode,
@@ -207,44 +211,15 @@ fn run(
     let ds_worker = data_storage.clone();
 
     /* Redis publisher */
-    let redis_enabled = settings.redis_publisher.enable;
-    let redis_worker = data_storage.clone();
-    let redis_conn = match redis_enabled {
-        true => {
-            let redis_host = settings.redis_publisher.host.to_owned();
-            let redis_port = settings.redis_publisher.port;
-            let redis_password = settings.redis_publisher.password.to_owned();
-            let redis_db_index = settings.redis_publisher.db_index;
-            let redis_channel = settings.redis_publisher.channel_name.to_owned();
-            let redis_username = settings.redis_publisher.username.to_owned();
-            match RedisConnection::new(
-                &redis_host,
-                redis_port,
-                redis_db_index,
-                redis_username.as_deref(),
-                &redis_password,
-                redis_worker,
-            ) {
-                Ok(mut redis_conn) => {
-                    if redis_channel.chars().count() != 0 {
-                        redis_conn.set_channel(redis_channel);
-                    }
-                    Some(redis_conn)
-                }
-                Err(err) => {
-                    error!(
-                        scope = logging::SCOPE_REDIS,
-                        host = %redis_host,
-                        port = redis_port,
-                        error = %err,
-                        "Can't set up the Redis publisher, statistics will not be published"
-                    );
-                    None
-                }
-            }
+    let publishers = if report_mode {
+        RedisPublishers {
+            statistics: None,
+            vehicle_events: None,
         }
-        false => None,
+    } else {
+        RedisPublishers::new(&settings.redis_publisher, data_storage.clone())
     };
+    let redis_conn = publishers.statistics;
 
     /* Start REST API if needed */
     // The API answers before the video source is even open, so what the app
@@ -253,10 +228,26 @@ fn run(
     let status = std::sync::Arc::new(RuntimeStatus::new());
     let overwrite_file = path_to_config.to_string();
     let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(0);
+    let (vehicle_events, _) = tokio::sync::broadcast::channel(128);
+    let enable_vehicle_events = !report_mode
+        && (settings.rest_api.enable || settings.redis_publisher.vehicle_events.enable);
+    let mut event_collector = enable_vehicle_events.then(|| {
+        VehicleEventCollector::new(
+            vehicle_events.clone(),
+            settings
+                .anpr
+                .as_ref()
+                .filter(|anpr| anpr.enable)
+                .map(|anpr| anpr.image)
+                .unwrap_or_default(),
+            publishers.vehicle_events,
+        )
+    });
     if settings.rest_api.enable && !report_mode {
         let settings_clone = settings.clone();
         let ds_api = data_storage.clone();
         let status_api = status.clone();
+        let events_api = vehicle_events.clone();
         thread::spawn(move || {
             match rest_api::start_rest_api(
                 settings_clone.rest_api.host.clone(),
@@ -267,6 +258,7 @@ fn run(
                 settings_clone,
                 &overwrite_file,
                 status_api,
+                events_api,
             ) {
                 Ok(_) => {}
                 Err(err) => {
@@ -406,8 +398,8 @@ fn run(
                         error!(scope = logging::SCOPE_ANALYTICS, error = %err, "Can't update statistics");
                     }
                 }
-                if redis_enabled {
-                    redis_conn.as_ref().unwrap().push_statistics();
+                if let Some(publisher) = &redis_conn {
+                    publisher.push_statistics();
                 }
             }
         }
@@ -474,6 +466,7 @@ fn run(
     /* Can't create colors as const/static currently */
     let mut first_frame: Option<lib::cv::RawFrame> = None;
     while let Some(received) = rx_capture.recv() {
+        let observed_at = Utc::now();
         if report_mode && first_frame.is_none() {
             first_frame = Some(received.frame.clone());
         }
@@ -609,6 +602,15 @@ fn run(
             .read()
             .expect("Zone grid is poisoned [RWLock]");
 
+        if let Some(collector) = event_collector.as_mut() {
+            collector.observe_detections(
+                &tmp_detections,
+                tracker,
+                observed_at,
+                (received.frame.width, received.frame.height),
+            );
+        }
+
         // Reset current occupancy for zones
         let current_ut = get_sys_time_in_secs();
         for (_, zone_guarded) in zones.iter() {
@@ -701,7 +703,7 @@ fn run(
                 } else {
                     None
                 };
-                match object_extra.spatial_info {
+                let counted_in_zone = match object_extra.spatial_info {
                     Some(ref mut spatial_info) => {
                         spatial_info.update_avg(
                             last_time,
@@ -719,7 +721,7 @@ fn run(
                             object_extra.get_classname(),
                             crossed,
                             zone_id_from.clone(),
-                        );
+                        )
                     }
                     None => {
                         object_extra.spatial_info = Some(SpatialInfo::new(
@@ -737,8 +739,11 @@ fn run(
                             object_extra.get_classname(),
                             crossed,
                             zone_id_from.clone(),
-                        );
+                        )
                     }
+                };
+                if let Some(collector) = event_collector.as_mut() {
+                    collector.record_zone_result(object_id, counted_in_zone);
                 }
                 // Only update vehicle zone tracking when vehicle crosses virtual line
                 if crossed {
@@ -758,7 +763,7 @@ fn run(
         /* Re-stream input video as MJPEG */
         if enable_mjpeg {
             // Sleep for a while for debug
-            // thread::sleep(std::time::Duration::from_millis(200));
+            // thread::sleep(std::time::Duration::from_millis(500));
 
             let mut frame = received.frame.clone();
 
@@ -795,6 +800,20 @@ fn run(
             drop(zone_grid);
             drop(zones);
             drop(ds_guard);
+        }
+
+        if let (Some(collector), Some(models)) =
+            (event_collector.as_mut(), plate_models.as_deref_mut())
+        {
+            collector.detect_plates(models, &received.frame, observed_at);
+        }
+        if let Some(collector) = event_collector.as_mut() {
+            let equipment_id = ds_tracker
+                .read()
+                .expect("DataStorage is poisoned [RWLock]")
+                .id
+                .clone();
+            collector.publish_completed(tracker, &equipment_id, plate_models.as_deref_mut());
         }
     }
 
@@ -948,7 +967,18 @@ fn main() {
         std::process::exit(1);
     });
 
-    match run(&app_settings, path_to_config, &mut *tracker, &mut detector) {
+    let mut plate_models = PlateModels::from_settings(app_settings.anpr.as_ref()).unwrap_or_else(|e| {
+        error!(scope = logging::SCOPE_STARTUP, error = %e, "Failed to load plate models");
+        std::process::exit(1);
+    });
+
+    match run(
+        &app_settings,
+        path_to_config,
+        &mut *tracker,
+        &mut detector,
+        plate_models.as_mut(),
+    ) {
         Ok(_) => {}
         Err(err) => {
             error!(scope = logging::SCOPE_PROCESSING, error = %err, "Error in main thread");

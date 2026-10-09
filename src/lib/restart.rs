@@ -86,7 +86,7 @@ fn replace_process(_exe: &PathBuf, _args: &[String]) -> io::Error {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::lib::restart::*;
 
     #[test]
     fn restart_command_is_this_process() {

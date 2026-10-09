@@ -1,11 +1,6 @@
 //! What the configuration API shows and accepts.
 //!
-//! These types are written out rather than derived from the settings file,
-//! and that is the point: a setting reaches the API by being named here, so
-//! anything added to `AppSettings` later stays private until someone decides
-//! otherwise. It is also why the model is simply absent instead of filtered
-//! out - which model runs, how it is shaped and what it can recognise belong
-//! to how the device was built, not to whoever operates it.
+//! API fields are explicit; new settings are not exposed automatically.
 use actix_web::{Error, HttpResponse, web};
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -15,7 +10,10 @@ use crate::lib::logging;
 use crate::rest_api::APIStorage;
 use crate::rest_api::change_state::ChangeState;
 use crate::rest_api::errors::{ErrorResponse, FieldError};
-use crate::settings::{AppSettings, KALMAN_FILTERS, TRACKER_TYPES};
+use crate::settings::{
+    AnprSettings, AppSettings, EventImage, InferenceModelSettings, KALMAN_FILTERS,
+    RedisConnectionSettings, RedisVehicleEventsSettings, TRACKER_TYPES,
+};
 
 /// Result of a configuration change
 #[derive(Debug, Serialize, ToSchema)]
@@ -31,7 +29,7 @@ pub struct UpdateConfigResponse {
     pub state: ChangeState,
 }
 
-/// The configuration as it is saved
+/// Current configuration, including unsaved changes
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ConfigView {
     pub input: InputView,
@@ -39,6 +37,7 @@ pub struct ConfigView {
     pub equipment_info: EquipmentView,
     pub worker: WorkerView,
     pub redis_publisher: RedisView,
+    pub anpr: Option<AnprView>,
     pub verbose: VerboseView,
 }
 
@@ -77,9 +76,10 @@ pub struct WorkerView {
     pub reset_data_milliseconds: i64,
 }
 
-/// Where statistics are published
+/// Statistics and vehicle-event publication
 #[derive(Debug, Serialize, ToSchema)]
 pub struct RedisView {
+    /// Enable statistics publishing
     pub enable: bool,
     pub host: String,
     pub port: i32,
@@ -88,6 +88,79 @@ pub struct RedisView {
     pub db_index: i32,
     pub channel_name: String,
     pub password: String,
+    pub vehicle_events: RedisVehicleEventsView,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RedisVehicleEventsView {
+    pub enable: bool,
+    pub channel_name: String,
+    /// Null uses the parent Redis connection
+    pub connection: Option<RedisConnectionView>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RedisConnectionView {
+    pub host: String,
+    pub port: i32,
+    pub username: Option<String>,
+    pub password: String,
+    pub db_index: i32,
+}
+
+impl From<&RedisConnectionSettings> for RedisConnectionView {
+    fn from(settings: &RedisConnectionSettings) -> Self {
+        Self {
+            host: settings.host.clone(),
+            port: settings.port,
+            username: settings.username.clone(),
+            password: settings.password.clone(),
+            db_index: settings.db_index,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AnprView {
+    pub enable: bool,
+    pub image: EventImage,
+    pub plates: InferenceModelView,
+    pub ocr: InferenceModelView,
+}
+
+impl From<&AnprSettings> for AnprView {
+    fn from(settings: &AnprSettings) -> Self {
+        Self {
+            enable: settings.enable,
+            image: settings.image,
+            plates: InferenceModelView::from(&settings.plates),
+            ocr: InferenceModelView::from(&settings.ocr),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct InferenceModelView {
+    /// Model file must be available on the device
+    pub network_weights: String,
+    pub conf_threshold: f32,
+    pub nms_threshold: f32,
+    pub net_width: Option<i32>,
+    pub net_height: Option<i32>,
+    pub net_classes: Vec<String>,
+}
+
+impl From<&InferenceModelSettings> for InferenceModelView {
+    fn from(settings: &InferenceModelSettings) -> Self {
+        Self {
+            network_weights: settings.network_weights.clone(),
+            conf_threshold: settings.conf_threshold,
+            nms_threshold: settings.nms_threshold,
+            net_width: settings.net_width,
+            net_height: settings.net_height,
+            net_classes: settings.net_classes.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -134,7 +207,17 @@ impl From<&AppSettings> for ConfigView {
                 db_index: redis.db_index,
                 channel_name: redis.channel_name.clone(),
                 password: redis.password.clone(),
+                vehicle_events: RedisVehicleEventsView {
+                    enable: redis.vehicle_events.enable,
+                    channel_name: redis.vehicle_events.channel_name.clone(),
+                    connection: redis
+                        .vehicle_events
+                        .connection
+                        .as_ref()
+                        .map(RedisConnectionView::from),
+                },
             },
+            anpr: settings.anpr.as_ref().map(AnprView::from),
             verbose: VerboseView {
                 level: verbose.level,
                 logs_folder: verbose.logs_folder,
@@ -155,6 +238,7 @@ pub struct ConfigPatch {
     pub equipment_info: Option<EquipmentPatch>,
     pub worker: Option<WorkerPatch>,
     pub redis_publisher: Option<RedisPatch>,
+    pub anpr: Option<AnprPatch>,
     pub verbose: Option<VerbosePatch>,
 }
 
@@ -203,6 +287,7 @@ pub struct WorkerPatch {
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RedisPatch {
+    /// Enable statistics publishing
     pub enable: Option<bool>,
     pub host: Option<String>,
     pub port: Option<i32>,
@@ -213,6 +298,56 @@ pub struct RedisPatch {
     pub db_index: Option<i32>,
     pub channel_name: Option<String>,
     pub password: Option<String>,
+    pub vehicle_events: Option<RedisVehicleEventsPatch>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RedisVehicleEventsPatch {
+    pub enable: Option<bool>,
+    pub channel_name: Option<String>,
+    /// Null restores the parent Redis connection
+    #[serde(default, deserialize_with = "nullable")]
+    #[schema(value_type = Option<RedisConnectionPatch>)]
+    pub connection: Option<Option<RedisConnectionPatch>>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RedisConnectionPatch {
+    pub host: Option<String>,
+    pub port: Option<i32>,
+    #[serde(default, deserialize_with = "nullable")]
+    #[schema(value_type = Option<String>)]
+    pub username: Option<Option<String>>,
+    pub password: Option<String>,
+    pub db_index: Option<i32>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AnprPatch {
+    pub enable: Option<bool>,
+    pub image: Option<EventImage>,
+    pub plates: Option<InferenceModelPatch>,
+    pub ocr: Option<InferenceModelPatch>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InferenceModelPatch {
+    /// Model file must be available on the device
+    pub network_weights: Option<String>,
+    pub conf_threshold: Option<f32>,
+    pub nms_threshold: Option<f32>,
+    /// Null restores automatic dimensions; clear both dimensions together
+    #[serde(default, deserialize_with = "nullable")]
+    #[schema(value_type = Option<i32>)]
+    pub net_width: Option<Option<i32>>,
+    #[serde(default, deserialize_with = "nullable")]
+    #[schema(value_type = Option<i32>)]
+    pub net_height: Option<Option<i32>>,
+    pub net_classes: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -298,6 +433,140 @@ fn set<T: PartialEq>(target: &mut T, value: Option<T>, path: &str, changed: &mut
         if *target != value {
             *target = value;
             changed.push(path.to_string());
+        }
+    }
+}
+
+impl InferenceModelPatch {
+    fn apply(self, current: &mut InferenceModelSettings, prefix: &str, changed: &mut Vec<String>) {
+        set(
+            &mut current.network_weights,
+            self.network_weights,
+            &format!("{prefix}.network_weights"),
+            changed,
+        );
+        set(
+            &mut current.conf_threshold,
+            self.conf_threshold,
+            &format!("{prefix}.conf_threshold"),
+            changed,
+        );
+        set(
+            &mut current.nms_threshold,
+            self.nms_threshold,
+            &format!("{prefix}.nms_threshold"),
+            changed,
+        );
+        set(
+            &mut current.net_width,
+            self.net_width,
+            &format!("{prefix}.net_width"),
+            changed,
+        );
+        set(
+            &mut current.net_height,
+            self.net_height,
+            &format!("{prefix}.net_height"),
+            changed,
+        );
+        set(
+            &mut current.net_classes,
+            self.net_classes,
+            &format!("{prefix}.net_classes"),
+            changed,
+        );
+    }
+}
+
+impl AnprPatch {
+    fn apply(self, settings: &mut Option<AnprSettings>, changed: &mut Vec<String>) {
+        let mut current = settings.clone().unwrap_or_default();
+        let before = changed.len();
+        set(&mut current.enable, self.enable, "anpr.enable", changed);
+        set(&mut current.image, self.image, "anpr.image", changed);
+        if let Some(plates) = self.plates {
+            plates.apply(&mut current.plates, "anpr.plates", changed);
+        }
+        if let Some(ocr) = self.ocr {
+            ocr.apply(&mut current.ocr, "anpr.ocr", changed);
+        }
+        if changed.len() != before {
+            *settings = Some(current);
+        }
+    }
+}
+
+impl RedisConnectionPatch {
+    fn apply(self, current: &mut RedisConnectionSettings, changed: &mut Vec<String>) {
+        const PREFIX: &str = "redis_publisher.vehicle_events.connection";
+        set(
+            &mut current.host,
+            self.host,
+            &format!("{PREFIX}.host"),
+            changed,
+        );
+        set(
+            &mut current.port,
+            self.port,
+            &format!("{PREFIX}.port"),
+            changed,
+        );
+        set(
+            &mut current.username,
+            self.username,
+            &format!("{PREFIX}.username"),
+            changed,
+        );
+        set(
+            &mut current.password,
+            self.password,
+            &format!("{PREFIX}.password"),
+            changed,
+        );
+        set(
+            &mut current.db_index,
+            self.db_index,
+            &format!("{PREFIX}.db_index"),
+            changed,
+        );
+    }
+}
+
+impl RedisVehicleEventsPatch {
+    fn apply(self, current: &mut RedisVehicleEventsSettings, changed: &mut Vec<String>) {
+        const PREFIX: &str = "redis_publisher.vehicle_events";
+        set(
+            &mut current.enable,
+            self.enable,
+            &format!("{PREFIX}.enable"),
+            changed,
+        );
+        set(
+            &mut current.channel_name,
+            self.channel_name,
+            &format!("{PREFIX}.channel_name"),
+            changed,
+        );
+        match self.connection {
+            None => {}
+            Some(None) => {
+                if current.connection.take().is_some() {
+                    changed.push(format!("{PREFIX}.connection"));
+                }
+            }
+            Some(Some(patch)) => {
+                let connection =
+                    current
+                        .connection
+                        .get_or_insert_with(|| RedisConnectionSettings {
+                            host: String::new(),
+                            port: 6379,
+                            username: None,
+                            password: String::new(),
+                            db_index: 0,
+                        });
+                patch.apply(connection, changed);
+            }
         }
     }
 }
@@ -435,6 +704,12 @@ impl ConfigPatch {
                 "redis_publisher.password",
                 &mut changed,
             );
+            if let Some(events) = redis.vehicle_events {
+                events.apply(&mut current.vehicle_events, &mut changed);
+            }
+        }
+        if let Some(anpr) = self.anpr {
+            anpr.apply(&mut settings.anpr, &mut changed);
         }
         if let Some(verbose) = self.verbose {
             let current = settings.verbose.get_or_insert_with(Default::default);
@@ -506,12 +781,10 @@ pub async fn tracking_options() -> Result<HttpResponse, Error> {
     tag = "Configuration",
     path = "/api/config",
     responses(
-        (status = 200, description = "The configuration as it is saved", body = ConfigView)
+        (status = 200, description = "Current configuration, including unsaved changes", body = ConfigView)
     )
 )]
-/// The settings this application can be told about. The zones have their own
-/// endpoints, the Redis password is reported only as `password_set`, and the
-/// model is not part of this at all
+/// Current settings, including unsaved changes. Zones have separate endpoints.
 pub async fn get_config(data: web::Data<APIStorage>) -> Result<HttpResponse, Error> {
     let settings = data
         .app_settings
@@ -599,7 +872,7 @@ pub async fn update_config(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::rest_api::config::*;
     use crate::settings::needs_restart;
 
     fn patch(text: &str) -> Result<ConfigPatch, serde_json::Error> {

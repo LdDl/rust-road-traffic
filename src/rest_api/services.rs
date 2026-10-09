@@ -3,7 +3,7 @@ use actix_web_static_files::ResourceFiles;
 include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 
 use crate::rest_api::{
-    config, logs, mjpeg_client, mjpeg_page, redis_check, restart, status, toml_mutations,
+    config, events, logs, mjpeg_client, mjpeg_page, redis_check, restart, status, toml_mutations,
     zones_list, zones_mutations, zones_stats,
 };
 
@@ -38,6 +38,7 @@ pub fn init_routes(enable_mjpeg: bool) -> impl Fn(&mut web::ServiceConfig) {
                 .service(RapiDoc::with_openapi("/docs.json", ApiDoc::openapi()))
                 .service(RapiDoc::new("/api/docs.json").path("/docs"))
                 .route("/ping", web::get().to(say_ping))
+                .route("/events/stream", web::get().to(events::stream))
                 .route("/status", web::get().to(status::status))
                 .route("/logs", web::get().to(logs::logs))
                 .service(
@@ -108,6 +109,7 @@ use utoipa_rapidoc::RapiDoc;
         config::update_config,
         config::tracking_options,
         redis_check::check_redis,
+        events::stream,
         say_ping,
     ),
     tags(
@@ -115,6 +117,7 @@ use utoipa_rapidoc::RapiDoc;
         (name = "Statistics", description = "Aggregated and real-time statistics in the detections zones"),
         (name = "Zones mutations", description = "A way to mutate information about detection zones"),
         (name = "Application", description = "Managing the running application"),
+        (name = "Events", description = "test see route"),
         (name = "Configuration", description = "Reading and changing the settings"),
     ),
     components(
@@ -155,12 +158,21 @@ use utoipa_rapidoc::RapiDoc;
             crate::rest_api::config::EquipmentView,
             crate::rest_api::config::WorkerView,
             crate::rest_api::config::RedisView,
+            crate::rest_api::config::RedisVehicleEventsView,
+            crate::rest_api::config::RedisConnectionView,
+            crate::rest_api::config::AnprView,
+            crate::rest_api::config::InferenceModelView,
+            crate::settings::EventImage,
             crate::rest_api::config::VerboseView,
             crate::rest_api::config::InputPatch,
             crate::rest_api::config::TrackingPatch,
             crate::rest_api::config::EquipmentPatch,
             crate::rest_api::config::WorkerPatch,
             crate::rest_api::config::RedisPatch,
+            crate::rest_api::config::RedisVehicleEventsPatch,
+            crate::rest_api::config::RedisConnectionPatch,
+            crate::rest_api::config::AnprPatch,
+            crate::rest_api::config::InferenceModelPatch,
             crate::rest_api::config::VerbosePatch,
             crate::rest_api::config::TrackingOptions,
             crate::rest_api::change_state::ChangeState,

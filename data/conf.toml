@@ -43,6 +43,33 @@
     # Print performance stats every N frames (0 = disabled)
     perf_stats_interval = 0
 
+[anpr]
+    enable = false
+    # Image selection: "" (none, default), "full", "vehicle" or "plate".
+    image = ""
+
+[anpr.plates]
+    # Set the plate model path before enabling: .onnx or .engine/.trt.
+    network_weights = ""
+    conf_threshold = 0.4
+    nms_threshold = 0.2
+    # Must match the selected model's input size.
+    net_width = 320
+    net_height = 192
+    # Class order must match the model output.
+    net_classes = ["civilian", "taxi", "military", "police", "diplomatic"]
+
+[anpr.ocr]
+    # Set the character model path before enabling ANPR: .onnx or .engine/.trt.
+    network_weights = ""
+    conf_threshold = 0.4
+    nms_threshold = 0.2
+    # Must match the selected model's input size.
+    net_width = 224
+    net_height = 64
+    # Class order from vehicles_yolo/ocr/classes.names, including diplomatic D.
+    net_classes = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "E", "H", "K", "M", "O", "P", "T", "X", "Y", "D"]
+
 [tracking]
     # Either "bytetrack" or "iou_naive". Default is "iou_naive"
     type = "iou_naive"
@@ -125,7 +152,7 @@
         quality = 80
 
 [redis_publisher]
-    # Right before reset analytics worker is done it could dump data to Redis
+    # Enable statistics publishing; vehicle events have a separate switch.
     # Adjust this attributes as needed
     enable = false
     host = "localhost"
@@ -137,6 +164,19 @@
     password = ""
     db_index = 0
     channel_name = "DETECTORS_STATISTICS"
+
+[redis_publisher.vehicle_events]
+    # Independent of statistics publishing and ANPR recognition.
+    enable = false
+    channel_name = "VEHICLE_EVENTS"
+
+# Omit this block to share the statistics connection, even if statistics are disabled.
+# [redis_publisher.vehicle_events.connection]
+#     host = "another-redis"
+#     port = 6379
+#     username = ""
+#     password = ""
+#     db_index = 0
 
 # Dataset collector - auto-labeling feature for collecting training data
 # This section is optional - if not present, the feature is disabled

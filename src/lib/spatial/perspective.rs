@@ -172,10 +172,10 @@ pub fn compute_perspective_matrix(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::lib::spatial::epsg::lonlat_to_meters;
     use crate::lib::spatial::epsg::meters_to_lonlat;
     use crate::lib::spatial::haversine::haversine;
+    use crate::lib::spatial::perspective::*;
 
     const EPS: f32 = 1e-7;
 

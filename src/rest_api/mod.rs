@@ -1,6 +1,7 @@
 mod change_state;
 mod config;
 mod errors;
+mod events;
 mod logs;
 mod mjpeg_client;
 mod mjpeg_page;

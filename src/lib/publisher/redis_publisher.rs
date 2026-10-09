@@ -1,85 +1,59 @@
-extern crate redis;
-
-use crate::lib::logging;
-use crate::lib::publisher::RedisMessage;
-use crate::rest_api::zones_stats::{AllZonesStats, VehicleTypeParameters, ZoneStats};
-use crate::{lib::data_storage::ThreadedDataStorage, rest_api::zones_stats::TrafficFlowInfo};
-use redis::{Client, Commands, ConnectionAddr, ConnectionInfo, RedisConnectionInfo};
 use std::collections::HashMap;
-use std::error::Error;
-use std::sync::Arc;
-use tracing::{error, info};
 
-/// How to reach the configured Redis or Valkey server.
-///
-/// Built as a struct rather than formatted into a `redis://user:pass@host/db`
-/// URL, because the crate percent-decodes whatever it finds in a URL: a
-/// password holding `@`, `/` or `%` is then read as part of the host or the
-/// path. Measured against Valkey 8.1 - `p@ss/w0rd` makes the parser take `ss`
-/// for the host and give up with "Invalid database number"
-pub fn connection_info(
-    host: &str,
-    port: i32,
-    db_index: i32,
-    username: Option<&str>,
-    password: &str,
-) -> ConnectionInfo {
-    let some_if_set = |value: &str| match value.is_empty() {
-        true => None,
-        false => Some(value.to_string()),
-    };
-    ConnectionInfo {
-        addr: ConnectionAddr::Tcp(host.to_string(), port.max(0) as u16),
-        redis: RedisConnectionInfo {
-            db: db_index as i64,
-            username: username.and_then(some_if_set),
-            password: some_if_set(password),
-            ..Default::default()
-        },
-    }
+use crate::lib::data_storage::ThreadedDataStorage;
+use crate::lib::publisher::redis_transport::RedisPublisher;
+use crate::rest_api::zones_stats::{
+    AllZonesStats, TrafficFlowInfo, VehicleTypeParameters, ZoneStats,
+};
+use crate::settings::RedisPublisherSettings;
+
+pub struct RedisPublishers {
+    pub statistics: Option<StatisticsPublisher>,
+    pub vehicle_events: Option<RedisPublisher>,
 }
 
-pub struct RedisConnection {
-    pub channel_name: String,
-    pub client: Arc<Client>,
-    pub data_storage: ThreadedDataStorage,
-}
-
-impl RedisConnection {
-    /// Nothing is dialled here: the client only holds the details, so this
-    /// fails on a hostname that cannot be read at all, not on a server that is
-    /// down
-    pub fn new(
-        host: &str,
-        port: i32,
-        db_index: i32,
-        username: Option<&str>,
-        password: &str,
-        data_storage: ThreadedDataStorage,
-    ) -> Result<RedisConnection, Box<dyn Error>> {
-        let client = Client::open(connection_info(host, port, db_index, username, password))?;
-        Ok(RedisConnection {
-            channel_name: "DETECTORS_STATISTICS".to_string(),
-            client: Arc::new(client),
-            data_storage,
-        })
-    }
-    pub fn set_channel(&mut self, _channel_name: String) {
-        self.channel_name = _channel_name.clone();
-    }
-    pub fn publish(&self, msg: &dyn RedisMessage) -> Result<(), Box<dyn Error>> {
-        info!(scope = logging::SCOPE_REDIS, channel = %self.channel_name, "Publishing to Redis");
-        let mut redis_conn = match self.client.get_connection() {
-            Ok(_conn) => _conn,
-            Err(_err) => {
-                return Err(_err.into());
-            }
+impl RedisPublishers {
+    pub fn new(settings: &RedisPublisherSettings, data_storage: ThreadedDataStorage) -> Self {
+        let events = &settings.vehicle_events;
+        let common = if settings.enable || (events.enable && events.connection.is_none()) {
+            RedisPublisher::new(&settings.connection())
+        } else {
+            None
         };
-        let msg_string = msg.prepare_string()?;
-        let _: usize = redis_conn.publish(self.channel_name.to_owned(), msg_string)?;
-        info!(scope = logging::SCOPE_REDIS, channel = %self.channel_name, "Published to Redis");
-        Ok(())
+        let statistics = if settings.enable {
+            common.as_ref().map(|publisher| StatisticsPublisher {
+                publisher: publisher.with_channel(if settings.channel_name.is_empty() {
+                    "DETECTORS_STATISTICS"
+                } else {
+                    &settings.channel_name
+                }),
+                data_storage,
+            })
+        } else {
+            None
+        };
+        let vehicle_events = if events.enable {
+            match &events.connection {
+                Some(connection) => RedisPublisher::new(connection),
+                None => common,
+            }
+            .map(|publisher| publisher.with_channel(&events.channel_name))
+        } else {
+            None
+        };
+        Self {
+            statistics,
+            vehicle_events,
+        }
     }
+}
+
+pub struct StatisticsPublisher {
+    publisher: RedisPublisher,
+    data_storage: ThreadedDataStorage,
+}
+
+impl StatisticsPublisher {
     pub fn push_statistics(&self) {
         let ds_guard = self
             .data_storage
@@ -128,18 +102,7 @@ impl RedisConnection {
         }
         drop(zones);
         drop(ds_guard);
-        match self.publish(&prepared_message) {
-            Err(err) => {
-                error!(scope = logging::SCOPE_REDIS, error = %err, "Can't publish statistics to Redis");
-            }
-            Ok(_) => {}
-        };
-    }
-}
-
-impl RedisMessage for AllZonesStats {
-    fn prepare_string(&self) -> Result<String, Box<dyn Error>> {
-        let json = serde_json::to_string(self)?;
-        Ok(json)
+        self.publisher
+            .publish(move || serde_json::to_string(&prepared_message));
     }
 }

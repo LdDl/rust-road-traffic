@@ -211,7 +211,7 @@ fn severity_rank(level: &str) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::rest_api::logs::*;
     use std::io::Write;
 
     fn line(level: &str, scope: &str, message: &str) -> String {

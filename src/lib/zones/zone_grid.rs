@@ -2,7 +2,7 @@ use crate::lib::spatial::Point2f;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use super::zones::Zone;
+use crate::lib::zones::zones::Zone;
 
 /// Spatial index for O(1) zone lookup
 /// Divides frame into grid cells, each cell stores which zones overlap it
@@ -182,7 +182,7 @@ pub struct ZoneGridStats {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::lib::zones::zone_grid::*;
 
     fn create_test_zone(id: &str, points: Vec<(f32, f32)>) -> Zone {
         let mut zone = Zone::default();
