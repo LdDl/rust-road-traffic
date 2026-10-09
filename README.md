@@ -17,7 +17,11 @@ Road traffic monitoring utility written in pure Rust. **OpenCV is not required**
 
 ## Video showcase
 
+Basic vehicle detection and tracking:
 <video src='https://github.com/user-attachments/assets/ac55e90f-eec4-4b6c-85af-e216937851b5' width="720px"></video>
+
+ANPR (for more information see [ANPR.md](ANPR.md)):
+<video src='https://github.com/user-attachments/assets/2e44615e-6ed1-4a1f-a1c2-1bab4e3d0cb1' width="720px"></video>
 
 ## About
 

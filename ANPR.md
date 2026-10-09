@@ -1,5 +1,9 @@
 # ANPR and vehicle events
 
+Showcase:
+
+<video src='https://github.com/user-attachments/assets/2e44615e-6ed1-4a1f-a1c2-1bab4e3d0cb1' width="720px"></video>
+
 `GET /api/events/stream` sends named `vehicle.passed` SSE events when an eligible vehicle track expires. Eligibility follows the existing zones and their virtual-line rules. SSE is available whenever the REST API is enabled outside report mode and has no replay. Events can also be published to Redis independently of the REST API. Disabling ANPR leaves vehicle events enabled, with `plate: null` and no image.
 
 ```shell
