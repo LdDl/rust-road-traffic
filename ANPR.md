@@ -1,6 +1,6 @@
 # ANPR and vehicle events
 
-`GET /api/events/stream` sends named `vehicle.passed` SSE events when an eligible vehicle track expires. Eligibility follows the existing zones and their virtual-line rules. Events are available when the REST API is enabled outside report mode. The stream has no replay; Redis currently publishes statistics, not these vehicle events.
+`GET /api/events/stream` sends named `vehicle.passed` SSE events when an eligible vehicle track expires. Eligibility follows the existing zones and their virtual-line rules. SSE is available whenever the REST API is enabled outside report mode and has no replay. Events can also be published to Redis independently of the REST API. Disabling ANPR leaves vehicle events enabled, with `plate: null` and no image.
 
 ```shell
 curl -N http://localhost:42001/api/events/stream
@@ -30,6 +30,41 @@ Images require `anpr.enable = true` and are JPEG, quality 90, encoded as standar
 The image and all boxes belong to the selected reference observation. If no attempt finds a plate, `full` and `vehicle` use the last attempt with an encoded image and its vehicle metadata. `frame_width` and `frame_height` always describe the full processing frame, including when a crop is sent. Crop dimensions are the corresponding bbox's `width` and `height`. Coordinates are pixels: vehicle relative to frame, plate relative to vehicle, OCR positions relative to the original plate. OCR uses padding internally, but symbol boxes are clipped to the original plate before export; a position absent from the reference attempt has a `null` bbox.
 
 Only the selected image mode is retained. Attempt images are stored as JPEG and Base64 is generated at event completion. Full-frame mode also compresses frames when pending recognition candidates change; tracks selecting the same frame share the JPEG. This bounds retained images per track but adds more encoding work than vehicle or plate mode.
+
+## Redis publication
+
+Enable publication of the same final event JSON through Redis Pub/Sub:
+
+```toml
+[redis_publisher.vehicle_events]
+    enable = true
+    channel_name = "VEHICLE_EVENTS"
+```
+
+This section is optional and defaults to disabled, with channel `VEHICLE_EVENTS`. Its switch is independent of `redis_publisher.enable`, which controls statistics. By default, events use the parent Redis connection settings and share the actual connection with statistics when both are enabled. Events also work when statistics or the REST API are disabled. Report mode publishes neither statistics nor vehicle events.
+
+To send events to a different Redis, add an optional connection block:
+
+```toml
+[redis_publisher.vehicle_events.connection]
+    host = "another-redis"
+    port = 6379
+    username = ""
+    password = ""
+    db_index = 0
+```
+
+In this block, `host` is required obviously. And omitted values use port 6379, no credentials and database 0 as is.
+
+Parent credentials are not inherited in that case. So you could just delete the entire block to use the shared parent connection. Vehicle-event publisher settings are currently TOML-only and take effect after restart; the existing configuration and status API Redis fields describe statistics.
+
+Subscribe before a track ends, using the configured Redis host, credentials and channel:
+
+```shell
+redis-cli -h localhost -p 6379 SUBSCRIBE VEHICLE_EVENTS
+```
+
+The payload is the JSON object below, including the same `event_id`, OCR and optional image as SSE, without SSE framing. Serialization and Redis I/O run in a background worker with a persistent connection and a bounded queue of 64 pending messages per connection. A full queue drops new messages; publication failures are logged and discarded, with reconnection attempted for the next message. There is no replay or durable storage, and pending messages may be lost at shutdown. Redis Pub/Sub does not retain messages for disconnected subscribers.
 
 ## Event JSON
 

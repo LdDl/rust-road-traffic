@@ -349,6 +349,54 @@ pub struct RedisPublisherSettings {
     pub password: String,
     pub db_index: i32,
     pub channel_name: String,
+    #[serde(default)]
+    pub vehicle_events: RedisVehicleEventsSettings,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
+pub struct RedisVehicleEventsSettings {
+    pub enable: bool,
+    pub channel_name: String,
+    pub connection: Option<RedisConnectionSettings>,
+}
+
+impl Default for RedisVehicleEventsSettings {
+    fn default() -> Self {
+        Self {
+            enable: false,
+            channel_name: "VEHICLE_EVENTS".to_string(),
+            connection: None,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RedisConnectionSettings {
+    pub host: String,
+    #[serde(default = "default_redis_port")]
+    pub port: i32,
+    pub username: Option<String>,
+    #[serde(default)]
+    pub password: String,
+    #[serde(default)]
+    pub db_index: i32,
+}
+
+fn default_redis_port() -> i32 {
+    6379
+}
+
+impl RedisPublisherSettings {
+    pub fn connection(&self) -> RedisConnectionSettings {
+        RedisConnectionSettings {
+            host: self.host.clone(),
+            port: self.port,
+            username: self.username.clone(),
+            password: self.password.clone(),
+            db_index: self.db_index,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -960,6 +1008,40 @@ impl AppSettings {
             1,
             65535,
         ));
+        let events = &self.redis_publisher.vehicle_events;
+        if events.enable && events.channel_name.trim().is_empty() {
+            problems.push((
+                "redis_publisher.vehicle_events.channel_name".into(),
+                "must not be empty when enabled".into(),
+            ));
+        }
+        if let Some(connection) = &events.connection {
+            const PREFIX: &str = "redis_publisher.vehicle_events.connection";
+            if connection.host.trim().is_empty() {
+                problems.push((format!("{PREFIX}.host"), "must not be empty".into()));
+            }
+            problems.extend(in_range(&format!("{PREFIX}.port"), connection.port, 1, 65535));
+            problems.extend(in_range(
+                &format!("{PREFIX}.db_index"),
+                connection.db_index,
+                0,
+                i32::MAX,
+            ));
+        }
+        if self.redis_publisher.enable || (events.enable && events.connection.is_none()) {
+            if self.redis_publisher.host.trim().is_empty() {
+                problems.push((
+                    "redis_publisher.host".into(),
+                    "must not be empty when enabled".into(),
+                ));
+            }
+            problems.extend(in_range(
+                "redis_publisher.db_index",
+                self.redis_publisher.db_index,
+                0,
+                i32::MAX,
+            ));
+        }
         if let Some(level) = self.verbose.as_ref().and_then(|v| v.level.as_deref()) {
             problems.extend(one_of("verbose.level", level, &logging::LEVELS));
         }

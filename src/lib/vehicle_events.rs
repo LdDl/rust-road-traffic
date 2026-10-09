@@ -12,6 +12,7 @@ use crate::lib::anpr::tracking::TrackRecognition;
 use crate::lib::anpr::types::{BoundingBox, PlateResult, VehicleDetection};
 use crate::lib::cv::RawFrame;
 use crate::lib::detection::{DetectionBlobs, Detections};
+use crate::lib::publisher::redis_transport::RedisPublisher;
 use crate::lib::tracker::TrackerTrait;
 use crate::settings::EventImage;
 
@@ -61,14 +62,16 @@ pub struct VehicleEventCollector {
     active: HashMap<Uuid, VehicleEventState>,
     events: VehicleEvents,
     images: EventImages,
+    redis: Option<RedisPublisher>,
 }
 
 impl VehicleEventCollector {
-    pub fn new(events: VehicleEvents, image: EventImage) -> Self {
+    pub fn new(events: VehicleEvents, image: EventImage, redis: Option<RedisPublisher>) -> Self {
         Self {
             active: HashMap::new(),
             events,
             images: EventImages::new(image),
+            redis,
         }
     }
 
@@ -197,8 +200,13 @@ impl VehicleEventCollector {
                 frame_width: frame_size.0,
                 frame_height: frame_size.1,
             };
+            let event = Arc::new(event);
+            if let Some(publisher) = &self.redis {
+                let message = event.clone();
+                publisher.publish(move || serde_json::to_string(message.as_ref()));
+            }
             // A broadcast with no subscribers is intentionally discarded.
-            let _ = self.events.send(Arc::new(event));
+            let _ = self.events.send(event);
         }
     }
 }

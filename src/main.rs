@@ -29,7 +29,7 @@ use settings::AppSettings;
 mod video_capture;
 use video_capture::{ThreadedFrame, VideoSource, frame_channel, kill_capture_subprocesses};
 
-use lib::publisher::RedisConnection;
+use lib::publisher::RedisPublishers;
 
 mod rest_api;
 
@@ -129,6 +129,7 @@ fn run(
         scope = logging::SCOPE_STARTUP,
         rest_api = settings.rest_api.enable,
         redis_publisher = settings.redis_publisher.enable,
+        redis_vehicle_events = settings.redis_publisher.vehicle_events.enable,
         mjpeg = enable_mjpeg,
         mjpeg_quality,
         report_mode,
@@ -210,44 +211,15 @@ fn run(
     let ds_worker = data_storage.clone();
 
     /* Redis publisher */
-    let redis_enabled = settings.redis_publisher.enable;
-    let redis_worker = data_storage.clone();
-    let redis_conn = match redis_enabled {
-        true => {
-            let redis_host = settings.redis_publisher.host.to_owned();
-            let redis_port = settings.redis_publisher.port;
-            let redis_password = settings.redis_publisher.password.to_owned();
-            let redis_db_index = settings.redis_publisher.db_index;
-            let redis_channel = settings.redis_publisher.channel_name.to_owned();
-            let redis_username = settings.redis_publisher.username.to_owned();
-            match RedisConnection::new(
-                &redis_host,
-                redis_port,
-                redis_db_index,
-                redis_username.as_deref(),
-                &redis_password,
-                redis_worker,
-            ) {
-                Ok(mut redis_conn) => {
-                    if redis_channel.chars().count() != 0 {
-                        redis_conn.set_channel(redis_channel);
-                    }
-                    Some(redis_conn)
-                }
-                Err(err) => {
-                    error!(
-                        scope = logging::SCOPE_REDIS,
-                        host = %redis_host,
-                        port = redis_port,
-                        error = %err,
-                        "Can't set up the Redis publisher, statistics will not be published"
-                    );
-                    None
-                }
-            }
+    let publishers = if report_mode {
+        RedisPublishers {
+            statistics: None,
+            vehicle_events: None,
         }
-        false => None,
+    } else {
+        RedisPublishers::new(&settings.redis_publisher, data_storage.clone())
     };
+    let redis_conn = publishers.statistics;
 
     /* Start REST API if needed */
     // The API answers before the video source is even open, so what the app
@@ -257,7 +229,9 @@ fn run(
     let overwrite_file = path_to_config.to_string();
     let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(0);
     let (vehicle_events, _) = tokio::sync::broadcast::channel(128);
-    let mut event_collector = (settings.rest_api.enable && !report_mode).then(|| {
+    let enable_vehicle_events = !report_mode
+        && (settings.rest_api.enable || settings.redis_publisher.vehicle_events.enable);
+    let mut event_collector = enable_vehicle_events.then(|| {
         VehicleEventCollector::new(
             vehicle_events.clone(),
             settings
@@ -266,6 +240,7 @@ fn run(
                 .filter(|anpr| anpr.enable)
                 .map(|anpr| anpr.image)
                 .unwrap_or_default(),
+            publishers.vehicle_events,
         )
     });
     if settings.rest_api.enable && !report_mode {
@@ -423,8 +398,8 @@ fn run(
                         error!(scope = logging::SCOPE_ANALYTICS, error = %err, "Can't update statistics");
                     }
                 }
-                if redis_enabled {
-                    redis_conn.as_ref().unwrap().push_statistics();
+                if let Some(publisher) = &redis_conn {
+                    publisher.push_statistics();
                 }
             }
         }

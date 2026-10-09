@@ -152,7 +152,7 @@
         quality = 80
 
 [redis_publisher]
-    # Right before reset analytics worker is done it could dump data to Redis
+    # Enable statistics publishing; vehicle events have a separate switch.
     # Adjust this attributes as needed
     enable = false
     host = "localhost"
@@ -164,6 +164,19 @@
     password = ""
     db_index = 0
     channel_name = "DETECTORS_STATISTICS"
+
+[redis_publisher.vehicle_events]
+    # Independent of statistics publishing and ANPR recognition.
+    enable = false
+    channel_name = "VEHICLE_EVENTS"
+
+# Omit this block to share the statistics connection, even if statistics are disabled.
+# [redis_publisher.vehicle_events.connection]
+#     host = "another-redis"
+#     port = 6379
+#     username = ""
+#     password = ""
+#     db_index = 0
 
 # Dataset collector - auto-labeling feature for collecting training data
 # This section is optional - if not present, the feature is disabled
