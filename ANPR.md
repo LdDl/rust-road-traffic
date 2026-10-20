@@ -18,6 +18,8 @@ Plate detection and OCR are optional. Configure both models under `[anpr.plates]
     image = "vehicle"
 ```
 
+Manually tested on Russian license plates using models trained in my [yolo_vehicles](https://github.com/LdDl/yolo_vehicles) project: [yolov4-tiny-plates_best for plate detection (v0.0.4)](https://github.com/LdDl/yolo_vehicles/releases/tag/v0.0.4) and [yolov8n-ocr_best.onnx for OCR (v0.0.5)](https://github.com/LdDl/yolo_vehicles/releases/tag/v0.0.5). Other compatible YOLO models can be used with matching input dimensions and class lists. Traditional Darknet models should first be converted to ONNX using [darknet2onnx](https://github.com/LdDl/darknet2onnx). Your results may vary.
+
 Recognition makes at most three attempts per track and stops after two identical nonempty readings. The final `plate.ocr` contains the fused `number`, `mean_confidence`, `has_conflicts`, `reference_attempt` and `positions` with observations and competing alternatives. Missing plate or OCR results are `null`; agreement is not a guarantee of correctness. Only `anpr.enable` and `anpr.image` are available through `GET/PATCH /api/config`; model settings remain in TOML. Save API changes with `GET /api/mutations/save_toml`, then restart to apply.
 
 `anpr.image` is optional and accepts:
