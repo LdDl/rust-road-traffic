@@ -10,6 +10,7 @@
 use serde::Serialize;
 use utoipa::ToSchema;
 
+use crate::settings::LaneRulesSettings;
 use crate::lib::data_storage::ThreadedDataStorage;
 use crate::rest_api::APIStorage;
 use crate::settings::{
@@ -123,6 +124,7 @@ pub fn live_road_lanes(data_storage: &ThreadedDataStorage) -> Vec<RoadLanesSetti
                         color_rgb: [vl.color[0] as i16, vl.color[1] as i16, vl.color[2] as i16],
                         direction: vl.direction.to_string(),
                     }),
+                rules: LaneRulesSettings::default(),
             }
         })
         .collect();
@@ -198,6 +200,7 @@ mod tests {
             geometry_wgs84: vec![[1.0, 2.0], [1.1, 2.0], [1.1, 2.1], [1.0, 2.1]],
             color_rgb: [255, 0, 0],
             virtual_line: None,
+            rules: LaneRulesSettings::default(),
         }
     }
 

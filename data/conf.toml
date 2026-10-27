@@ -29,12 +29,11 @@
 [detection]
     # Weights file: .weights (Darknet), .onnx (ONNX), .engine/.trt (TensorRT)
     # Format is auto-detected from file contents + extension
-    network_weights = "./data/yolov7.weights"
-    network_cfg = "./data/yolov7.cfg"
-    conf_threshold = 0.4
-    nms_threshold = 0.2
-    net_width = 608
-    net_height = 608
+    network_weights = "data/yolov8n.onnx"
+    conf_threshold = 0.2
+    nms_threshold = 0.45
+    net_width = 640
+    net_height = 640
     # Target classes to be used in filtering.
     # Leave array empty if all net classes should be used
     target_classes = ["car", "motorbike", "bus", "train", "truck"]
@@ -90,6 +89,14 @@
     # Any non-empty string. Leave it empty and a UUID is generated on first start and written back here.
     id = "1e23985f-1fa3-45d0-a365-2d8525a23ddd"
 
+
+
+
+[violations]
+enabled = true
+state_ttl_sec = 7.0
+cleanup_interval_sec = 1.0
+
 # Define parameters for zones of intereset
 # Each zone is defined by lane number, direction, corresponding coordinates on image,
 # corresponding coordinates on WGS84 (longitude, lattitude) + color as a gimmick to distinct in visually
@@ -100,6 +107,8 @@
     geometry = [[204, 542], [398, 558], [506, 325], [402, 318]]
     geometry_wgs84 = [[-3.7059677, 40.39317], [-3.7060046, 40.39314], [-3.7058284, 40.393044], [-3.7058063, 40.393074]]
     color_rgb = [255, 0, 0]
+    id = "dir_0_lane_0"
+    [road_lanes.rules]
     # Optional attribute.
     # By default road traffic flow in calculated as number of vehicles which has been registered by naive verification metric: if even single point were registered in lane - it is counted as +1.
     # This attribute overrides default behaviour and allows to count only vehicles which has been registered by virtual line in this zone.
@@ -109,7 +118,12 @@
         color_rgb = [255, 0, 0]
         # lrtb - left->right or top-bottom object registration
         # rtbt - right->left or bottom->top object registration
-        direction = "outbound"
+        direction = "inbound"
+
+    [road_lanes.rules.solid_line]
+    line = [[254, 456], [456, 475]]
+    margin_px = 8.0
+
 
 [[road_lanes]]
     lane_number = 1
@@ -117,6 +131,8 @@
     geometry = [[34, 357], [297, 415], [461, 257], [289, 247]]
     geometry_wgs84 = [[-3.7059398340939538,40.39321540939261],[-3.705722041522307,40.39311216511089],[-3.705755817984624,40.393093668143706],[-3.7059520342002656,40.393187305050645]]
     color_rgb = [0, 255, 0]
+    id = "dir_0_lane_1"
+    [road_lanes.rules]
     [road_lanes.virtual_line]
         geometry = [[84, 315], [357, 380]]
         color_rgb = [0, 255, 0]
@@ -125,14 +141,15 @@
 [[road_lanes]]
     lane_number = 0
     lane_direction = 1
-    geometry = [[847, 524], [1265, 418], [1000, 264], [739, 302]]
+    geometry = [[789, 835], [1469, 509], [1038, 34], [613, 151]]
     geometry_wgs84 = [[-3.705993897269792,40.3930559331794],[-3.7060362418659167,40.392987552243824],[-3.705919328016762,40.39294132477778],[-3.7058850074338068,40.39300219015797]]
     color_rgb = [0, 0, 255]
+    id = "dir_1_lane_0"
+    [road_lanes.rules]
     [road_lanes.virtual_line]
-        geometry = [[704, 321], [1078, 271]]
+        geometry = [[730, 333], [1103, 283]]
         color_rgb = [0, 0, 255]
         direction = "inbound"
-
 
 [worker]
     # Period to reset analytics

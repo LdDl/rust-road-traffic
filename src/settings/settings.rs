@@ -58,6 +58,8 @@ pub struct AppSettings {
     pub redis_publisher: RedisPublisherSettings,
     pub dataset_collector: Option<DatasetCollectorSettings>,
     pub report: Option<ReportSettings>,
+    #[serde(default)]
+    pub violations: ViolationsSettings,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -277,6 +279,8 @@ pub struct RoadLanesSettings {
     pub geometry_wgs84: Vec<[f32; 2]>,
     pub color_rgb: [i16; 3],
     pub virtual_line: Option<VirtualLineSettings>,
+    #[serde(default)]
+    pub rules: LaneRulesSettings,
 }
 
 impl RoadLanesSettings {
@@ -312,6 +316,41 @@ pub fn assign_zone_ids(lanes: &[RoadLanesSettings]) -> Vec<(String, bool)> {
             (generated, true)
         })
         .collect()
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(default)]
+pub struct LaneRulesSettings {
+    pub speeding: Option<LaneSpeedingRuleSettings>,
+    pub no_stopping: Option<LaneZoneViolationRuleSettings>,
+    pub no_parking: Option<LaneZoneViolationRuleSettings>,
+    pub wrong_way: Option<LaneWrongWayRuleSettings>,
+    pub solid_line: Option<LaneSolidLineRuleSettings>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LaneSpeedingRuleSettings {
+    pub threshold_kmh: f32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LaneZoneViolationRuleSettings {
+    pub min_duration_sec: f32,
+    #[serde(default = "default_stationary_speed_kmh")]
+    pub stationary_speed_kmh: f32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LaneWrongWayRuleSettings {
+    #[serde(default = "default_min_direction_samples")]
+    pub min_direction_samples: usize,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LaneSolidLineRuleSettings {
+    pub line: [[f32; 2]; 2],
+    #[serde(default = "default_line_margin_px")]
+    pub margin_px: f32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -459,6 +498,36 @@ fn default_capture_interval() -> u32 {
 pub struct ReportSettings {
     pub enabled: bool,
     pub output_path: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(default)]
+pub struct ViolationsSettings {
+    pub enabled: bool,
+    #[serde(default = "default_violation_state_ttl_sec")]
+    pub state_ttl_sec: f32,
+    #[serde(default = "default_violation_cleanup_interval_sec")]
+    pub cleanup_interval_sec: f32,
+}
+
+fn default_stationary_speed_kmh() -> f32 {
+    3.0
+}
+
+fn default_min_direction_samples() -> usize {
+    3
+}
+
+fn default_line_margin_px() -> f32 {
+    8.0
+}
+
+fn default_violation_state_ttl_sec() -> f32 {
+    7.0
+}
+
+fn default_violation_cleanup_interval_sec() -> f32 {
+    1.0
 }
 
 use crate::lib::cv::Scalar;
@@ -1145,6 +1214,7 @@ impl AppSettings {
             redis_publisher: self.redis_publisher.clone(),
             dataset_collector: self.dataset_collector.clone(),
             report: self.report.clone(),
+            violations: self.violations.clone(),
         }
     }
     pub fn is_report_mode(&self) -> bool {
@@ -1592,6 +1662,7 @@ mod tests {
             geometry_wgs84: vec![[1.0, 2.0], [1.1, 2.0], [1.1, 2.1], [1.0, 2.1]],
             color_rgb: [255, 0, 0],
             virtual_line: None,
+            rules: LaneRulesSettings::default(),
         }
     }
 
