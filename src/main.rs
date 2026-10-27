@@ -10,28 +10,30 @@ mod lib;
 use lib::anpr::plate_detector::PlateModels;
 use lib::data_storage::new_datastorage;
 use lib::dataset_collector::DatasetCollector;
+use lib::detection::process_yolo_detections;
 use lib::detection::DetectionBlobs::BBox;
 use lib::detection::DetectionBlobs::Simple;
 use lib::detection::Detector;
 use lib::detection::KalmanFilterType;
-use lib::detection::process_yolo_detections;
 use lib::draw;
 use lib::logging;
 use lib::perf_stats::{PerfStats, Timer};
+use lib::publisher::RedisPublishers;
 use lib::status::{DetectionStatus, InputStatus, RuntimeStatus};
-use lib::tracker::{SpatialInfo, TrackerTrait, new_tracker_from_type};
+use lib::track_observations::{
+    spawn_console_observer, BoundingBoxPx, PointProjected, PointPx, TrackObservation, TrackObservations,
+};
+use lib::tracker::{new_tracker_from_type, SpatialInfo, TrackerTrait};
 use lib::vehicle_events::VehicleEventCollector;
 use lib::zones::Zone;
 
-mod settings;
-use settings::AppSettings;
-
-mod video_capture;
-use video_capture::{ThreadedFrame, VideoSource, frame_channel, kill_capture_subprocesses};
-
-use lib::publisher::RedisPublishers;
-
 mod rest_api;
+mod settings;
+mod video_capture;
+mod violations;
+
+use settings::AppSettings;
+use video_capture::{frame_channel, kill_capture_subprocesses, ThreadedFrame, VideoSource};
 
 use std::collections::HashSet;
 use std::env;
@@ -39,6 +41,7 @@ use std::fmt;
 use std::iter::FromIterator;
 use std::process;
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -49,6 +52,10 @@ fn get_sys_time_in_secs() -> u64 {
         Ok(n) => n.as_secs(),
         Err(_) => panic!("SystemTime before UNIX EPOCH!"),
     }
+}
+
+fn publish_track_observation(tx: &TrackObservations, observation: TrackObservation) {
+    let _ = tx.send(Arc::new(observation));
 }
 
 #[derive(Debug)]
@@ -97,6 +104,63 @@ impl From<video_capture::CaptureError> for AppError {
 impl From<lib::data_storage::DataStorageError> for AppError {
     fn from(e: lib::data_storage::DataStorageError) -> Self {
         AppError::DataStorage(e)
+    }
+}
+
+fn draw_solid_line_rules(
+    frame: &mut lib::cv::RawFrame,
+    lanes: &[settings::RoadLanesSettings],
+) {
+    use lib::draw::primitives::draw_line_thick;
+
+    let width = frame.cols() as usize;
+    let height = frame.rows() as usize;
+    let step = frame.step();
+    let bytes = frame.data_bytes_mut();
+
+    for lane in lanes {
+        let Some(rule) = lane.rules.solid_line.as_ref() else {
+            continue;
+        };
+
+        if !rule.line.iter().flatten().all(|value| value.is_finite()) {
+            continue;
+        }
+
+        let [[ax, ay], [bx, by]] = rule.line;
+
+        let x1 = ax.round() as i32;
+        let y1 = ay.round() as i32;
+        let x2 = bx.round() as i32;
+        let y2 = by.round() as i32;
+
+        // Black outline.
+        draw_line_thick(
+            bytes,
+            step,
+            width,
+            height,
+            x1,
+            y1,
+            x2,
+            y2,
+            [0, 0, 0],
+            7,
+        );
+
+        // Yellow solid line. Frame colors are BGR.
+        draw_line_thick(
+            bytes,
+            step,
+            width,
+            height,
+            x1,
+            y1,
+            x2,
+            y2,
+            [0, 255, 255],
+            3,
+        );
     }
 }
 
@@ -229,6 +293,13 @@ fn run(
     let overwrite_file = path_to_config.to_string();
     let (tx_mjpeg, rx_mjpeg) = mpsc::sync_channel(0);
     let (vehicle_events, _) = tokio::sync::broadcast::channel(128);
+    let track_observations: TrackObservations = tokio::sync::broadcast::channel(1024).0;
+    let _track_observer_task = spawn_console_observer(&track_observations);
+    let _violation_observer_task = violations::spawn_violation_observer(
+        &track_observations,
+        settings.violations.clone(),
+        settings.road_lanes.clone().unwrap_or_default(),
+    );
     let enable_vehicle_events = !report_mode
         && (settings.rest_api.enable || settings.redis_publisher.vehicle_events.enable);
     let mut event_collector = enable_vehicle_events.then(|| {
@@ -243,6 +314,7 @@ fn run(
             publishers.vehicle_events,
         )
     });
+
     if settings.rest_api.enable && !report_mode {
         let settings_clone = settings.clone();
         let ds_api = data_storage.clone();
@@ -280,24 +352,20 @@ fn run(
         ..Default::default()
     });
 
-    // Initialize zone grid with frame dimensions
-    {
-        let ds_guard = data_storage
-            .read()
-            .expect("DataStorage is poisoned [RWLock]");
-        match ds_guard.initialize_zone_grid(width, height) {
-            Ok(_) => info!(
-                scope = logging::SCOPE_STARTUP,
-                columns = (width / 32.0).ceil() as u32,
-                rows = (height / 32.0).ceil() as u32,
-                cell_px = 32,
-                "Zone grid initialized"
-            ),
-            Err(e) => {
-                warn!(scope = logging::SCOPE_STARTUP, error = %e, "Failed to initialize zone grid")
-            }
+    let ds_guard = data_storage.read().expect("DataStorage is poisoned [RWLock]");
+    match ds_guard.initialize_zone_grid(width, height) {
+        Ok(_) => info!(
+            scope = logging::SCOPE_STARTUP,
+            columns = (width / 32.0).ceil() as u32,
+            rows = (height / 32.0).ceil() as u32,
+            cell_px = 32,
+            "Zone grid initialized"
+        ),
+        Err(e) => {
+            warn!(scope = logging::SCOPE_STARTUP, error = %e, "Failed to initialize zone grid")
         }
     }
+    drop(ds_guard);
 
     /* Start capture loop */
     let live_source = video_source.is_live();
@@ -315,6 +383,7 @@ fn run(
         process_every_nth_frame: skip_every_n_frame,
         ..Default::default()
     });
+
     thread::spawn(move || {
         let mut frame_idx: u64 = 0;
         let mut processed_frames: u32 = 0;
@@ -374,7 +443,8 @@ fn run(
             if timestamp - period_start_ts >= next_reset as f64 {
                 info!(
                     scope = logging::SCOPE_ANALYTICS,
-                    timestamp, "Analytics period reset"
+                    timestamp,
+                    "Analytics period reset"
                 );
                 period_start_ts = timestamp;
                 let mut ds_writer = ds_worker.write().expect("Bad DS");
@@ -444,10 +514,8 @@ fn run(
         "Frame timing"
     );
 
-    /* Performance stats (optional) */
-    let perf_stats_interval = settings.detection.perf_stats_interval;
-    let mut perf_stats = if perf_stats_interval > 0 {
-        Some(PerfStats::new(perf_stats_interval))
+    let mut perf_stats = if settings.detection.perf_stats_interval > 0 {
+        Some(PerfStats::new(settings.detection.perf_stats_interval))
     } else {
         None
     };
@@ -463,8 +531,7 @@ fn run(
         None
     };
 
-    /* Can't create colors as const/static currently */
-    let mut first_frame: Option<lib::cv::RawFrame> = None;
+    let mut first_frame = None;
     while let Some(received) = rx_capture.recv() {
         let observed_at = Utc::now();
         if report_mode && first_frame.is_none() {
@@ -624,40 +691,41 @@ fn run(
         // Zero-copy filtering: collect IDs of active objects
         let object_ids: Vec<Uuid> = tracker
             .iter_tracked_objects()
-            .filter_map(|(id, obj)| {
-                if obj.get_no_match_times() <= 1 {
-                    Some(id)
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(id, obj)| if obj.get_no_match_times() <= 1 { Some(id) } else { None })
             .collect();
 
         for object_id in object_ids {
-            // Zero-copy lookup for each object
-            let object = match tracker.get_tracked_object_ref(&object_id) {
-                Some(obj) => obj,
-                None => continue,
-            };
-            if object.get_no_match_times() > 1 {
-                // Skip, since object is lost for a while
-                // println!("Object {} is lost for a while", object_id);
-                continue;
-            }
-            let track: &Vec<mot_rs::utils::Point> = object.get_track();
-            let track_len = track.len();
-            let last_point = &track[track_len - 1];
-            let last_point_x = last_point.x;
-            let last_point_y = last_point.y;
+            let (last_point_x, last_point_y, last_before_point, no_match_times, bbox) = {
+                let object = match tracker.get_tracked_object_ref(&object_id) {
+                    Some(obj) => obj,
+                    None => continue,
+                };
+                if object.get_no_match_times() > 1 {
+                    continue;
+                }
 
-            let last_before_point = if track_len >= 2 {
-                let pt = &track[track_len - 2];
-                Some((pt.x, pt.y))
-            } else {
-                None
+                let track: &Vec<mot_rs::utils::Point> = object.get_track();
+                let track_len = track.len();
+                let last_point = &track[track_len - 1];
+                let last_point_x = last_point.x;
+                let last_point_y = last_point.y;
+
+                let last_before_point = if track_len >= 2 {
+                    let pt = &track[track_len - 2];
+                    Some((pt.x, pt.y))
+                } else {
+                    None
+                };
+
+                (
+                    last_point_x,
+                    last_point_y,
+                    last_before_point,
+                    object.get_no_match_times(),
+                    object.get_bbox(),
+                )
             };
 
-            // Get the vehicle's previous zone from tracking if possible
             let previous_zone_id = {
                 let vehicle_zones = ds_guard
                     .vehicle_last_zone_cross
@@ -667,9 +735,12 @@ fn run(
                 drop(vehicle_zones);
                 result
             };
+
             let object_extra = tracker.get_object_extra_mut(&object_id).unwrap();
             let times = &object_extra.times;
             let last_time = times[times.len() - 1];
+            let class_name = object_extra.get_classname();
+            let detection_confidence = object_extra.get_confidence();
 
             // Use zone grid for O(1) candidate lookup instead of O(m) iteration
             let candidate_zone_ids = zone_grid.get_candidate_zones(last_point_x, last_point_y);
@@ -682,7 +753,7 @@ fn run(
                 if !zone.contains_point(last_point_x, last_point_y) {
                     continue;
                 }
-                zone.current_statistics.occupancy += 1; // Increment current load to match number of objects in zone
+                zone.current_statistics.occupancy += 1;
 
                 let projected_pt = zone.project_to_skeleton(last_point_x, last_point_y);
                 let pixels_per_meters = zone.get_skeleton_ppm();
@@ -703,6 +774,7 @@ fn run(
                 } else {
                     None
                 };
+
                 let counted_in_zone = match object_extra.spatial_info {
                     Some(ref mut spatial_info) => {
                         spatial_info.update_avg(
@@ -713,15 +785,62 @@ fn run(
                             projected_pt.1,
                             pixels_per_meters,
                         );
-                        zone.register_or_update_object(
+
+                        let speed_kmh = if spatial_info.speed >= 0.0 {
+                            Some(spatial_info.speed)
+                        } else {
+                            None
+                        };
+
+                        let counted_in_zone = zone.register_or_update_object(
                             object_id,
                             last_time,
                             relative_time,
                             spatial_info.speed,
-                            object_extra.get_classname(),
+                            class_name.clone(),
                             crossed,
                             zone_id_from.clone(),
-                        )
+                        );
+
+                        let anchor_x = bbox.x + (bbox.width / 2.0);
+                        let anchor_y = bbox.y + bbox.height;
+
+                        publish_track_observation(
+                            &track_observations,
+                            TrackObservation {
+                                equipment_id: ds_guard.id.clone(),
+                                track_id: object_id,
+                                observed_at,
+                                source_time_relative_sec: relative_time,
+                                class_name: class_name.clone(),
+                                confidence: detection_confidence,
+                                bbox: BoundingBoxPx {
+                                    x: bbox.x.floor() as i32,
+                                    y: bbox.y.floor() as i32,
+                                    width: bbox.width.round() as i32,
+                                    height: bbox.height.round() as i32,
+                                },
+                                anchor_px: PointPx {
+                                    x: anchor_x,
+                                    y: anchor_y,
+                                },
+                                image_point_px: PointPx {
+                                    x: last_point_x,
+                                    y: last_point_y,
+                                },
+                                projected_point: Some(PointProjected {
+                                    x: projected_pt.0,
+                                    y: projected_pt.1,
+                                }),
+                                speed_kmh,
+                                zone_id: Some(zone.id.clone()),
+                                previous_zone_id: previous_zone_id.clone(),
+                                crossed_virtual_line: crossed,
+                                no_match_times,
+                            },
+                        );
+
+                        counted_in_zone
                     }
                     None => {
                         object_extra.spatial_info = Some(SpatialInfo::new(
@@ -731,15 +850,56 @@ fn run(
                             projected_pt.0,
                             projected_pt.1,
                         ));
-                        zone.register_or_update_object(
+
+                        let counted_in_zone = zone.register_or_update_object(
                             object_id,
                             last_time,
                             relative_time,
                             -1.0,
-                            object_extra.get_classname(),
+                            class_name.clone(),
                             crossed,
                             zone_id_from.clone(),
-                        )
+                        );
+
+                        let anchor_x = bbox.x + (bbox.width / 2.0);
+                        let anchor_y = bbox.y + bbox.height;
+
+                        publish_track_observation(
+                            &track_observations,
+                            TrackObservation {
+                                equipment_id: ds_guard.id.clone(),
+                                track_id: object_id,
+                                observed_at,
+                                source_time_relative_sec: relative_time,
+                                class_name: class_name.clone(),
+                                confidence: detection_confidence,
+                                bbox: BoundingBoxPx {
+                                    x: bbox.x.floor() as i32,
+                                    y: bbox.y.floor() as i32,
+                                    width: bbox.width.round() as i32,
+                                    height: bbox.height.round() as i32,
+                                },
+                                anchor_px: PointPx {
+                                    x: anchor_x,
+                                    y: anchor_y,
+                                },
+                                image_point_px: PointPx {
+                                    x: last_point_x,
+                                    y: last_point_y,
+                                },
+                                projected_point: Some(PointProjected {
+                                    x: projected_pt.0,
+                                    y: projected_pt.1,
+                                }),
+                                speed_kmh: None,
+                                zone_id: Some(zone.id.clone()),
+                                previous_zone_id: previous_zone_id.clone(),
+                                crossed_virtual_line: crossed,
+                                no_match_times,
+                            },
+                        );
+
+                        counted_in_zone
                     }
                 };
                 if let Some(collector) = event_collector.as_mut() {
@@ -776,7 +936,10 @@ fn run(
                 drop(zone);
             }
 
-            // We need drop here explicitly, since we need to release lock on zones for MJPEG / REST API / Redis publisher and statistics threads
+            if let Some(lanes) = settings.road_lanes.as_deref() {
+                draw_solid_line_rules(&mut frame, lanes);
+            }
+
             drop(zone_grid);
             drop(zones);
             drop(ds_guard);
@@ -823,18 +986,22 @@ fn run(
             "Video processing complete, generating report"
         );
         let report_settings = settings.report.as_ref().unwrap();
-        {
-            let mut ds_writer = data_storage
-                .write()
-                .expect("DataStorage is poisoned [RWLock]");
-            ds_writer.period_end = Utc::now();
-            match ds_writer.update_statistics() {
-                Ok(_) => {}
-                Err(err) => {
-                    error!(scope = logging::SCOPE_REPORT, error = %err, "Can't compute final statistics");
-                }
+
+        let mut ds_writer = data_storage
+            .write()
+            .expect("DataStorage is poisoned [RWLock]");
+        ds_writer.period_end = Utc::now();
+        match ds_writer.update_statistics() {
+            Ok(_) => {}
+            Err(err) => {
+                error!(
+                    scope = logging::SCOPE_REPORT,
+                    error = %err,
+                    "Can't compute final statistics"
+                );
             }
         }
+
         let ds_reader = data_storage
             .read()
             .expect("DataStorage is poisoned [RWLock]");
@@ -865,10 +1032,8 @@ fn run(
 
     Ok(())
 }
-
-fn main() {
-    // Logging comes up first, on stdout only: the config that says where the
-    // file goes is not read yet. `apply_config` below adds the file and the level
+#[tokio::main]
+async fn main() {
     logging::init_logger();
     info!(
         scope = logging::SCOPE_STARTUP,

@@ -26,6 +26,16 @@ impl ObjectExtra {
     pub fn get_classname(&self) -> String {
         self.class_name.clone()
     }
+
+    /// Returns the confidence of the latest detection associated with this track.
+    pub fn get_confidence(&self) -> f32 {
+        self.confidence
+    }
+
+    /// Updates the confidence from a detection associated with this track.
+    pub fn set_confidence(&mut self, confidence: f32) {
+        self.confidence = confidence;
+}
 }
 
 pub struct SpatialInfo {
