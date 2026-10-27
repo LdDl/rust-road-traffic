@@ -241,7 +241,6 @@ impl InferenceModelSettings {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TrackingSettings {
     // Either "bytetrack" or "iou_naive". Default is "iou_naive".
-    // `typ` is what earlier versions wrote when saving from the UI
     #[serde(rename = "type", alias = "typ")]
     pub typ: Option<String>,
     pub max_points_in_track: usize,
@@ -1113,6 +1112,9 @@ impl AppSettings {
                         + &format!(".{}.bak", Utc::now().format("%Y-%m-%dT%H-%M-%S-%f")),
                 )?;
                 let mut document: DocumentMut = existing.parse()?;
+                if let Some(tracking) = document.get_mut("tracking").and_then(Item::as_table_mut) {
+                    tracking.remove("typ");
+                }
                 let mut fresh: DocumentMut = dump.parse()?;
                 // Tables added to the document go after everything it already has
                 let mut next_position = max_position(document.as_table()) + 1;
@@ -1128,6 +1130,8 @@ impl AppSettings {
             }
             Err(_) => dump,
         };
+        // Reject invalid merged settings before replacing the current file.
+        toml::from_str::<Self>(&output)?;
         fs::write(filename, output)?;
         Ok(())
     }
