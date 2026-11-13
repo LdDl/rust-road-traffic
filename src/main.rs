@@ -8,30 +8,31 @@ use uuid::Uuid;
 #[path = "lib/mod.rs"]
 mod lib;
 use lib::anpr::plate_detector::PlateModels;
-use lib::data_storage::new_datastorage;
+use lib::data_storage::{new_datastorage, ThreadedDataStorage};
 use lib::dataset_collector::DatasetCollector;
+use lib::detection::process_yolo_detections;
 use lib::detection::DetectionBlobs::BBox;
 use lib::detection::DetectionBlobs::Simple;
 use lib::detection::Detector;
 use lib::detection::KalmanFilterType;
-use lib::detection::process_yolo_detections;
 use lib::draw;
 use lib::logging;
 use lib::perf_stats::{PerfStats, Timer};
+use lib::publisher::RedisPublishers;
+use lib::spatial::Point2f;
 use lib::status::{DetectionStatus, InputStatus, RuntimeStatus};
-use lib::tracker::{SpatialInfo, TrackerTrait, new_tracker_from_type};
+use lib::track_observations::{TrackObservation, TrackObservations};
+use lib::tracker::{new_tracker_from_type, SpatialInfo, TrackerTrait};
 use lib::vehicle_events::VehicleEventCollector;
 use lib::zones::Zone;
 
-mod settings;
-use settings::AppSettings;
-
-mod video_capture;
-use video_capture::{ThreadedFrame, VideoSource, frame_channel, kill_capture_subprocesses};
-
-use lib::publisher::RedisPublishers;
-
 mod rest_api;
+mod settings;
+mod video_capture;
+mod violations;
+
+use settings::AppSettings;
+use video_capture::{frame_channel, kill_capture_subprocesses, ThreadedFrame, VideoSource};
 
 use std::collections::HashSet;
 use std::env;
@@ -39,6 +40,7 @@ use std::fmt;
 use std::iter::FromIterator;
 use std::process;
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -106,6 +108,8 @@ fn run(
     tracker: &mut dyn TrackerTrait,
     detector: &mut Detector,
     mut plate_models: Option<&mut PlateModels>,
+    track_observations: TrackObservations,
+    data_storage: ThreadedDataStorage,
 ) -> Result<(), AppError> {
     let report_mode = settings.is_report_mode();
     if report_mode && !std::path::Path::new(&settings.input.video_src).is_file() {
@@ -136,8 +140,8 @@ fn run(
         "Run configuration"
     );
 
-    /* Preprocess spatial data */
-    let data_storage = new_datastorage(settings.equipment_info.id.clone());
+    /* Preprocess spatial data (the storage was created by main: the violation
+     * observer holds the same zones map this loop fills) */
     let target_classes = HashSet::from_iter(
         settings
             .detection
@@ -243,6 +247,7 @@ fn run(
             publishers.vehicle_events,
         )
     });
+
     if settings.rest_api.enable && !report_mode {
         let settings_clone = settings.clone();
         let ds_api = data_storage.clone();
@@ -280,24 +285,20 @@ fn run(
         ..Default::default()
     });
 
-    // Initialize zone grid with frame dimensions
-    {
-        let ds_guard = data_storage
-            .read()
-            .expect("DataStorage is poisoned [RWLock]");
-        match ds_guard.initialize_zone_grid(width, height) {
-            Ok(_) => info!(
-                scope = logging::SCOPE_STARTUP,
-                columns = (width / 32.0).ceil() as u32,
-                rows = (height / 32.0).ceil() as u32,
-                cell_px = 32,
-                "Zone grid initialized"
-            ),
-            Err(e) => {
-                warn!(scope = logging::SCOPE_STARTUP, error = %e, "Failed to initialize zone grid")
-            }
+    let ds_guard = data_storage.read().expect("DataStorage is poisoned [RWLock]");
+    match ds_guard.initialize_zone_grid(width, height) {
+        Ok(_) => info!(
+            scope = logging::SCOPE_STARTUP,
+            columns = (width / 32.0).ceil() as u32,
+            rows = (height / 32.0).ceil() as u32,
+            cell_px = 32,
+            "Zone grid initialized"
+        ),
+        Err(e) => {
+            warn!(scope = logging::SCOPE_STARTUP, error = %e, "Failed to initialize zone grid")
         }
     }
+    drop(ds_guard);
 
     /* Start capture loop */
     let live_source = video_source.is_live();
@@ -315,6 +316,7 @@ fn run(
         process_every_nth_frame: skip_every_n_frame,
         ..Default::default()
     });
+
     thread::spawn(move || {
         let mut frame_idx: u64 = 0;
         let mut processed_frames: u32 = 0;
@@ -374,7 +376,8 @@ fn run(
             if timestamp - period_start_ts >= next_reset as f64 {
                 info!(
                     scope = logging::SCOPE_ANALYTICS,
-                    timestamp, "Analytics period reset"
+                    timestamp,
+                    "Analytics period reset"
                 );
                 period_start_ts = timestamp;
                 let mut ds_writer = ds_worker.write().expect("Bad DS");
@@ -444,10 +447,8 @@ fn run(
         "Frame timing"
     );
 
-    /* Performance stats (optional) */
-    let perf_stats_interval = settings.detection.perf_stats_interval;
-    let mut perf_stats = if perf_stats_interval > 0 {
-        Some(PerfStats::new(perf_stats_interval))
+    let mut perf_stats = if settings.detection.perf_stats_interval > 0 {
+        Some(PerfStats::new(settings.detection.perf_stats_interval))
     } else {
         None
     };
@@ -463,9 +464,14 @@ fn run(
         None
     };
 
-    /* Can't create colors as const/static currently */
-    let mut first_frame: Option<lib::cv::RawFrame> = None;
+    let mut first_frame = None;
+    // `vehicle_last_zone_cross` is updated on every virtual-line crossing and
+    // would otherwise keep every track id ever seen. Pruning it against the
+    // tracker's live set costs little and runs rarely.
+    const VEHICLE_ZONE_MAP_PRUNE_INTERVAL: u32 = 300;
+    let mut frames_since_vehicle_map_prune: u32 = 0;
     while let Some(received) = rx_capture.recv() {
+
         let observed_at = Utc::now();
         if report_mode && first_frame.is_none() {
             first_frame = Some(received.frame.clone());
@@ -474,6 +480,7 @@ fn run(
         // Note: frame clone is deferred to only displaying
 
         /* Inference (preprocessing + forward pass + NMS) */
+
         let t_inference = Timer::start();
         let (nms_bboxes, nms_classes_ids, nms_confidences) = match detector.detect_frame(
             &received.frame,
@@ -502,6 +509,7 @@ fn run(
             }
             _ => nominal_dt,
         };
+
         let t_postprocess = Timer::start();
         let mut tmp_detections = process_yolo_detections(
             &nms_bboxes,
@@ -518,6 +526,7 @@ fn run(
         let postprocess_time = t_postprocess.elapsed();
 
         /* Tracking: match detections to existing tracks */
+
         let t_tracking = Timer::start();
         let relative_time = received.timestamp as f32;
         match tracker.match_objects(&mut tmp_detections, relative_time, dt as f32) {
@@ -612,6 +621,7 @@ fn run(
         }
 
         // Reset current occupancy for zones
+
         let current_ut = get_sys_time_in_secs();
         for (_, zone_guarded) in zones.iter() {
             let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
@@ -622,42 +632,49 @@ fn run(
         }
 
         // Zero-copy filtering: collect IDs of active objects
+
         let object_ids: Vec<Uuid> = tracker
             .iter_tracked_objects()
-            .filter_map(|(id, obj)| {
-                if obj.get_no_match_times() <= 1 {
-                    Some(id)
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(id, obj)| if obj.get_no_match_times() <= 1 { Some(id) } else { None })
             .collect();
 
+        // One observation per active track and frame for the violation rules.
+        // The batch is built only when violations are enabled, and published
+        // once per frame: the observer runs every rule on the whole frame.
+        let mut frame_observations: Vec<TrackObservation> = Vec::with_capacity(object_ids.len());
+
         for object_id in object_ids {
-            // Zero-copy lookup for each object
-            let object = match tracker.get_tracked_object_ref(&object_id) {
-                Some(obj) => obj,
-                None => continue,
-            };
-            if object.get_no_match_times() > 1 {
-                // Skip, since object is lost for a while
-                // println!("Object {} is lost for a while", object_id);
-                continue;
-            }
-            let track: &Vec<mot_rs::utils::Point> = object.get_track();
-            let track_len = track.len();
-            let last_point = &track[track_len - 1];
-            let last_point_x = last_point.x;
-            let last_point_y = last_point.y;
+            let (last_point_x, last_point_y, last_before_point, no_match_times, bbox) = {
+                let object = match tracker.get_tracked_object_ref(&object_id) {
+                    Some(obj) => obj,
+                    None => continue,
+                };
+                if object.get_no_match_times() > 1 {
+                    continue;
+                }
 
-            let last_before_point = if track_len >= 2 {
-                let pt = &track[track_len - 2];
-                Some((pt.x, pt.y))
-            } else {
-                None
+                let track: &Vec<mot_rs::utils::Point> = object.get_track();
+                let track_len = track.len();
+                let last_point = &track[track_len - 1];
+                let last_point_x = last_point.x;
+                let last_point_y = last_point.y;
+
+                let last_before_point = if track_len >= 2 {
+                    let pt = &track[track_len - 2];
+                    Some((pt.x, pt.y))
+                } else {
+                    None
+                };
+
+                (
+                    last_point_x,
+                    last_point_y,
+                    last_before_point,
+                    object.get_no_match_times(),
+                    object.get_bbox(),
+                )
             };
 
-            // Get the vehicle's previous zone from tracking if possible
             let previous_zone_id = {
                 let vehicle_zones = ds_guard
                     .vehicle_last_zone_cross
@@ -667,9 +684,30 @@ fn run(
                 drop(vehicle_zones);
                 result
             };
+
             let object_extra = tracker.get_object_extra_mut(&object_id).unwrap();
             let times = &object_extra.times;
             let last_time = times[times.len() - 1];
+            let class_name = object_extra.get_classname();
+            let detection_confidence = object_extra.get_confidence();
+
+            let anchor_x = bbox.x + bbox.width / 2.0;
+            let anchor_y = bbox.y + bbox.height;
+            let bbox_px = RectCV::new(
+                bbox.x.floor() as i32,
+                bbox.y.floor() as i32,
+                bbox.width.round() as i32,
+                bbox.height.round() as i32,
+            );
+            let anchor_px = Point2f::new(anchor_x, anchor_y);
+
+            // Filled if the track is inside a zone. The solid-line detector
+            // does not need a zone, but a zone gives the event its speed and
+            // projected point when they are available.
+            let mut matched_zone_id: Option<String> = None;
+            let mut matched_projected_point: Option<Point2f> = None;
+            let mut matched_speed_kmh: Option<f32> = None;
+            let mut matched_crossed_virtual_line = false;
 
             // Use zone grid for O(1) candidate lookup instead of O(m) iteration
             let candidate_zone_ids = zone_grid.get_candidate_zones(last_point_x, last_point_y);
@@ -682,27 +720,31 @@ fn run(
                 if !zone.contains_point(last_point_x, last_point_y) {
                     continue;
                 }
-                zone.current_statistics.occupancy += 1; // Increment current load to match number of objects in zone
+                zone.current_statistics.occupancy += 1;
 
                 let projected_pt = zone.project_to_skeleton(last_point_x, last_point_y);
                 let pixels_per_meters = zone.get_skeleton_ppm();
 
                 let crossed = if let Some(before_point) = last_before_point {
                     zone.crossed_virtual_line(
-                        last_point_x,
-                        last_point_y,
                         before_point.0,
                         before_point.1,
+                        last_point_x,
+                        last_point_y,
                     )
                 } else {
                     false
                 };
+                matched_zone_id = Some(zone.id.clone());
+                matched_projected_point = Some(Point2f::new(projected_pt.0, projected_pt.1));
+                matched_crossed_virtual_line = crossed;
                 // Only provide zone_id_from when vehicle actually crosses the virtual line
                 let zone_id_from = if crossed {
                     previous_zone_id.clone()
                 } else {
                     None
                 };
+
                 let counted_in_zone = match object_extra.spatial_info {
                     Some(ref mut spatial_info) => {
                         spatial_info.update_avg(
@@ -713,15 +755,25 @@ fn run(
                             projected_pt.1,
                             pixels_per_meters,
                         );
-                        zone.register_or_update_object(
+
+                        let speed_kmh = if spatial_info.speed >= 0.0 {
+                            Some(spatial_info.speed)
+                        } else {
+                            None
+                        };
+                        matched_speed_kmh = speed_kmh;
+
+                        let counted_in_zone = zone.register_or_update_object(
                             object_id,
                             last_time,
                             relative_time,
                             spatial_info.speed,
-                            object_extra.get_classname(),
+                            class_name.clone(),
                             crossed,
                             zone_id_from.clone(),
-                        )
+                        );
+
+                        counted_in_zone
                     }
                     None => {
                         object_extra.spatial_info = Some(SpatialInfo::new(
@@ -731,15 +783,18 @@ fn run(
                             projected_pt.0,
                             projected_pt.1,
                         ));
-                        zone.register_or_update_object(
+
+                        let counted_in_zone = zone.register_or_update_object(
                             object_id,
                             last_time,
                             relative_time,
                             -1.0,
-                            object_extra.get_classname(),
+                            class_name.clone(),
                             crossed,
                             zone_id_from.clone(),
-                        )
+                        );
+
+                        counted_in_zone
                     }
                 };
                 if let Some(collector) = event_collector.as_mut() {
@@ -758,6 +813,49 @@ fn run(
                 // Vehicle can only be in one zone at a time
                 break;
             }
+
+            // One observation per track, built once per frame and shared by
+            // every rule through the frame batch.
+            if settings.violations.enabled {
+                frame_observations.push(TrackObservation {
+                    equipment_id: ds_guard.id.clone(),
+                    track_id: object_id,
+                    observed_at,
+                    source_time_relative_sec: relative_time,
+                    class_name,
+                    confidence: detection_confidence,
+                    bbox: bbox_px,
+                    anchor_px,
+                    image_point_px: Point2f::new(last_point_x, last_point_y),
+                    projected_point: matched_projected_point,
+                    speed_kmh: matched_speed_kmh,
+                    zone_id: matched_zone_id,
+                    previous_zone_id,
+                    crossed_virtual_line: matched_crossed_virtual_line,
+                    no_match_times,
+                });
+            }
+        }
+
+        if settings.violations.enabled && !frame_observations.is_empty() {
+
+
+            let _ = track_observations.send(Arc::new(frame_observations));
+        }
+
+        frames_since_vehicle_map_prune += 1;
+        if frames_since_vehicle_map_prune >= VEHICLE_ZONE_MAP_PRUNE_INTERVAL {
+            frames_since_vehicle_map_prune = 0;
+            let active_tracks: HashSet<Uuid> = tracker
+                .iter_tracked_objects()
+                .map(|(track_id, _)| track_id)
+                .collect();
+            let mut vehicle_zones = ds_guard
+                .vehicle_last_zone_cross
+                .write()
+                .expect("Vehicle zones is poisoned [RWLock]");
+            vehicle_zones.retain(|track_id, _| active_tracks.contains(track_id));
+            drop(vehicle_zones);
         }
 
         /* Re-stream input video as MJPEG */
@@ -773,10 +871,10 @@ fn run(
                 zone.draw_skeleton(&mut frame);
                 zone.draw_current_intensity(&mut frame);
                 zone.draw_virtual_line(&mut frame);
+                zone.draw_solid_line(&mut frame);
                 drop(zone);
             }
 
-            // We need drop here explicitly, since we need to release lock on zones for MJPEG / REST API / Redis publisher and statistics threads
             drop(zone_grid);
             drop(zones);
             drop(ds_guard);
@@ -784,6 +882,7 @@ fn run(
 
             match jpeg_encoder.as_mut().unwrap().encode(frame.data_bytes()) {
                 Ok(jpeg_buf) => {
+
                     match tx_mjpeg.send(jpeg_buf) {
                         Ok(_) => {}
                         Err(err) => {
@@ -815,6 +914,7 @@ fn run(
                 .clone();
             collector.publish_completed(tracker, &equipment_id, plate_models.as_deref_mut());
         }
+
     }
 
     if report_mode {
@@ -823,18 +923,22 @@ fn run(
             "Video processing complete, generating report"
         );
         let report_settings = settings.report.as_ref().unwrap();
-        {
-            let mut ds_writer = data_storage
-                .write()
-                .expect("DataStorage is poisoned [RWLock]");
-            ds_writer.period_end = Utc::now();
-            match ds_writer.update_statistics() {
-                Ok(_) => {}
-                Err(err) => {
-                    error!(scope = logging::SCOPE_REPORT, error = %err, "Can't compute final statistics");
-                }
+
+        let mut ds_writer = data_storage
+            .write()
+            .expect("DataStorage is poisoned [RWLock]");
+        ds_writer.period_end = Utc::now();
+        match ds_writer.update_statistics() {
+            Ok(_) => {}
+            Err(err) => {
+                error!(
+                    scope = logging::SCOPE_REPORT,
+                    error = %err,
+                    "Can't compute final statistics"
+                );
             }
         }
+
         let ds_reader = data_storage
             .read()
             .expect("DataStorage is poisoned [RWLock]");
@@ -865,10 +969,44 @@ fn run(
 
     Ok(())
 }
-
-fn main() {
-    // Logging comes up first, on stdout only: the config that says where the
-    // file goes is not read yet. `apply_config` below adds the file and the level
+#[tokio::main]
+async fn main() {
+    // With `--features profile-run` the whole process is sampled (the kernel's
+    // perf_event_open; the `perf` binary is not required) and the flamegraph
+    // is written to flamegraph.svg when the run ends normally. Ctrl-C / SIGKILL
+    // skip the write: let the video end.
+    #[cfg(feature = "profile-run")]
+    let _profile = {
+        struct FlamegraphGuard(pprof::ProfilerGuard<'static>);
+        impl Drop for FlamegraphGuard {
+            fn drop(&mut self) {
+                match self.0.report().build() {
+                    Ok(report) => {
+                        // exact stacks and counts: one line per stack
+                        let stacks = format!("{report:?}");
+                        let _ = std::fs::write("flamegraph.stacks.txt", stacks);
+                        match std::fs::File::create("flamegraph.svg") {
+                        Ok(file) => {
+                            if let Err(err) = report.flamegraph(file) {
+                                eprintln!("flamegraph write failed: {err}");
+                            } else {
+                                eprintln!("flamegraph written to flamegraph.svg");
+                            }
+                        }
+                        Err(err) => eprintln!("can't create flamegraph.svg: {err}"),
+                        }
+                    }
+                    Err(err) => eprintln!("flamegraph report failed: {err}"),
+                }
+            }
+        }
+        FlamegraphGuard(
+            pprof::ProfilerGuardBuilder::default()
+                .frequency(199)
+                .build()
+                .expect("pprof profiler"),
+        )
+    };
     logging::init_logger();
     info!(
         scope = logging::SCOPE_STARTUP,
@@ -973,18 +1111,50 @@ fn main() {
             std::process::exit(1);
         });
 
-    match run(
-        &app_settings,
-        path_to_config,
-        &mut *tracker,
-        &mut detector,
-        plate_models.as_mut(),
-    ) {
-        Ok(_) => {}
-        Err(err) => {
+    // Violation processing: one observer task on this runtime, fed by the
+    // detection thread through the observation broadcast. Spawned only when
+    // violations are enabled: the setting cannot change while running.
+    let track_observations: TrackObservations = tokio::sync::broadcast::channel(1024).0;
+    let data_storage = new_datastorage(app_settings.equipment_info.id.clone());
+    let _violation_observer_task = if app_settings.violations.enabled {
+        Some(violations::spawn_violation_observer(
+            &track_observations,
+            data_storage.clone(),
+            app_settings.violations.clone(),
+        ))
+    } else {
+        None
+    };
+
+    // The detection loop stays a dedicated OS thread, as in the baseline: it
+    // must never wait for this runtime's workers.
+    let path_to_config = path_to_config.to_string();
+    let run_thread = thread::spawn(move || {
+        run(
+            &app_settings,
+            &path_to_config,
+            &mut *tracker,
+            &mut detector,
+            plate_models.as_mut(),
+            track_observations,
+            data_storage,
+        )
+    });
+    match tokio::task::spawn_blocking(move || run_thread.join()).await {
+        Ok(Ok(Ok(_))) => {}
+        Ok(Ok(Err(err))) => {
             error!(scope = logging::SCOPE_PROCESSING, error = %err, "Error in main thread");
         }
-    };
+        Ok(Err(_)) => {
+            error!(
+                scope = logging::SCOPE_PROCESSING,
+                "Detection thread panicked"
+            );
+        }
+        Err(err) => {
+            error!(scope = logging::SCOPE_PROCESSING, error = %err, "Can't wait for the detection thread");
+        }
+    }
     // A restart takes the capture subprocess down, which ends the run above:
     // stay alive until this process image is replaced
     lib::restart::wait_while_restarting();

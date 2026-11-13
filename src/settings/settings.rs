@@ -58,6 +58,8 @@ pub struct AppSettings {
     pub redis_publisher: RedisPublisherSettings,
     pub dataset_collector: Option<DatasetCollectorSettings>,
     pub report: Option<ReportSettings>,
+    #[serde(default)]
+    pub violations: ViolationsSettings,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -276,7 +278,33 @@ pub struct RoadLanesSettings {
     pub geometry_wgs84: Vec<[f32; 2]>,
     pub color_rgb: [i16; 3],
     pub virtual_line: Option<VirtualLineSettings>,
+    #[serde(default)]
+    pub rules: LaneRulesSettings,
 }
+
+/// Keys of `[[road_lanes]]` this version knows about. A save removes only
+/// these when the new zone no longer has them; a key written by another
+/// version or by hand survives the round trip
+const ZONE_KEYS: [&str; 8] = [
+    "id",
+    "lane_number",
+    "lane_direction",
+    "geometry",
+    "geometry_wgs84",
+    "color_rgb",
+    "virtual_line",
+    "rules",
+];
+
+/// Keys of `[road_lanes.rules]` this version knows about, with the same rule:
+/// a rule this version does not know is not a rule that was removed
+const RULE_KEYS: [&str; 5] = [
+    "speeding",
+    "no_stopping",
+    "no_parking",
+    "wrong_way",
+    "solid_line",
+];
 
 impl RoadLanesSettings {
     /// The zone's own identifier, or the one its direction and lane imply.
@@ -311,6 +339,41 @@ pub fn assign_zone_ids(lanes: &[RoadLanesSettings]) -> Vec<(String, bool)> {
             (generated, true)
         })
         .collect()
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(default)]
+pub struct LaneRulesSettings {
+    pub speeding: Option<LaneSpeedingRuleSettings>,
+    pub no_stopping: Option<LaneZoneViolationRuleSettings>,
+    pub no_parking: Option<LaneZoneViolationRuleSettings>,
+    pub wrong_way: Option<LaneWrongWayRuleSettings>,
+    pub solid_line: Option<LaneSolidLineRuleSettings>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LaneSpeedingRuleSettings {
+    pub threshold_kmh: f32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LaneZoneViolationRuleSettings {
+    pub min_duration_sec: f32,
+    #[serde(default = "default_stationary_speed_kmh")]
+    pub stationary_speed_kmh: f32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LaneWrongWayRuleSettings {
+    #[serde(default = "default_min_direction_samples")]
+    pub min_direction_samples: usize,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LaneSolidLineRuleSettings {
+    pub line: [[f32; 2]; 2],
+    #[serde(default = "default_line_margin_px")]
+    pub margin_px: f32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -460,6 +523,36 @@ pub struct ReportSettings {
     pub output_path: String,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(default)]
+pub struct ViolationsSettings {
+    pub enabled: bool,
+    #[serde(default = "default_violation_state_ttl_sec")]
+    pub state_ttl_sec: f32,
+    #[serde(default = "default_violation_cleanup_interval_sec")]
+    pub cleanup_interval_sec: f32,
+}
+
+fn default_stationary_speed_kmh() -> f32 {
+    3.0
+}
+
+fn default_min_direction_samples() -> usize {
+    3
+}
+
+fn default_line_margin_px() -> f32 {
+    8.0
+}
+
+fn default_violation_state_ttl_sec() -> f32 {
+    7.0
+}
+
+fn default_violation_cleanup_interval_sec() -> f32 {
+    1.0
+}
+
 use crate::lib::cv::Scalar;
 use crate::lib::logging;
 use crate::lib::spatial::Point2f;
@@ -472,32 +565,21 @@ use std::convert::From;
 /// formatting attached to the keys that are already there. Tables new to the
 /// document go after their parent (`nested`) or after everything (`next_position`);
 /// tables parsed from the fresh dump carry positions of their own, which would
-/// otherwise interleave them with the document's. With `prune`, keys that
-/// `fresh` no longer has are removed: that is for generated content only
+/// otherwise interleave them with the document's. Keys that are gone are dealt
+/// with by the callers that know which keys this version owns
 fn merge_tables(
     existing: &mut Table,
     fresh: Table,
     next_position: &mut isize,
     nested: Option<isize>,
-    prune: bool,
 ) {
-    if prune {
-        let stale: Vec<String> = existing
-            .iter()
-            .filter(|(key, _)| !fresh.contains_key(key))
-            .map(|(key, _)| key.to_string())
-            .collect();
-        for key in stale {
-            existing.remove(&key);
-        }
-    }
     for (key, item) in fresh {
         match item {
             Item::Value(value) => merge_value(existing, &key, value),
             Item::Table(mut table) => match existing.get_mut(&key) {
                 Some(Item::Table(target)) => {
                     let position = target.position();
-                    merge_tables(target, table, next_position, position, prune)
+                    merge_tables(target, table, next_position, position)
                 }
                 _ => {
                     let position = nested.unwrap_or_else(|| {
@@ -522,9 +604,10 @@ fn merge_tables(
 
 /// Zones are generated by the UI, so at the same index a fresh table can only
 /// differ from the document's one by its values: those are set in place, with
-/// the comments and indentation around them kept and keys that are gone
-/// removed. Extra fresh tables are appended in the same style, extra old ones
-/// dropped
+/// the comments and indentation around them kept. Keys this version knows and
+/// the new zone does not have any more are removed; anything else is left
+/// alone, so a field written by another version or by hand is not lost. Extra
+/// fresh tables are appended in the same style, extra old ones dropped
 fn merge_array_of_tables(
     existing: &mut Table,
     key: &str,
@@ -547,7 +630,8 @@ fn merge_array_of_tables(
             match current.get_mut(index) {
                 Some(target) => {
                     let position = target.position();
-                    merge_tables(target, table, next_position, position, true)
+                    drop_known_absent_keys(target, &table);
+                    merge_tables(target, table, next_position, position)
                 }
                 None => {
                     set_positions(&mut table, position.unwrap_or(*next_position));
@@ -567,6 +651,29 @@ fn merge_array_of_tables(
     }
     *next_position += 1;
     existing.insert(key, Item::ArrayOfTables(array));
+}
+
+/// Removes from a zone table the keys this version knows about that the new
+/// zone no longer has. Keys this version has never heard of stay where they
+/// are: a newer version may have written them, and a save is not the place to
+/// decide they are not wanted.
+fn drop_known_absent_keys(existing: &mut Table, fresh: &Table) {
+    for key in ZONE_KEYS {
+        if !fresh.contains_key(key) {
+            existing.remove(key);
+        }
+    }
+    let Some(Item::Table(fresh_rules)) = fresh.get("rules") else {
+        return;
+    };
+    let Some(Item::Table(existing_rules)) = existing.get_mut("rules") else {
+        return;
+    };
+    for key in RULE_KEYS {
+        if !fresh_rules.contains_key(key) {
+            existing_rules.remove(key);
+        }
+    }
 }
 
 fn merge_value(existing: &mut Table, key: &str, mut value: Value) {
@@ -856,7 +963,7 @@ impl From<&RoadLanesSettings> for Zone {
             None => None,
         };
 
-        Zone::new(
+        let mut zone = Zone::new(
             setting.zone_id(),
             geom,
             geom_epsg4326,
@@ -869,7 +976,11 @@ impl From<&RoadLanesSettings> for Zone {
             setting.lane_number,
             setting.lane_direction,
             virtual_line,
-        )
+        );
+        // The rules belong to the zone while it runs: they are shown through the
+        // API and written back by a save, so loading has to carry them over
+        zone.set_rules(setting.rules.clone());
+        zone
     }
 }
 
@@ -1051,6 +1162,18 @@ impl AppSettings {
         if let Some(lanes) = &self.road_lanes {
             let mut seen: HashSet<&str> = HashSet::new();
             for (index, lane) in lanes.iter().enumerate() {
+                if lane.geometry.len() < 4 {
+                    problems.push((
+                        format!("{ZONES_KEY}.{index}.geometry"),
+                        "must contain at least 4 points".to_string(),
+                    ));
+                }
+                if lane.geometry_wgs84.len() < 4 {
+                    problems.push((
+                        format!("{ZONES_KEY}.{index}.geometry_wgs84"),
+                        "must contain at least 4 points".to_string(),
+                    ));
+                }
                 let Some(id) = lane.id.as_deref() else {
                     continue;
                 };
@@ -1083,9 +1206,10 @@ impl AppSettings {
     /// Writes the settings back to `filename` keeping the file's comments, key
     /// order and formatting: every value this struct carries is set in the
     /// existing document, anything else in the file is left as is, and values
-    /// that did not change are not touched at all. `[[road_lanes]]` is replaced
-    /// as a whole: it is produced by the UI and carries no hand-written
-    /// comments. A missing file is created from a plain dump
+    /// that did not change are not touched at all. `[[road_lanes]]` is merged
+    /// by position: the fields this version knows are set and the ones it owns
+    /// that are gone are removed, while fields it has never heard of are kept.
+    /// A missing file is created from a plain dump
     /// Gives the equipment a generated id when the file has none (or a blank
     /// one) and writes it back at once, so it survives restarts. The id names
     /// the installation point, not the board, so it is never derived from
@@ -1123,7 +1247,6 @@ impl AppSettings {
                     std::mem::take(fresh.as_table_mut()),
                     &mut next_position,
                     None,
-                    false,
                 );
                 drop_cleared_keys(document.as_table_mut(), &serde_json::to_value(self)?);
                 document.to_string()
@@ -1149,6 +1272,7 @@ impl AppSettings {
             redis_publisher: self.redis_publisher.clone(),
             dataset_collector: self.dataset_collector.clone(),
             report: self.report.clone(),
+            violations: self.violations.clone(),
         }
     }
     pub fn is_report_mode(&self) -> bool {
@@ -1249,11 +1373,15 @@ mod tests {
 
     impl TempConfig {
         fn new(name: &str) -> Self {
+            Self::with(name, CONFIG)
+        }
+
+        fn with(name: &str, contents: &str) -> Self {
             let path = std::env::temp_dir()
                 .join(format!("rrt_settings_{}_{}.toml", name, std::process::id()))
                 .to_string_lossy()
                 .into_owned();
-            fs::write(&path, CONFIG).unwrap();
+            fs::write(&path, contents).unwrap();
             TempConfig(path)
         }
     }
@@ -1596,6 +1724,7 @@ mod tests {
             geometry_wgs84: vec![[1.0, 2.0], [1.1, 2.0], [1.1, 2.1], [1.0, 2.1]],
             color_rgb: [255, 0, 0],
             virtual_line: None,
+            rules: LaneRulesSettings::default(),
         }
     }
 
@@ -1664,5 +1793,122 @@ mod tests {
             reloaded.road_lanes.unwrap()[0].id.as_deref(),
             Some("dir_0_lane_0")
         );
+    }
+
+    const CONFIG_WITH_RULES: &str = r#"
+[input]
+    video_src = "rtsp://cam/stream"
+
+[detection]
+    network_weights = "m.onnx"
+    conf_threshold = 0.4
+    nms_threshold = 0.2
+    net_classes = ["car"]
+
+[tracking]
+    type = "iou_naive"
+    max_points_in_track = 100
+
+[equipment_info]
+    id = "eq-1"
+
+[worker]
+    reset_data_milliseconds = 30000
+
+[rest_api]
+    enable = true
+    host = "0.0.0.0"
+    back_end_port = 42001
+    api_scope = "/api"
+
+[redis_publisher]
+    enable = false
+    host = "localhost"
+    port = 6379
+    password = ""
+    db_index = 0
+    channel_name = "X"
+
+[[road_lanes]]
+    lane_number = 0
+    lane_direction = 0
+    geometry = [[0, 0], [10, 0], [10, 10], [0, 10]]
+    geometry_wgs84 = [[1.0, 2.0], [1.1, 2.0], [1.1, 2.1], [1.0, 2.1]]
+    color_rgb = [255, 0, 0]
+    id = "dir_0_lane_0"
+    unknown_zone_key = "kept"
+
+    [road_lanes.rules]
+
+    [road_lanes.rules.solid_line]
+        line = [[10.5, 20.5], [30.5, 40.5]]
+        margin_px = 8.0
+        unknown_solid_key = "kept"
+
+    [road_lanes.rules.unknown_rule]
+        foo = 1
+"#;
+
+    #[test]
+    fn saving_a_zone_keeps_its_rules_and_unknown_fields() {
+        let file = TempConfig::with("rules_kept", CONFIG_WITH_RULES);
+        let mut settings = AppSettings::new(&file.0).unwrap();
+        // What the UI does: change the zone's geometry and save the whole file
+        settings.road_lanes.as_mut().unwrap()[0].geometry =
+            vec![[1, 1], [11, 1], [11, 11], [1, 11]];
+        settings.save(&file.0).unwrap();
+
+        let text = fs::read_to_string(&file.0).unwrap();
+        assert!(text.contains("[road_lanes.rules.solid_line]"), "{text}");
+        assert!(
+            text.contains("line = [[10.5, 20.5], [30.5, 40.5]]"),
+            "{text}"
+        );
+        assert!(text.contains("margin_px = 8.0"), "{text}");
+        // Fields this version has never heard of are not its to delete
+        assert!(text.contains("unknown_zone_key = \"kept\""), "{text}");
+        assert!(text.contains("unknown_solid_key = \"kept\""), "{text}");
+        assert!(text.contains("[road_lanes.rules.unknown_rule]"), "{text}");
+        assert!(text.contains("foo = 1"), "{text}");
+
+        let reloaded = AppSettings::new(&file.0).unwrap();
+        let rules = &reloaded.road_lanes.unwrap()[0].rules;
+        assert!(rules.solid_line.is_some());
+    }
+
+    #[test]
+    fn clearing_solid_line_keeps_the_other_rules() {
+        let file = TempConfig::with("rules_cleared", CONFIG_WITH_RULES);
+        let mut settings = AppSettings::new(&file.0).unwrap();
+        settings.road_lanes.as_mut().unwrap()[0].rules.solid_line = None;
+        settings.save(&file.0).unwrap();
+
+        let text = fs::read_to_string(&file.0).unwrap();
+        assert!(!text.contains("[road_lanes.rules.solid_line]"), "{text}");
+        // The rules this version does not know are still there
+        assert!(text.contains("[road_lanes.rules.unknown_rule]"), "{text}");
+        assert!(text.contains("unknown_zone_key = \"kept\""), "{text}");
+    }
+
+    #[test]
+    fn a_zone_with_too_few_points_is_rejected() {
+        let file = TempConfig::new("short_geometry");
+        let text = fs::read_to_string(&file.0)
+            .unwrap()
+            .replace(
+                "geometry = [[0, 0], [10, 0], [10, 10], [0, 10]]",
+                "geometry = [[0, 0], [10, 0], [10, 10]]",
+            )
+            .replace(
+                "geometry_wgs84 = [[1.0123456789, 2.0], [1.1, 2.0], [1.1, 2.1], [1.0, 2.1]]",
+                "geometry_wgs84 = [[1.0123456789, 2.0], [1.1, 2.0], [1.1, 2.1]]",
+            );
+        fs::write(&file.0, text).unwrap();
+
+        let error = AppSettings::new(&file.0)
+            .expect_err("short zone geometry must be refused")
+            .to_string();
+        assert!(error.contains("road_lanes.0.geometry"), "{error}");
+        assert!(error.contains("road_lanes.0.geometry_wgs84"), "{error}");
     }
 }

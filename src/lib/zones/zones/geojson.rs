@@ -54,6 +54,8 @@ pub struct ZonePropertiesGeoJSON {
     pub color_rgb: [i16; 3],
     /// Information about virtual line (optional)
     pub virtual_line: Option<VirtualLineFeature>,
+    /// Information about solid line (optional)
+    pub solid_line: Option<SolidLineFeature>,
 }
 
 /// Information about virtual line
@@ -70,6 +72,20 @@ pub struct VirtualLineFeature {
     /// 'outbound' - outbound traffic (away from target side)
     #[schema(example = "inbound")]
     pub direction: String,
+}
+
+/// Information about solid line
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct SolidLineFeature {
+    /// Geometry: two points
+    #[schema(example = json!([[254.0, 456.0], [456.0, 475.0]]))]
+    pub geometry: [[f32; 2]; 2],
+    /// Corresponding color
+    #[schema(example = json!([255, 255, 0]))]
+    pub color_rgb: [i16; 3],
+    /// Side-classification margin in pixels
+    #[schema(example = 8.0)]
+    pub margin_px: f32,
 }
 
 /// Polygon in GeoJSON specification

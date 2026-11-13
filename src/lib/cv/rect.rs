@@ -1,6 +1,8 @@
 // Own rectangle type (just copy of opencv::core::Rect)
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Rect {
     pub x: i32,
     pub y: i32,

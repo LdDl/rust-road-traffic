@@ -1,11 +1,12 @@
 use crate::lib::logging;
-use crate::lib::zones::{VirtualLine, VirtualLineDirection, Zone};
+use crate::lib::zones::{SolidLine, VirtualLine, VirtualLineDirection, Zone};
 use crate::rest_api::APIStorage;
 use crate::rest_api::change_state::ChangeState;
 use crate::rest_api::errors::{ErrorResponse, FieldError};
+use crate::settings::LaneRulesSettings;
 use actix_web::{Error, HttpResponse, http::StatusCode, web};
-use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use serde::{Deserialize, Deserializer, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use tracing::{error, info};
 use utoipa::ToSchema;
@@ -34,6 +35,9 @@ pub struct ZoneUpdateRequest {
     pub color_rgb: Option<[i16; 3]>,
     /// Virtual line
     pub virtual_line: Option<VirtualLineRequestData>,
+    /// Solid line. Leave it out to keep the current line, send null to remove it
+    #[serde(default, deserialize_with = "deserialize_present")]
+    pub solid_line: Option<Option<SolidLineRequestData>>,
 }
 
 /// Respone on zone update request
@@ -153,6 +157,12 @@ pub async fn update_zone(
         _ => {}
     }
 
+    if _update_zone.solid_line.is_some() {
+        let mut zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
+        apply_solid_line(&mut zone, &_update_zone.solid_line);
+        drop(zone)
+    }
+
     drop(zone_guarded);
     drop(zones);
 
@@ -257,6 +267,9 @@ pub struct ZoneCreateRequest {
     pub color_rgb: Option<[i16; 3]>,
     /// Virtual line
     pub virtual_line: Option<VirtualLineRequestData>,
+    /// Solid line. Leave it out for a zone without one, send null to remove it
+    #[serde(default, deserialize_with = "deserialize_present")]
+    pub solid_line: Option<Option<SolidLineRequestData>>,
 }
 
 /// Information about virtual line
@@ -273,6 +286,60 @@ pub struct VirtualLineRequestData {
     /// 'outbound' - outbound traffic (away from target side)
     #[schema(example = "inbound")]
     pub direction: String,
+}
+
+/// Information about solid line. The geometry is stored in the zone's
+/// `rules.solid_line`, where the violation engine reads it
+#[derive(Deserialize, Debug, ToSchema)]
+pub struct SolidLineRequestData {
+    /// Line geometry. 2 points
+    #[schema(example = json!([[254.0, 456.0], [456.0, 475.0]]))]
+    pub geometry: [[f32; 2]; 2],
+    /// Side-classification margin in pixels. The current value is kept when
+    /// this is omitted, and a new rule gets the default
+    #[schema(example = 8.0)]
+    pub margin_px: Option<f32>,
+}
+
+/// Distinguishes a field that is missing from one sent as `null`: the former
+/// leaves the current value alone, the latter clears it. Serde turns both into
+/// `None` for a plain `Option`, which would make removal impossible
+fn deserialize_present<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
+}
+
+/// The margin a solid line gets when neither the request nor the zone has one
+const DEFAULT_SOLID_LINE_MARGIN_PX: f32 = 8.0;
+
+fn solid_line_from_request(
+    request: &SolidLineRequestData,
+    existing_margin_px: Option<f32>,
+) -> SolidLine {
+    let margin_px = request
+        .margin_px
+        .filter(|value| value.is_finite() && *value >= 0.0)
+        .or(existing_margin_px)
+        .unwrap_or(DEFAULT_SOLID_LINE_MARGIN_PX);
+    SolidLine::new(request.geometry, margin_px)
+}
+
+/// Applies the `solid_line` field of a request to a zone. The field is
+/// optional, so an absent one keeps the current line; this is what lets a
+/// client that does not know about solid lines save a zone without deleting
+/// the rule it cannot see
+fn apply_solid_line(zone: &mut Zone, solid_line: &Option<Option<SolidLineRequestData>>) {
+    match solid_line {
+        Some(Some(request)) => {
+            let existing_margin_px = zone.get_solid_line().map(|line| line.margin_px);
+            zone.set_solid_line(solid_line_from_request(request, existing_margin_px));
+        }
+        Some(None) => zone.clear_solid_line(),
+        None => {}
+    }
 }
 
 /// Respone on zone create request
@@ -365,6 +432,8 @@ pub async fn create_zone(
         }
         _ => {}
     }
+
+    apply_solid_line(&mut zone, &_new_zone.solid_line);
 
     if let Some(id) = requested_id {
         zone.set_id(id);
@@ -493,7 +562,8 @@ pub async fn replace_all(
         );
     }
 
-    // Mark data for clean
+    // Mark data for clean, and remember the rules of every zone that is there
+    // now: a zone sent back under the same name keeps them
     let ds_guard = data
         .data_storage
         .read()
@@ -502,7 +572,15 @@ pub async fn replace_all(
         .zones
         .read()
         .expect("Spatial data is poisoned [RWLock]");
-    let need_to_clean: Vec<String> = zones.iter().map(|poly| poly.0.clone()).collect();
+    let mut rules_by_id: HashMap<String, LaneRulesSettings> = HashMap::new();
+    let need_to_clean: Vec<String> = zones
+        .iter()
+        .map(|(id, zone_guarded)| {
+            let zone = zone_guarded.lock().expect("Zone is poisoned [Mutex]");
+            rules_by_id.insert(id.clone(), zone.get_rules());
+            id.clone()
+        })
+        .collect();
     drop(zones);
     drop(ds_guard);
 
@@ -566,6 +644,13 @@ pub async fn replace_all(
         }
         let new_id = zone.get_id().clone();
 
+        // A zone sent back under the name it already has keeps its violation
+        // rules: the editor changes its geometry, not what it is watched for
+        if let Some(rules) = rules_by_id.get(&new_id) {
+            zone.set_rules(rules.clone());
+        }
+        apply_solid_line(&mut zone, &new_zone.solid_line);
+
         let ds_guard = data
             .data_storage
             .read()
@@ -620,4 +705,202 @@ pub async fn replace_all(
         zones_ids: response,
         state: ChangeState::of(&data),
     }));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lib::data_storage::new_datastorage;
+    use crate::lib::mjpeg_streaming::Broadcaster;
+    use crate::lib::status::RuntimeStatus;
+    use crate::lib::zones::Zone;
+    use crate::settings::{
+        AppSettings, LaneRulesSettings, LaneSolidLineRuleSettings, RoadLanesSettings,
+    };
+    use std::sync::{Arc, Mutex, RwLock};
+
+    fn zone_with_solid_line() -> Zone {
+        let mut zone = Zone::default();
+        zone.set_solid_line(SolidLine::new([[0.0, 0.0], [10.0, 10.0]], 8.0));
+        zone
+    }
+
+    #[test]
+    fn an_absent_solid_line_keeps_the_current_one() {
+        let mut zone = zone_with_solid_line();
+        apply_solid_line(&mut zone, &None);
+        assert!(zone.get_solid_line().is_some());
+    }
+
+    #[test]
+    fn a_null_solid_line_removes_it() {
+        let mut zone = zone_with_solid_line();
+        apply_solid_line(&mut zone, &Some(None));
+        assert!(zone.get_solid_line().is_none());
+    }
+
+    #[test]
+    fn a_solid_line_request_keeps_the_existing_margin() {
+        let mut zone = zone_with_solid_line();
+        apply_solid_line(
+            &mut zone,
+            &Some(Some(SolidLineRequestData {
+                geometry: [[1.0, 2.0], [30.0, 40.0]],
+                margin_px: None,
+            })),
+        );
+        let line = zone.get_solid_line().unwrap();
+        assert_eq!(line.line, [[1.0, 2.0], [30.0, 40.0]]);
+        assert_eq!(line.margin_px, 8.0);
+    }
+
+    #[test]
+    fn a_solid_line_request_can_set_the_margin() {
+        let mut zone = Zone::default();
+        apply_solid_line(
+            &mut zone,
+            &Some(Some(SolidLineRequestData {
+                geometry: [[1.0, 2.0], [30.0, 40.0]],
+                margin_px: Some(12.0),
+            })),
+        );
+        assert_eq!(zone.get_solid_line().unwrap().margin_px, 12.0);
+    }
+
+    const API_CONFIG: &str = r#"
+[input]
+    video_src = "rtsp://cam/stream"
+
+[detection]
+    network_weights = "m.onnx"
+    conf_threshold = 0.4
+    nms_threshold = 0.2
+    net_classes = ["car"]
+
+[tracking]
+    type = "iou_naive"
+    max_points_in_track = 100
+
+[worker]
+    reset_data_milliseconds = 30000
+
+[rest_api]
+    enable = true
+    host = "0.0.0.0"
+    back_end_port = 42001
+    api_scope = "/api"
+
+[redis_publisher]
+    enable = false
+    host = "localhost"
+    port = 6379
+    password = ""
+    db_index = 0
+    channel_name = "X"
+"#;
+
+    fn api_storage_with_solid_line(
+        line: [[f32; 2]; 2],
+        margin_px: f32,
+    ) -> (web::Data<APIStorage>, String) {
+        let path = std::env::temp_dir()
+            .join(format!("rrt_zone_update_{}.toml", std::process::id()))
+            .to_string_lossy()
+            .into_owned();
+        std::fs::write(&path, API_CONFIG).unwrap();
+        let settings = AppSettings::new(&path).unwrap();
+
+        let lane = RoadLanesSettings {
+            id: Some("zone-1".to_string()),
+            lane_number: 0,
+            lane_direction: 0,
+            geometry: vec![[0, 0], [10, 0], [10, 10], [0, 10]],
+            geometry_wgs84: vec![[1.0, 2.0], [1.1, 2.0], [1.1, 2.1], [1.0, 2.1]],
+            color_rgb: [255, 0, 0],
+            virtual_line: None,
+            rules: LaneRulesSettings {
+                solid_line: Some(LaneSolidLineRuleSettings { line, margin_px }),
+                ..LaneRulesSettings::default()
+            },
+        };
+
+        let data_storage = new_datastorage("eq-1".to_string());
+        data_storage
+            .write()
+            .unwrap()
+            .insert_zone(Zone::from(&lane))
+            .unwrap();
+        let (vehicle_events, _) = tokio::sync::broadcast::channel(8);
+        let storage = APIStorage {
+            data_storage,
+            app_settings: RwLock::new(settings.clone()),
+            running_settings: settings.clone(),
+            saved_settings: RwLock::new(settings),
+            settings_filename: path.clone(),
+            mjpeg_broadcaster: web::Data::new(Mutex::new(Broadcaster::default())),
+            status: Arc::new(RuntimeStatus::new()),
+            vehicle_events,
+        };
+        (web::Data::new(storage), path)
+    }
+
+    #[tokio::test]
+    async fn rest_update_moves_solid_line_and_keeps_margin() {
+        let (data, path) = api_storage_with_solid_line([[1.0, 2.0], [3.0, 4.0]], 8.0);
+
+        // New coordinates, no margin in the request: the configured margin
+        // must stay.
+        let request = ZoneUpdateRequest {
+            zone_id: "zone-1".to_string(),
+            pixel_points: None,
+            spatial_points: None,
+            lane_number: None,
+            lane_direction: None,
+            color_rgb: None,
+            virtual_line: None,
+            solid_line: Some(Some(SolidLineRequestData {
+                geometry: [[11.0, 22.0], [33.0, 44.0]],
+                margin_px: None,
+            })),
+        };
+        let response = update_zone(data.clone(), web::Json(request)).await.unwrap();
+        assert_eq!(response.status(), actix_web::http::StatusCode::OK);
+
+        {
+            let zones = data.data_storage.read().unwrap().zones.clone();
+            let zones = zones.read().unwrap();
+            let zone = zones.get("zone-1").unwrap().lock().unwrap();
+            let line = zone.get_solid_line().expect("solid line after update");
+            assert_eq!(line.line, [[11.0, 22.0], [33.0, 44.0]]);
+            assert_eq!(line.margin_px, 8.0);
+        }
+
+        // A request that gives a margin sets it.
+        let request = ZoneUpdateRequest {
+            zone_id: "zone-1".to_string(),
+            pixel_points: None,
+            spatial_points: None,
+            lane_number: None,
+            lane_direction: None,
+            color_rgb: None,
+            virtual_line: None,
+            solid_line: Some(Some(SolidLineRequestData {
+                geometry: [[55.0, 66.0], [77.0, 88.0]],
+                margin_px: Some(3.5),
+            })),
+        };
+        let response = update_zone(data.clone(), web::Json(request)).await.unwrap();
+        assert_eq!(response.status(), actix_web::http::StatusCode::OK);
+
+        {
+            let zones = data.data_storage.read().unwrap().zones.clone();
+            let zones = zones.read().unwrap();
+            let zone = zones.get("zone-1").unwrap().lock().unwrap();
+            let line = zone.get_solid_line().expect("solid line after update");
+            assert_eq!(line.line, [[55.0, 66.0], [77.0, 88.0]]);
+            assert_eq!(line.margin_px, 3.5);
+        }
+
+        let _ = std::fs::remove_file(path);
+    }
 }

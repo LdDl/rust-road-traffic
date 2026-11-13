@@ -123,6 +123,10 @@ pub fn live_road_lanes(data_storage: &ThreadedDataStorage) -> Vec<RoadLanesSetti
                         color_rgb: [vl.color[0] as i16, vl.color[1] as i16, vl.color[2] as i16],
                         direction: vl.direction.to_string(),
                     }),
+                // The zone keeps its rules for as long as it exists, and they
+                // are written back unchanged: the UI edits geometry, not the
+                // list of violations it is watched for
+                rules: zone.get_rules(),
             }
         })
         .collect();
@@ -148,6 +152,7 @@ fn same_zones(a: &[RoadLanesSettings], b: &[RoadLanesSettings]) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::rest_api::change_state::*;
+    use crate::settings::LaneRulesSettings;
 
     fn settings(name: &str) -> AppSettings {
         let path =
@@ -198,6 +203,7 @@ mod tests {
             geometry_wgs84: vec![[1.0, 2.0], [1.1, 2.0], [1.1, 2.1], [1.0, 2.1]],
             color_rgb: [255, 0, 0],
             virtual_line: None,
+            rules: LaneRulesSettings::default(),
         }
     }
 
@@ -267,5 +273,162 @@ mod tests {
         let state = ChangeState::compute(&current, &running, &running, &[]);
         assert_eq!(state.unsaved_changes, ["input.video_src", "verbose.level"]);
         assert_eq!(state.pending_changes, ["input.video_src"]);
+    }
+
+    #[test]
+    fn live_zones_keep_their_violation_rules() {
+        use crate::lib::data_storage::new_datastorage;
+        use crate::lib::zones::Zone;
+        use crate::settings::{
+            LaneSolidLineRuleSettings, LaneSpeedingRuleSettings, LaneZoneViolationRuleSettings,
+        };
+
+        let mut lane = zone(0, 0);
+        lane.rules.solid_line = Some(LaneSolidLineRuleSettings {
+            line: [[10.5, 20.5], [30.5, 40.5]],
+            margin_px: 8.0,
+        });
+        lane.rules.speeding = Some(LaneSpeedingRuleSettings {
+            threshold_kmh: 60.0,
+        });
+        lane.rules.no_parking = Some(LaneZoneViolationRuleSettings {
+            min_duration_sec: 5.0,
+            stationary_speed_kmh: 3.0,
+        });
+        let storage = new_datastorage("test".to_string());
+        storage
+            .write()
+            .unwrap()
+            .insert_zone(Zone::from(&lane))
+            .unwrap();
+
+        let live = live_road_lanes(&storage);
+        assert_eq!(live.len(), 1);
+        let rules = &live[0].rules;
+        let solid_line = rules
+            .solid_line
+            .as_ref()
+            .expect("the rule must survive the trip through the running zone");
+        assert_eq!(solid_line.line, [[10.5, 20.5], [30.5, 40.5]]);
+        assert_eq!(solid_line.margin_px, 8.0);
+        assert_eq!(rules.speeding.as_ref().unwrap().threshold_kmh, 60.0);
+        assert_eq!(rules.no_parking.as_ref().unwrap().min_duration_sec, 5.0);
+    }
+
+    const MOVE_CONFIG: &str = r#"
+[input]
+    video_src = "rtsp://cam/stream"
+
+[detection]
+    network_weights = "m.onnx"
+    conf_threshold = 0.4
+    nms_threshold = 0.2
+    net_classes = ["car"]
+
+[tracking]
+    type = "iou_naive"
+    max_points_in_track = 100
+
+[equipment_info]
+    id = "eq-1"
+
+[worker]
+    reset_data_milliseconds = 30000
+
+[rest_api]
+    enable = true
+    host = "0.0.0.0"
+    back_end_port = 42001
+    api_scope = "/api"
+
+[redis_publisher]
+    enable = false
+    host = "localhost"
+    port = 6379
+    password = ""
+    db_index = 0
+    channel_name = "X"
+
+[[road_lanes]]
+    lane_number = 0
+    lane_direction = 0
+    geometry = [[0, 0], [10, 0], [10, 10], [0, 10]]
+    geometry_wgs84 = [[1.0, 2.0], [1.1, 2.0], [1.1, 2.1], [1.0, 2.1]]
+    color_rgb = [255, 0, 0]
+    id = "zone-1"
+
+    [road_lanes.rules]
+
+    [road_lanes.rules.solid_line]
+        line = [[1.0, 2.0], [3.0, 4.0]]
+        margin_px = 8.0
+
+    [road_lanes.rules.speeding]
+        threshold_kmh = 60.0
+
+    [road_lanes.rules.unknown_rule]
+        foo = 1
+"#;
+
+    #[test]
+    fn moving_solid_line_saves_new_coordinates_and_keeps_other_rules() {
+        use crate::lib::data_storage::new_datastorage;
+        use crate::lib::zones::{SolidLine, Zone};
+
+        let path = std::env::temp_dir()
+            .join(format!("rrt_move_solid_{}.toml", std::process::id()))
+            .to_string_lossy()
+            .into_owned();
+        std::fs::write(&path, MOVE_CONFIG).unwrap();
+
+        let settings = AppSettings::new(&path).unwrap();
+        let lane = settings.road_lanes.as_ref().unwrap()[0].clone();
+        let mut zone = Zone::from(&lane);
+        zone.set_solid_line(SolidLine::new([[11.0, 22.0], [33.0, 44.0]], 4.5));
+
+        let storage = new_datastorage("test".to_string());
+        storage.write().unwrap().insert_zone(zone).unwrap();
+
+        // This is the path save_toml takes: the zones the process runs are
+        // written over the file, with the rules they currently carry.
+        let mut to_save = settings.clone();
+        to_save.road_lanes = Some(live_road_lanes(&storage));
+        to_save.save(&path).unwrap();
+
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            text.contains("line = [[11.0, 22.0], [33.0, 44.0]]"),
+            "{text}"
+        );
+        assert!(text.contains("margin_px = 4.5"), "{text}");
+        assert!(text.contains("[road_lanes.rules.speeding]"), "{text}");
+        assert!(text.contains("threshold_kmh = 60.0"), "{text}");
+        // This version does not know the rule, but it is not its to delete.
+        assert!(text.contains("[road_lanes.rules.unknown_rule]"), "{text}");
+
+        let reloaded = AppSettings::new(&path).unwrap();
+        let line = reloaded.road_lanes.unwrap()[0]
+            .rules
+            .solid_line
+            .clone()
+            .expect("solid line after reload");
+        assert_eq!(line.line, [[11.0, 22.0], [33.0, 44.0]]);
+        assert_eq!(line.margin_px, 4.5);
+
+        let _ = std::fs::remove_file(&path);
+        if let Some(dir) = std::path::Path::new(&path).parent() {
+            let prefix = format!(
+                "{}.",
+                std::path::Path::new(&path)
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+            );
+            for entry in std::fs::read_dir(dir).unwrap().flatten() {
+                if entry.file_name().to_string_lossy().starts_with(&prefix) {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
     }
 }

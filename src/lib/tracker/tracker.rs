@@ -391,7 +391,7 @@ pub fn new_tracker_from_type(
 }
 
 /// Common trait for all tracker types (both SimpleBlob and BlobBBox based)
-pub trait TrackerTrait {
+pub trait TrackerTrait: Send {
     /// Matches detections to tracks. `dt` is the real interval in seconds since
     /// the previous processed frame; `current_second` is the frame timestamp
     fn match_objects(
@@ -419,7 +419,7 @@ pub trait TrackerTrait {
     fn description(&self) -> String;
 }
 
-impl<T: TrackerEngineSimple> TrackerTrait for TrackerSimple<T> {
+impl<T: TrackerEngineSimple + Send> TrackerTrait for TrackerSimple<T> {
     fn match_objects(
         &mut self,
         detections: &mut Detections,
@@ -496,7 +496,7 @@ impl<T: TrackerEngineSimple> TrackerTrait for TrackerSimple<T> {
     }
 }
 
-impl<T: TrackerEngineBBox> TrackerTrait for TrackerBBox<T> {
+impl<T: TrackerEngineBBox + Send> TrackerTrait for TrackerBBox<T> {
     fn match_objects(
         &mut self,
         detections: &mut Detections,

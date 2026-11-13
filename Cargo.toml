@@ -21,6 +21,10 @@ ort-cuda = ["ort-backend", "od_opencv/ort-cuda-backend"]
 tensorrt-backend = ["od_opencv/tensorrt-backend"]
 # Build libjpeg-turbo from source via cmake (no system lib needed)
 turbojpeg-vendor = ["turbojpeg/cmake"]
+# Self-profiling with pprof: samples the whole process
+# (perf_event_open; the perf binary is not required) and writes flamegraph.svg
+# when the run ends normally
+profile-run = ["dep:pprof"]
 
 [dependencies]
 # OpenCV: only needed for opencv-backend (DNN inference). Optional for ort/tensorrt backends.
@@ -56,6 +60,9 @@ od_opencv = { version = "0.8.2", default-features = false, features = ["letterbo
 rand = "0.9.2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 # JPEG encoding for MJPEG streaming (libjpeg-turbo).
+# Only for `--features profile-run`: sampling profiler that renders the SVG.
+pprof = { version = "0.13", optional = true, features = ["flamegraph"] }
+
 # By default links to system libturbojpeg via pkg-config.
 # Use `--features turbojpeg-vendor` to build from source via cmake.
 turbojpeg = { version = "1.4", default-features = false, features = ["pkg-config"] }

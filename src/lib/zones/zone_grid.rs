@@ -1,4 +1,4 @@
-use crate::lib::spatial::Point2f;
+use crate::lib::spatial::{Aabb, Point2f};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -67,19 +67,17 @@ impl ZoneGrid {
             };
 
             // Get zone bounding box from pixel_coordinates
-            let bbox = Self::compute_bbox(&zone.pixel_coordinates);
-            if bbox.is_none() {
+            let Some(bbox) = Aabb::from_points(&zone.pixel_coordinates) else {
                 continue;
-            }
-            let (min_x, min_y, max_x, max_y) = bbox.unwrap();
+            };
 
             // Convert to cell indices (clamped to grid bounds)
-            let col_start =
-                ((min_x / self.cell_size).floor() as usize).min(self.width_cells.saturating_sub(1));
-            let col_end = ((max_x / self.cell_size).ceil() as usize).min(self.width_cells);
-            let row_start = ((min_y / self.cell_size).floor() as usize)
+            let col_start = ((bbox.min_x / self.cell_size).floor() as usize)
+                .min(self.width_cells.saturating_sub(1));
+            let col_end = ((bbox.max_x / self.cell_size).ceil() as usize).min(self.width_cells);
+            let row_start = ((bbox.min_y / self.cell_size).floor() as usize)
                 .min(self.height_cells.saturating_sub(1));
-            let row_end = ((max_y / self.cell_size).ceil() as usize).min(self.height_cells);
+            let row_end = ((bbox.max_y / self.cell_size).ceil() as usize).min(self.height_cells);
 
             // Mark all cells in bounding box as containing this zone
             for row in row_start..row_end {
@@ -119,24 +117,8 @@ impl ZoneGrid {
     }
 
     /// Compute axis-aligned bounding box of polygon
-    fn compute_bbox(points: &[Point2f]) -> Option<(f32, f32, f32, f32)> {
-        if points.is_empty() {
-            return None;
-        }
-
-        let mut min_x = f32::MAX;
-        let mut min_y = f32::MAX;
-        let mut max_x = f32::MIN;
-        let mut max_y = f32::MIN;
-
-        for pt in points {
-            min_x = min_x.min(pt.x);
-            min_y = min_y.min(pt.y);
-            max_x = max_x.max(pt.x);
-            max_y = max_y.max(pt.y);
-        }
-
-        Some((min_x, min_y, max_x, max_y))
+    fn compute_bbox(points: &[Point2f]) -> Option<Aabb> {
+        Aabb::from_points(points)
     }
 
     /// Get grid statistics for debugging
@@ -182,6 +164,7 @@ pub struct ZoneGridStats {
 
 #[cfg(test)]
 mod tests {
+    use crate::lib::spatial::Aabb;
     use crate::lib::zones::zone_grid::*;
 
     fn create_test_zone(id: &str, points: Vec<(f32, f32)>) -> Zone {
@@ -429,7 +412,7 @@ mod tests {
     fn test_compute_bbox_single_point() {
         let points = vec![Point2f::new(100.0, 200.0)];
         let result = ZoneGrid::compute_bbox(&points);
-        assert_eq!(result, Some((100.0, 200.0, 100.0, 200.0)));
+        assert_eq!(result, Some(Aabb::new(100.0, 200.0, 100.0, 200.0)));
     }
 
     #[test]
@@ -440,6 +423,6 @@ mod tests {
             Point2f::new(30.0, 60.0),
         ];
         let result = ZoneGrid::compute_bbox(&points);
-        assert_eq!(result, Some((10.0, 20.0, 50.0, 60.0)));
+        assert_eq!(result, Some(Aabb::new(10.0, 20.0, 50.0, 60.0)));
     }
 }

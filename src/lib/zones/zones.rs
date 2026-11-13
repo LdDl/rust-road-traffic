@@ -7,10 +7,11 @@ use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-use geometry::PointsOrientation;
-use geometry::{get_orientation, is_intersects, is_on_segment};
+use geometry::{is_intersects, polygon_contains_point};
 
-use geojson::{GeoPolygon, VirtualLineFeature, ZoneFeature, ZonePropertiesGeoJSON};
+use geojson::{
+    GeoPolygon, SolidLineFeature, VirtualLineFeature, ZoneFeature, ZonePropertiesGeoJSON,
+};
 
 use crate::lib::constants::EPSILON;
 use crate::lib::cv::RawFrame;
@@ -22,9 +23,15 @@ use crate::lib::spatial::compute_center;
 use crate::lib::spatial::epsg::lonlat_to_meters;
 use crate::lib::spatial::haversine;
 use crate::lib::zones::{
-    Skeleton, Statistics, TrafficFlowParameters, VehicleTypeParameters, VirtualLine,
-    VirtualLineDirection,
+    SOLID_LINE_COLOR_RGB, Skeleton, SolidLine, Statistics, TrafficFlowParameters,
+    VehicleTypeParameters, VirtualLine, VirtualLineDirection,
 };
+use crate::settings::LaneRulesSettings;
+
+/// A track must be away from the virtual line for this long before another
+/// crossing is counted. This suppresses bbox jitter around the line without
+/// hiding a real later crossing.
+const VIRTUAL_LINE_CROSSING_COOLDOWN_SEC: f32 = 0.5;
 
 #[derive(Debug, Clone)]
 struct ObjectInfo {
@@ -32,6 +39,7 @@ struct ObjectInfo {
     speed: f32,
     crossed_virtual_line: bool,
     timestamp_registration: f32,
+    last_crossed_at: f32,
 }
 
 type Registered = HashMap<Uuid, ObjectInfo>;
@@ -52,6 +60,10 @@ pub struct Zone {
     pub current_statistics: RealTimeStatistics,
     skeleton: Skeleton,
     virtual_line: Option<VirtualLine>,
+    /// Violation rules configured for this zone. They are not used by counting,
+    /// but they are part of the zone: saving the configuration writes them back
+    /// and the API shows the ones that can be edited
+    rules: LaneRulesSettings,
 }
 
 #[derive(Debug)]
@@ -89,6 +101,7 @@ impl Zone {
             },
             skeleton: Skeleton::default(),
             virtual_line: None,
+            rules: LaneRulesSettings::default(),
         }
     }
     pub fn new(
@@ -104,7 +117,7 @@ impl Zone {
         /* Init skeleton */
         let skeleton_line = find_skeleton_line(&coordinates, 0, 2); // 0-1 is first segment of polygon, 2-3 is second segment
         let mut skeleton = Skeleton::new(skeleton_line[0], skeleton_line[1]);
-        let converter = if spatial_coordinates_epsg4326.len() > 0 {
+        let converter = if spatial_coordinates_epsg4326.len() >= 4 {
             /* Eval distance between sides if spatial data is provided */
             let a = spatial_coordinates_epsg4326[0];
             let b = spatial_coordinates_epsg4326[1];
@@ -146,6 +159,7 @@ impl Zone {
             },
             skeleton: skeleton,
             virtual_line: _virtual_line,
+            rules: LaneRulesSettings::default(),
         }
     }
     pub fn default_from_cv(points: Vec<Point2f>) -> Self {
@@ -198,6 +212,9 @@ impl Zone {
         };
     }
     pub fn update_skeleton(&mut self) {
+        if self.pixel_coordinates.len() < 4 || self.spatial_coordinates_epsg4326.len() < 4 {
+            return;
+        }
         /* Eval distance between sides */
         let a = self.spatial_coordinates_epsg4326[0];
         let b = self.spatial_coordinates_epsg4326[1];
@@ -314,12 +331,31 @@ impl Zone {
                     speed: _speed,
                     crossed_virtual_line: register_as_crossed,
                     timestamp_registration: _timestamp,
+                    last_crossed_at: -1.0,
                 });
             }
         }
         if !register_as_crossed {
             return self.virtual_line.is_none();
         }
+
+        // Bbox jitter can flip the side of the line several times per second.
+        // Count a crossing again only after the track has been away long
+        // enough for a real new crossing.
+        let duplicate = self
+            .objects_registered
+            .get(&object_id)
+            .map_or(false, |info| {
+                let age = _relative_time - info.last_crossed_at;
+                age >= 0.0 && age < VIRTUAL_LINE_CROSSING_COOLDOWN_SEC
+            });
+        if duplicate {
+            return true;
+        }
+        if let Some(info) = self.objects_registered.get_mut(&object_id) {
+            info.last_crossed_at = _relative_time;
+        }
+
         // Check if this object has crossed the virtual line before
         if !self.objects_crossed.contains(&object_id) {
             // First time crossing - add to crossed objects and update OD matrix
@@ -458,61 +494,11 @@ impl Zone {
         // self.statistics.traffic_flow_parameters.avg_speed = self.statistics.vehicles_data.values().map(|vt_param| vt_param.sum_intensity).sum::<u32>();
         self.reset_objects_registered();
     }
-    // Checks if given polygon contains a point
-    // Code has been taken from: https://github.com/LdDl/odam/blob/master/virtual_polygons.go#L180
+    // Checks if given polygon contains a point.
+    // Delegates to the canonical `polygon_contains_point` so that zone matching
+    // and the violation rules classify a point identically.
     pub fn contains_point(&self, x: f32, y: f32) -> bool {
-        let n = self.pixel_coordinates.len();
-        // @todo: math.maxInt could lead to overflow obviously. Need good workaround. PRs are welcome
-        let extreme_point: [f32; 2] = [99999.0, y];
-        let mut intersections_cnt = 0;
-        let mut previous = 0;
-        loop {
-            let current = (previous + 1) % n;
-            // Check if the segment from given point P to extreme point intersects with the segment from polygon point on previous interation to  polygon point on current interation
-            if is_intersects(
-                self.pixel_coordinates[previous].x as f32,
-                self.pixel_coordinates[previous].y as f32,
-                self.pixel_coordinates[current].x as f32,
-                self.pixel_coordinates[current].y as f32,
-                x,
-                y,
-                extreme_point[0],
-                extreme_point[1],
-            ) {
-                let orientation = get_orientation(
-                    self.pixel_coordinates[previous].x as f32,
-                    self.pixel_coordinates[previous].y as f32,
-                    x,
-                    y,
-                    self.pixel_coordinates[current].x as f32,
-                    self.pixel_coordinates[current].y as f32,
-                );
-                // If given point P is collinear with segment from polygon point on previous interation to  polygon point on current interation
-                if orientation == PointsOrientation::Collinear {
-                    // then check if it is on segment
-                    // 'True' will be returns if it lies on segment. Otherwise 'False' will be returned
-                    return is_on_segment(
-                        self.pixel_coordinates[previous].x as f32,
-                        self.pixel_coordinates[previous].y as f32,
-                        x,
-                        y,
-                        self.pixel_coordinates[current].x as f32,
-                        self.pixel_coordinates[current].y as f32,
-                    );
-                }
-                intersections_cnt += 1;
-            }
-            previous = current;
-            if previous == 0 {
-                break;
-            }
-        }
-        // If ray intersects even number of times then return true
-        // Otherwise return false
-        if intersections_cnt % 2 == 1 {
-            return true;
-        }
-        false
+        polygon_contains_point(&self.pixel_coordinates, x, y)
     }
     pub fn contains_point_cv(&self, pt: &Point2f) -> bool {
         self.contains_point(pt.x, pt.y)
@@ -549,6 +535,22 @@ impl Zone {
                 let is_left_before = vl.is_left(x1, y1);
                 let is_left_after = vl.is_left(x2, y2);
 
+                // A side change alone would also count a track that goes
+                // around the end of the line. The movement must actually
+                // cross the configured segment.
+                if !is_intersects(
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    vl.line[0][0] as f32,
+                    vl.line[0][1] as f32,
+                    vl.line[1][0] as f32,
+                    vl.line[1][1] as f32,
+                ) {
+                    return false;
+                }
+
                 // Check direction-specific crossing
                 if vl.direction == VirtualLineDirection::Inbound {
                     // Inbound: crossing from right to left (or bottom to top)
@@ -576,6 +578,31 @@ impl Zone {
     }
     pub fn set_virtual_line(&mut self, _virtual_line: VirtualLine) {
         self.virtual_line = Some(_virtual_line);
+    }
+    /// Violation rules of this zone as the configuration holds them
+    pub fn get_rules(&self) -> LaneRulesSettings {
+        self.rules.clone()
+    }
+    pub fn set_rules(&mut self, _rules: LaneRulesSettings) {
+        self.rules = _rules;
+    }
+    /// The solid line of this zone, if a rule is configured for it. The line is
+    /// kept inside `rules.solid_line`, which is also what the violation engine
+    /// reads, so there is a single copy of the geometry
+    pub fn get_solid_line(&self) -> Option<SolidLine> {
+        self.rules
+            .solid_line
+            .as_ref()
+            .map(|rule| SolidLine::new(rule.line, rule.margin_px))
+    }
+    pub fn set_solid_line(&mut self, _solid_line: SolidLine) {
+        self.rules.solid_line = Some(crate::settings::LaneSolidLineRuleSettings {
+            line: _solid_line.line,
+            margin_px: _solid_line.margin_px,
+        });
+    }
+    pub fn clear_solid_line(&mut self) {
+        self.rules.solid_line = None;
     }
     pub fn draw_geom(&self, img: &mut RawFrame) {
         let w = img.cols() as usize;
@@ -608,6 +635,11 @@ impl Zone {
                 vl.draw_on_frame(img);
             }
             None => {}
+        }
+    }
+    pub fn draw_solid_line(&self, img: &mut RawFrame) {
+        if let Some(solid_line) = self.get_solid_line() {
+            solid_line.draw_on_frame(img);
         }
     }
     pub fn draw_current_intensity(&self, img: &mut RawFrame) {
@@ -643,11 +675,12 @@ impl Zone {
         for v in self.spatial_coordinates_epsg4326.iter() {
             poly_element.push(vec![v.x, v.y]);
         }
-        poly_element.push(vec![
-            self.spatial_coordinates_epsg4326[0].x,
-            self.spatial_coordinates_epsg4326[0].y,
-        ]);
-        geojson_poly.push(poly_element);
+        if let Some(first) = self.spatial_coordinates_epsg4326.first() {
+            poly_element.push(vec![first.x, first.y]);
+        }
+        if !poly_element.is_empty() {
+            geojson_poly.push(poly_element);
+        }
         ZoneFeature {
             typ: "Feature".to_string(),
             id: self.id.clone(),
@@ -668,6 +701,11 @@ impl Zone {
                     }),
                     None => None,
                 },
+                solid_line: self.rules.solid_line.as_ref().map(|rule| SolidLineFeature {
+                    geometry: rule.line,
+                    color_rgb: SOLID_LINE_COLOR_RGB,
+                    margin_px: rule.margin_px,
+                }),
             },
             geometry: GeoPolygon {
                 geometry_type: "Polygon".to_string(),
@@ -695,6 +733,15 @@ fn find_skeleton_line(
     first_line_idx: usize,
     second_line_id: usize,
 ) -> [Point2f; 2] {
+    if coordinates.len() <= first_line_idx + 1 || coordinates.len() <= second_line_id + 1 {
+        // Invalid geometry is rejected by the settings validation; this guard
+        // keeps a manually constructed Zone from panicking.
+        let fallback = coordinates
+            .first()
+            .copied()
+            .unwrap_or_else(|| Point2f::new(0.0, 0.0));
+        return [fallback, fallback];
+    }
     let a = coordinates[first_line_idx];
     let b = coordinates[first_line_idx + 1];
     let a_b_center = Point2f::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
@@ -794,5 +841,131 @@ mod tests {
         let d_track_must_not_enter = vec![Point2f::new(19.0, 20.0), Point2f::new(19.0, 25.0)];
         let left = polygon.object_left_cv(d_track_must_not_enter[0], d_track_must_not_enter[1]);
         assert_eq!(left, false);
+    }
+
+    #[test]
+    fn test_solid_line_is_in_geojson() {
+        use crate::lib::cv::Scalar;
+        use crate::lib::spatial::Point2f;
+        use crate::lib::zones::SolidLine;
+
+        let mut zone = Zone::new(
+            "dir_0_lane_0".to_string(),
+            vec![
+                Point2f::new(0.0, 0.0),
+                Point2f::new(10.0, 0.0),
+                Point2f::new(10.0, 10.0),
+                Point2f::new(0.0, 10.0),
+            ],
+            vec![
+                Point2f::new(1.0, 2.0),
+                Point2f::new(1.1, 2.0),
+                Point2f::new(1.1, 2.1),
+                Point2f::new(1.0, 2.1),
+            ],
+            vec![
+                Point2f::new(1.0, 2.0),
+                Point2f::new(1.1, 2.0),
+                Point2f::new(1.1, 2.1),
+                Point2f::new(1.0, 2.1),
+            ],
+            Scalar::from((255.0, 255.0, 255.0)),
+            0,
+            0,
+            None,
+        );
+        zone.set_solid_line(SolidLine::new([[10.0, 20.0], [30.0, 40.0]], 6.0));
+
+        let feature = zone.to_geojson();
+        let solid_line = feature
+            .properties
+            .solid_line
+            .expect("solid line must be exposed through GeoJSON");
+        assert_eq!(solid_line.geometry, [[10.0, 20.0], [30.0, 40.0]]);
+        assert_eq!(solid_line.margin_px, 6.0);
+        assert_eq!(solid_line.color_rgb, [255, 255, 0]);
+    }
+
+    #[test]
+    fn crossed_virtual_line_respects_direction_and_finite_segment() {
+        use crate::lib::zones::{VirtualLine, VirtualLineDirection};
+
+        let zone_with_line = |direction| {
+            let mut zone = Zone::default_from_cv(vec![
+                Point2f::new(0.0, 0.0),
+                Point2f::new(200.0, 0.0),
+                Point2f::new(200.0, 200.0),
+                Point2f::new(0.0, 200.0),
+            ]);
+            zone.set_virtual_line(VirtualLine::new_from([[100, 0], [100, 100]], direction));
+            zone
+        };
+
+        let inbound = zone_with_line(VirtualLineDirection::Inbound);
+        // Right to left crosses the finite segment.
+        assert!(inbound.crossed_virtual_line(150.0, 50.0, 50.0, 50.0));
+        // Left to right is the opposite direction.
+        assert!(!inbound.crossed_virtual_line(50.0, 50.0, 150.0, 50.0));
+        // Both points on the same side.
+        assert!(!inbound.crossed_virtual_line(150.0, 40.0, 150.0, 60.0));
+        // The infinite line is crossed, but below the end of the segment.
+        assert!(!inbound.crossed_virtual_line(150.0, 150.0, 50.0, 150.0));
+
+        let outbound = zone_with_line(VirtualLineDirection::Outbound);
+        assert!(outbound.crossed_virtual_line(50.0, 50.0, 150.0, 50.0));
+        assert!(!outbound.crossed_virtual_line(150.0, 50.0, 50.0, 50.0));
+    }
+
+    #[test]
+    fn virtual_line_crossings_are_debounced() {
+        use crate::lib::zones::{VirtualLine, VirtualLineDirection};
+        use uuid::Uuid;
+
+        let mut zone = Zone::default_from_cv(vec![
+            Point2f::new(0.0, 0.0),
+            Point2f::new(200.0, 0.0),
+            Point2f::new(200.0, 200.0),
+            Point2f::new(0.0, 200.0),
+        ]);
+        zone.set_virtual_line(VirtualLine::new_from(
+            [[100, 0], [100, 100]],
+            VirtualLineDirection::Inbound,
+        ));
+        let track = Uuid::new_v4();
+
+        assert!(zone.register_or_update_object(
+            track,
+            0.0,
+            1.0,
+            10.0,
+            "car".to_string(),
+            true,
+            Some("from".to_string()),
+        ));
+        assert_eq!(zone.current_statistics.income.get("from"), Some(&1));
+
+        // A second crossing 0.1 s later is bbox jitter, not a new event.
+        assert!(zone.register_or_update_object(
+            track,
+            0.0,
+            1.1,
+            10.0,
+            "car".to_string(),
+            true,
+            Some("from".to_string()),
+        ));
+        assert_eq!(zone.current_statistics.income.get("from"), Some(&1));
+
+        // After the cooldown a real crossing is counted again.
+        assert!(zone.register_or_update_object(
+            track,
+            0.0,
+            1.7,
+            10.0,
+            "car".to_string(),
+            true,
+            Some("from".to_string()),
+        ));
+        assert_eq!(zone.current_statistics.income.get("from"), Some(&2));
     }
 }

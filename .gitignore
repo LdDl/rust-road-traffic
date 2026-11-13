@@ -29,3 +29,4 @@ data/conf_test.toml
 collected_dataset/
 benchmarking.prof
 logs/
+yolov8n.onnx

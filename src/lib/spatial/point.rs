@@ -1,6 +1,8 @@
 // Own Point type (API-compatible with opencv::core::Point_)
 
-#[derive(Clone, Default, Debug, Copy, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Default, Debug, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Point_<T> {
     pub x: T,
     pub y: T,
